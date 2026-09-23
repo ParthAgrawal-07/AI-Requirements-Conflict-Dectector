@@ -2,6 +2,8 @@
 
 > Automatically detects **conflicting**, **duplicate**, **ambiguous**, **incomplete**, and **dependent** requirements in an SRS document — flagging issues before they cost weeks of rework.
 
+Built as a semester project for **IT314 — Software Engineering** (Autumn 2026–27), designed to double as a placement-ready, resume-worthy engineering artifact rather than a toy CRUD app.
+
 ---
 
 ## Table of Contents
