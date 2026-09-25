@@ -9,8 +9,36 @@ on:
       - "frontend/**"
 
 jobs:
+  lint-and-typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+      - name: Install dependencies
+        # The committed package-lock.json was generated on Windows. Even `npm install`
+        # (not just `npm ci`) tries to satisfy an existing lockfile with minimal changes
+        # rather than fully re-resolving it — so the Windows lockfile was still poisoning
+        # the install on this Linux runner (npm/cli#4828). Deleting it first forces a
+        # completely fresh, platform-correct resolution.
+        run: |
+          cd frontend
+          rm -f package-lock.json
+          rm -rf node_modules
+          npm install
+      - name: Run ESLint
+        run: |
+          cd frontend
+          npm run lint
+      - name: Run TypeScript type check
+        run: |
+          cd frontend
+          npm run typecheck
+
   test:
     runs-on: ubuntu-latest
+    needs: lint-and-typecheck
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -19,8 +47,17 @@ jobs:
       - name: Install dependencies
         run: |
           cd frontend
-          npm ci
+          rm -f package-lock.json
+          rm -rf node_modules
+          npm install
       - name: Run tests
         run: |
           cd frontend
           npm run test
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build frontend Docker image (build check only, not pushed)
+        run: docker build -t frontend-ci-check ./frontend

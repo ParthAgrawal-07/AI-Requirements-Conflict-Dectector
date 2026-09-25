@@ -1,0 +1,3 @@
+# Dev-only dependencies — not needed in production, only for CI/local linting & type checks
+ruff
+mypy
