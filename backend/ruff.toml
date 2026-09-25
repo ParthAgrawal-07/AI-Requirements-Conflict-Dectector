@@ -1,0 +1,10 @@
+line-length = 100
+target-version = "py311"
+
+[lint]
+# E/F = pyflakes+pycodestyle core errors, I = import sorting, UP = modernize syntax
+select = ["E", "F", "I", "UP"]
+ignore = ["E501"]  # line length handled loosely for now; tighten later if the team wants
+
+[lint.per-file-ignores]
+"alembic/*" = ["E", "F"]  # auto-generated migration files aren't hand-written to this standard
