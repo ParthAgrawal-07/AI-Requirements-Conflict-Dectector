@@ -17,9 +17,14 @@ jobs:
         with:
           node-version: "18"
       - name: Install dependencies
+        # Using `npm install` rather than `npm ci` here deliberately: the committed
+        # lockfile was generated on Windows, and npm has a known bug (npm/cli#4828)
+        # where Windows-generated lockfiles don't reliably record the Linux-specific
+        # optional native binary Rollup needs. `npm install` re-resolves platform-
+        # correct optional deps at install time instead of trusting the lockfile blindly.
         run: |
           cd frontend
-          npm ci
+          npm install
       - name: Run ESLint
         run: |
           cd frontend
@@ -40,7 +45,7 @@ jobs:
       - name: Install dependencies
         run: |
           cd frontend
-          npm ci
+          npm install
       - name: Run tests
         run: |
           cd frontend
