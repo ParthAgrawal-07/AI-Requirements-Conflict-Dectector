@@ -17,13 +17,15 @@ jobs:
         with:
           node-version: "18"
       - name: Install dependencies
-        # Using `npm install` rather than `npm ci` here deliberately: the committed
-        # lockfile was generated on Windows, and npm has a known bug (npm/cli#4828)
-        # where Windows-generated lockfiles don't reliably record the Linux-specific
-        # optional native binary Rollup needs. `npm install` re-resolves platform-
-        # correct optional deps at install time instead of trusting the lockfile blindly.
+        # The committed package-lock.json was generated on Windows. Even `npm install`
+        # (not just `npm ci`) tries to satisfy an existing lockfile with minimal changes
+        # rather than fully re-resolving it — so the Windows lockfile was still poisoning
+        # the install on this Linux runner (npm/cli#4828). Deleting it first forces a
+        # completely fresh, platform-correct resolution.
         run: |
           cd frontend
+          rm -f package-lock.json
+          rm -rf node_modules
           npm install
       - name: Run ESLint
         run: |
@@ -45,6 +47,8 @@ jobs:
       - name: Install dependencies
         run: |
           cd frontend
+          rm -f package-lock.json
+          rm -rf node_modules
           npm install
       - name: Run tests
         run: |
