@@ -7,7 +7,6 @@ Every parser (PDF, DOCX, or future formats) MUST implement the
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import List
 
 from app.ingestion.models import RawSegment
 
@@ -22,7 +21,7 @@ class Parser(ABC):
     """
 
     @abstractmethod
-    def parse(self, file_path: str) -> List[RawSegment]:
+    def parse(self, file_path: str) -> list[RawSegment]:
         """
         Parse a document and return a list of RawSegment objects.
 

@@ -6,9 +6,9 @@ produce identical RawSegment instances. The Requirement model is the
 final output of segmentation.
 """
 
+from datetime import UTC, datetime
+
 from pydantic import BaseModel, Field
-from datetime import datetime, timezone
-from typing import Optional
 
 
 class RawSegment(BaseModel):
@@ -28,7 +28,7 @@ class RawSegment(BaseModel):
     text: str
     source_document: str
     page_or_paragraph: int
-    section_heading: Optional[str] = None
+    section_heading: str | None = None
     order_index: int
 
     def __repr__(self) -> str:
@@ -61,5 +61,5 @@ class Requirement(BaseModel):
     source_document: str
     location: str
     extracted_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=lambda: datetime.now(UTC)
     )

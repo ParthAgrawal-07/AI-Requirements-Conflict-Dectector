@@ -11,12 +11,11 @@ Usage:
 
 import logging
 from pathlib import Path
-from typing import List
 
 from app.ingestion.models import Requirement
 from app.ingestion.parsers.base import Parser
-from app.ingestion.parsers.pdf_parser import PDFParser
 from app.ingestion.parsers.docx_parser import DOCXParser
+from app.ingestion.parsers.pdf_parser import PDFParser
 from app.ingestion.segmentation.segmenter import Segmenter
 
 logger = logging.getLogger(__name__)
@@ -36,7 +35,7 @@ _UNSUPPORTED_HINTS: dict[str, str] = {
 }
 
 
-def ingest(file_path: str) -> List[Requirement]:
+def ingest(file_path: str) -> list[Requirement]:
     """
     Parse a document and extract requirements from it.
 

@@ -1,8 +1,9 @@
 """Tests for PDFParser."""
 
 import pytest
-from app.ingestion.parsers.pdf_parser import PDFParser
+
 from app.ingestion.models import RawSegment
+from app.ingestion.parsers.pdf_parser import PDFParser
 
 
 class TestPDFParser:

@@ -5,11 +5,9 @@ Creates small deterministic PDF and DOCX test files on the fly
 so tests don't depend on external sample documents.
 """
 
-import pytest
-import pymupdf  # PyMuPDF
 import docx
-import tempfile
-import os
+import pymupdf  # PyMuPDF
+import pytest
 
 
 @pytest.fixture

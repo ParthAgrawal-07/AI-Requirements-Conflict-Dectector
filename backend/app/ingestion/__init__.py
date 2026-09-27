@@ -9,7 +9,7 @@ Models:
     Requirement — final segmented requirement
 """
 
-from app.ingestion.pipeline import ingest
 from app.ingestion.models import RawSegment, Requirement
+from app.ingestion.pipeline import ingest
 
 __all__ = ["ingest", "RawSegment", "Requirement"]

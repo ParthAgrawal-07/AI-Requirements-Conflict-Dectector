@@ -1,8 +1,11 @@
 """Tests for the ingestion pipeline (end-to-end)."""
 
+import shutil
+
 import pytest
-from app.ingestion.pipeline import ingest
+
 from app.ingestion.models import Requirement
+from app.ingestion.pipeline import ingest
 
 
 class TestPipeline:
@@ -45,8 +48,6 @@ class TestPipeline:
 
     def test_case_insensitive_extension(self, sample_pdf, tmp_path):
         """Pipeline should handle .PDF (uppercase) extensions."""
-        import shutil
-
         upper_path = tmp_path / "DOCUMENT.PDF"
         shutil.copy(sample_pdf, str(upper_path))
 

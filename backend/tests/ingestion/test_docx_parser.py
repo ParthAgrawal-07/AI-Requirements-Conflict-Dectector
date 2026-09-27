@@ -1,8 +1,9 @@
 """Tests for DOCXParser."""
 
 import pytest
-from app.ingestion.parsers.docx_parser import DOCXParser
+
 from app.ingestion.models import RawSegment
+from app.ingestion.parsers.docx_parser import DOCXParser
 
 
 class TestDOCXParser:

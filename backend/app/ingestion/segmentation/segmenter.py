@@ -15,7 +15,6 @@ FALLBACK BEHAVIOR:
 """
 
 import logging
-from typing import List
 
 from app.ingestion.models import RawSegment, Requirement
 from app.ingestion.segmentation.rules import REQUIREMENT_ID_PATTERN
@@ -30,7 +29,7 @@ class Segmenter:
     Sprint 0 implementation: line-by-line regex matching only.
     """
 
-    def segment(self, raw_segments: List[RawSegment]) -> List[Requirement]:
+    def segment(self, raw_segments: list[RawSegment]) -> list[Requirement]:
         """
         Segment raw text chunks into individual requirements.
 
@@ -40,7 +39,7 @@ class Segmenter:
         Returns:
             List of Requirement objects with extracted or fallback IDs.
         """
-        requirements: List[Requirement] = []
+        requirements: list[Requirement] = []
 
         for segment in raw_segments:
             lines = segment.text.split("\n")

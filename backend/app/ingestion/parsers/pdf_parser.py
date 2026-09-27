@@ -6,16 +6,15 @@ Empty pages are skipped. No OCR is performed.
 """
 
 import pymupdf  # PyMuPDF (fitz API is deprecated)
-from typing import List
 
-from app.ingestion.parsers.base import Parser
 from app.ingestion.models import RawSegment
+from app.ingestion.parsers.base import Parser
 
 
 class PDFParser(Parser):
     """Parse a PDF document into RawSegment objects, one per non-empty page."""
 
-    def parse(self, file_path: str) -> List[RawSegment]:
+    def parse(self, file_path: str) -> list[RawSegment]:
         path = self._validate_file_exists(file_path)
 
         if path.suffix.lower() != ".pdf":
@@ -24,7 +23,7 @@ class PDFParser(Parser):
                 f"Only .pdf files are supported."
             )
 
-        segments: List[RawSegment] = []
+        segments: list[RawSegment] = []
         doc_name = path.name
         order_index = 0
 

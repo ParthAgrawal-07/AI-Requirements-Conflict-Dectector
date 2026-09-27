@@ -1,7 +1,7 @@
 """Tests for the Segmenter."""
 
-from app.ingestion.segmentation.segmenter import Segmenter
 from app.ingestion.models import RawSegment, Requirement
+from app.ingestion.segmentation.segmenter import Segmenter
 
 
 class TestSegmenter:
