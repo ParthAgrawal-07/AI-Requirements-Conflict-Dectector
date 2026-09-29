@@ -205,6 +205,9 @@ ai-requirements-conflict-detector/
 
 ### Quick Start (Docker Compose)
 
+Requires **Docker Compose v2** (the `docker compose` plugin bundled with current Docker
+Desktop / Docker Engine — not the legacy standalone `docker-compose` v1 binary).
+
 ```bash
 # Clone the repo
 git clone https://github.com/<org>/ai-requirements-conflict-detector.git
@@ -213,37 +216,63 @@ cd ai-requirements-conflict-detector
 # Copy and fill in environment variables
 cp .env.example .env
 
-# Start all services (backend, frontend, Postgres+pgvector, Redis)
+# Start every service: Postgres+pgvector, Redis, a one-shot migration step,
+# the FastAPI backend, the Celery worker, and the frontend dev server.
 docker compose up --build
+# (equivalently: `make up`, then `make logs` to follow output — see `make help`)
 ```
 
 - Frontend: `http://localhost:5173`
 - Backend API docs (Swagger): `http://localhost:8000/docs`
+- Backend health check: `http://localhost:8000/health/ready`
+
+There's no public sign-up endpoint by design (accounts are provisioned, not
+self-registered — an IT/DevOps stakeholder requirement). Create your first user:
+
+```bash
+make seed-demo        # one demo user per role (analyst/admin/compliance_reviewer/
+                       # read_only/service), dev-only, prints the shared password
+# or
+make create-user email=you@example.com name="Your Name" role=admin
+```
+
+Then log in at `POST /api/v1/auth/login` (Swagger's "Authorize" button works directly,
+since it's a standard OAuth2 password-flow form) to get a bearer token for `/api/v1/auth/me`
+and every other `/api/v1/*` route.
 
 ### Running Tests
 
 ```bash
-# Backend
+# Backend — spins up nothing itself; needs the db/redis containers running (`make up` first)
 cd backend && pytest
+# or, fully inside Docker:
+make test
 
 # Frontend
 cd frontend && npm run test
 ```
 
+Backend tests that touch the database are marked `integration` and auto-skip (rather than
+fail) if Postgres isn't reachable — set `REQUIRE_DB=1` (CI does) to make that a hard failure
+instead. See `backend/tests/conftest.py`.
+
 ---
 
 ## Environment Variables
 
-See [`.env.example`](.env.example) for the full list. Key variables:
+See [`.env.example`](.env.example) for the full, commented list. Key variables:
 
 | Variable | Description |
 |---|---|
+| `ENVIRONMENT` | `development` / `test` / `staging` / `production` — the latter two enforce a strong `JWT_SECRET` and an explicit CORS origin list at startup |
 | `DATABASE_URL` | PostgreSQL connection string (with pgvector extension enabled) |
 | `REDIS_URL` | Redis connection string for Celery job queue |
 | `LLM_API_KEY` | Anthropic or OpenAI API key |
 | `LLM_PROVIDER` | `anthropic` or `openai` |
 | `JWT_SECRET` | Secret for signing auth tokens |
-| `SIMILARITY_THRESHOLD` | Default cosine similarity threshold for candidate-pair filtering |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | JWT lifetime in minutes (default 60) |
+| `MAX_UPLOAD_SIZE_MB` | Upload size cap enforced by the API (default 25) |
+| `SIMILARITY_THRESHOLD_DEFAULT` | Default cosine similarity threshold for candidate-pair filtering (per-workspace override lives in the database, not here) |
 
 ---
 
