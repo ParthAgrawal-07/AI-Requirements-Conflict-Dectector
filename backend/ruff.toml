@@ -1,6 +1,16 @@
 line-length = 100
 target-version = "py311"
 
+# Sprint 0 introduced ruff formatting for the first time. These files predate it and use a
+# different style; excluding them here (rather than reformatting someone else's code in a
+# DevOps PR) lets each role format their own files next time they touch them. Remove an
+# entry as soon as its file has been run through `ruff format` by its owner.
+extend-exclude = [
+    "app/ingestion/models.py",
+    "app/ingestion/segmentation/rules.py",
+    "tests/ingestion/conftest.py",
+]
+
 [lint]
 # E/F = pyflakes+pycodestyle core errors, I = import sorting, UP = modernize syntax,
 # B = likely bugs (bugbear), S = security (bandit), C4 = comprehensions, SIM = simplifications
@@ -27,14 +37,4 @@ known-first-party = ["app", "tests"]
 "tests/*" = [
     "S101",  # assert is how pytest works
     "S105", "S106",  # throw-away passwords in fixtures
-]
-
-# Sprint 0 introduced ruff formatting for the first time. These files predate it and use a
-# different style; excluding them here (rather than reformatting someone else's code in a
-# DevOps PR) lets each role format their own files next time they touch them. Remove an
-# entry as soon as its file has been run through `ruff format` by its owner.
-extend-exclude = [
-    "app/ingestion/models.py",
-    "app/ingestion/segmentation/rules.py",
-    "tests/ingestion/conftest.py",
 ]
