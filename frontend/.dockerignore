@@ -1,0 +1,8 @@
+# Never copy host node_modules into the image: native binaries (esbuild, rollup) built on
+# Windows/macOS crash inside the Linux container.
+node_modules/
+dist/
+.vite/
+coverage/
+.env
+*.log
