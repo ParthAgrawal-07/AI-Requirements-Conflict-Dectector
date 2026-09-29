@@ -26,19 +26,32 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 
+def _ensure_psycopg2_driver(url_str: str) -> str:
+    """Force the psycopg2 driver explicitly.
+
+    A bare "postgresql://" (no driver suffix) lets SQLAlchemy pick whichever PostgreSQL
+    DBAPI it resolves to by default — in practice that has been ``psycopg`` (v3, not
+    installed) rather than ``psycopg2-binary`` (the one we actually install). Every call
+    site that turns a connection string into an Engine routes through this first, rather
+    than relying on the string having been normalized exactly once upstream.
+    """
+    url = make_url(url_str)
+    if url.drivername == "postgresql":
+        url = url.set(drivername="postgresql+psycopg2")
+    return url.render_as_string(hide_password=False)
+
+
 def _resolve_test_database_url() -> str:
     explicit = os.environ.get("TEST_DATABASE_URL")
     if explicit:
-        return explicit
+        return _ensure_psycopg2_driver(explicit)
     base = os.environ.get(
         "DATABASE_URL",
         "postgresql://postgres:postgres@localhost:5432/requirements_conflict_detector",
     )
     if base.startswith("postgres://"):
         base = "postgresql://" + base.removeprefix("postgres://")
-    url = make_url(base)
-    if url.drivername == "postgresql":
-        url = url.set(drivername="postgresql+psycopg2")
+    url = make_url(_ensure_psycopg2_driver(base))
     return url.set(database=f"{url.database}_test").render_as_string(hide_password=False)
 
 
@@ -77,7 +90,7 @@ def _fast_password_hashing(monkeypatch: pytest.MonkeyPatch) -> None:
 # ── Database ─────────────────────────────────────────────────────────────────
 def _ensure_database(url_str: str) -> None:
     """Create the target database if it does not exist yet."""
-    url = make_url(url_str)
+    url = make_url(_ensure_psycopg2_driver(url_str))
     admin = create_engine(url.set(database="postgres"), isolation_level="AUTOCOMMIT")
     try:
         with admin.connect() as conn:
@@ -107,7 +120,7 @@ def _reset_schema(engine: Engine) -> None:
 @pytest.fixture(scope="session")
 def db_engine() -> Iterator[Engine]:
     """A migrated, empty PostgreSQL database. Built with Alembic, so migrations are exercised."""
-    url = os.environ["DATABASE_URL"]
+    url = _ensure_psycopg2_driver(os.environ["DATABASE_URL"])
     try:
         _ensure_database(url)
     except OperationalError as exc:
@@ -125,7 +138,7 @@ def db_engine() -> Iterator[Engine]:
 @pytest.fixture
 def scratch_engine() -> Iterator[Engine]:
     """A throw-away empty database, for tests that must migrate up/down themselves."""
-    base = make_url(os.environ["DATABASE_URL"])
+    base = make_url(_ensure_psycopg2_driver(os.environ["DATABASE_URL"]))
     name = f"{base.database}_scratch_{uuid.uuid4().hex[:8]}"
     url = base.set(database=name).render_as_string(hide_password=False)
     try:
