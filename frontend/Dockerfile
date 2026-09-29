@@ -17,9 +17,9 @@ RUN rm -f package-lock.json && npm install
 
 COPY . .
 
-RUN useradd --uid 1000 --create-home node_app \
-    && chown -R node_app:node_app /app
-USER node_app
+# node:20-slim already ships a "node" user at UID 1000 — reuse it instead of creating one.
+RUN chown -R node:node /app
+USER node
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD node -e "fetch('http://localhost:5173').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
