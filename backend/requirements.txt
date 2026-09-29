@@ -1,18 +1,37 @@
-fastapi
-uvicorn[standard]
-pydantic
-sqlalchemy
-sqlmodel
-alembic
-celery
-redis
-psycopg2-binary
-pgvector
-sentence-transformers
-spacy
-pymupdf
-python-docx
-python-jose[cryptography]
-passlib[bcrypt]
-pytest
-httpx
+# Runtime dependencies. Dev/test tooling lives in requirements-dev.txt.
+#
+# Ranges below were verified against the newest releases at Sprint 0 (Sep 2026).
+# Once the app stabilises, generate a fully pinned lock file (pip-tools / uv) for deploys.
+#
+# NOTE: torch is installed separately in the Dockerfile / CI from the CPU-only wheel index
+# (see backend/Dockerfile) so we don't pull ~2 GB of CUDA libraries we can't use.
+
+# ── API ──────────────────────────────────────────────────
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30,<1
+pydantic>=2.7,<3
+pydantic-settings>=2.7,<3          # >=2.7 needed for NoDecode (comma-separated env lists)
+email-validator>=2.1,<3            # pydantic EmailStr
+python-multipart>=0.0.9            # multipart uploads (POST /documents, Sprint 1)
+
+# ── Auth ─────────────────────────────────────────────────
+PyJWT>=2.8,<3                      # JWT encode/decode (replaces python-jose: less maintained, past CVEs)
+argon2-cffi>=23.1,<26              # Argon2id password hashing (replaces passlib+bcrypt)
+
+# ── Database ─────────────────────────────────────────────
+sqlalchemy>=2.0.30,<3
+alembic>=1.13,<2
+psycopg2-binary>=2.9,<3
+pgvector>=0.3,<1
+
+# ── Async jobs ───────────────────────────────────────────
+celery>=5.4,<6
+redis>=5.0,<9
+
+# ── Ingestion (Role 1) ───────────────────────────────────
+pymupdf>=1.24
+python-docx>=1.1,<2
+spacy>=3.7,<4
+
+# ── Embeddings (Role 2) ──────────────────────────────────
+sentence-transformers>=3.0

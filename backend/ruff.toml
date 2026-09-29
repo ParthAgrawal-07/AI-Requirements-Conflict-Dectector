@@ -2,9 +2,29 @@ line-length = 100
 target-version = "py311"
 
 [lint]
-# E/F = pyflakes+pycodestyle core errors, I = import sorting, UP = modernize syntax
-select = ["E", "F", "I", "UP"]
-ignore = ["E501"]  # line length handled loosely for now; tighten later if the team wants
+# E/F = pyflakes+pycodestyle core errors, I = import sorting, UP = modernize syntax,
+# B = likely bugs (bugbear), S = security (bandit), C4 = comprehensions, SIM = simplifications
+select = ["E", "F", "I", "UP", "B", "S", "C4", "SIM"]
+ignore = [
+    "E501",  # line length handled loosely for now; tighten later if the team wants
+    "S608",  # SQL-string building: revisit when raw SQL appears (we use the ORM)
+]
+
+[lint.flake8-bugbear]
+# FastAPI's dependency markers are meant to be used as default values.
+extend-immutable-calls = [
+    "fastapi.Depends", "fastapi.Security", "fastapi.Query", "fastapi.Path",
+    "fastapi.Body", "fastapi.Header", "fastapi.Cookie", "fastapi.Form", "fastapi.File",
+]
+
+[lint.isort]
+# backend/alembic/ (our migrations folder) would otherwise shadow the third-party package
+known-third-party = ["alembic"]
+known-first-party = ["app", "tests"]
 
 [lint.per-file-ignores]
 "alembic/*" = ["E", "F"]  # auto-generated migration files aren't hand-written to this standard
+"tests/*" = [
+    "S101",  # assert is how pytest works
+    "S105", "S106",  # throw-away passwords in fixtures
+]
