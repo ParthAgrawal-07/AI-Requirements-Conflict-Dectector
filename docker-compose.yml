@@ -1,43 +1,104 @@
-version: "3.9"
+# Local development topology (NFR-23: the same definition is meant to describe production).
+# `docker compose up --build` starts every service; see README.md for first-time setup.
+#
+# No top-level `version:` key — it's the legacy Compose v1 file format field and is ignored
+# (with a warning) by Compose v2, which everyone on the team is expected to have.
 
 services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-requirements_conflict_detector}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-requirements_conflict_detector}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Runs `alembic upgrade head` and exits. `backend` and `worker` both wait for it to finish
+  # successfully rather than each migrating on their own start-up, so two containers can never
+  # race to apply the same migration.
+  migrate:
+    build: ./backend
+    env_file: .env
+    environment:
+      RUN_MIGRATIONS: "1"
+    command: ["true"]  # entrypoint.sh migrates, then execs this no-op and exits 0
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
   backend:
     build: ./backend
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT:-8000}:8000"
     env_file: .env
+    environment:
+      RUN_MIGRATIONS: "0"  # already applied by the `migrate` service above
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - ./backend:/app          # bind mount for hot-reload; /opt/venv lives outside /app
+      - uploads:/data/uploads
+
+  worker:
+    build: ./backend
+    env_file: .env
+    environment:
+      RUN_MIGRATIONS: "0"
+    command: ["celery", "-A", "app.core.celery_app", "worker", "--loglevel=INFO"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     volumes:
       - ./backend:/app
+      - uploads:/data/uploads   # same volume as `backend`: the worker reads what the API saved
 
   frontend:
     build: ./frontend
     ports:
-      - "5173:5173"
+      - "${FRONTEND_PORT:-5173}:5173"
     env_file: .env
     depends_on:
       - backend
     volumes:
       - ./frontend:/app
-
-  db:
-    image: ankane/pgvector:latest
-    restart: always
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
+      - frontend_node_modules:/app/node_modules  # keep the image's own install; don't let
+                                                  # the bind mount above shadow it with the host's
 
 volumes:
   pgdata:
+  redisdata:
+  uploads:
+  frontend_node_modules:
