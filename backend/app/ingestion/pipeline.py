@@ -1,8 +1,10 @@
 """
 Ingestion pipeline entry point.
 
-Provides the `ingest()` function which is the single public interface
-for converting a document file into a list of Requirement objects.
+Provides the public interface for converting a document file into Requirements:
+
+    ingest(path)          -> list[Requirement]
+    ingest_document(path) -> SegmentationResult (requirements + excluded text)
 
 Usage:
     from app.ingestion.pipeline import ingest
@@ -13,7 +15,7 @@ import logging
 from pathlib import Path
 
 from app.ingestion.errors import DocumentParseError
-from app.ingestion.models import Requirement
+from app.ingestion.models import Requirement, SegmentationResult
 from app.ingestion.parsers.base import Parser
 from app.ingestion.parsers.docx_parser import DOCXParser
 from app.ingestion.parsers.pdf_parser import PDFParser
@@ -37,6 +39,11 @@ _UNSUPPORTED_HINTS: dict[str, str] = {
 
 
 def ingest(file_path: str) -> list[Requirement]:
+    """Parse a document and return its requirements. See ingest_document()."""
+    return ingest_document(file_path).requirements
+
+
+def ingest_document(file_path: str) -> SegmentationResult:
     """
     Parse a document and extract requirements from it.
 
@@ -50,7 +57,8 @@ def ingest(file_path: str) -> list[Requirement]:
         file_path: Path to a .pdf or .docx file.
 
     Returns:
-        List of Requirement objects extracted from the document.
+        SegmentationResult with the requirements and the text that was excluded
+        as non-requirement content (TOC, fragments, narrative).
 
     Raises:
         FileNotFoundError: If the file does not exist.
@@ -85,9 +93,8 @@ def ingest(file_path: str) -> list[Requirement]:
             "Scanned/image-only PDFs are not supported (no OCR)."
         )
 
-    segmenter = Segmenter()
-    requirements = segmenter.segment(raw_segments)
+    result = Segmenter().run(raw_segments)
 
-    logger.info("Produced %d requirements from %s", len(requirements), path.name)
+    logger.info("Produced %d requirements from %s", len(result.requirements), path.name)
 
-    return requirements
+    return result

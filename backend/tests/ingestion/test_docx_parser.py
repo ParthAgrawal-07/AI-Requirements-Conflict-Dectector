@@ -1,5 +1,6 @@
 """Tests for DOCXParser."""
 
+import docx
 import pytest
 
 from app.ingestion.errors import DocumentParseError
@@ -93,3 +94,19 @@ class TestDOCXParser:
 
         with pytest.raises(DocumentParseError, match="corrupted"):
             DOCXParser().parse(str(bad))
+
+    def test_skips_table_of_contents_paragraphs(self, tmp_path):
+        path = tmp_path / "toc.docx"
+        doc = docx.Document()
+        styles = doc.styles
+        styles.add_style("TOC 1", 1)  # WD_STYLE_TYPE.PARAGRAPH
+        doc.add_paragraph("1 Introduction\t2", style="TOC 1")
+        doc.add_paragraph("REQ-1: The system shall work.")
+        doc.save(str(path))
+
+        assert [s.text for s in DOCXParser().parse(str(path))] == ["REQ-1: The system shall work."]
+
+    def test_marks_list_paragraphs(self, realistic_srs_docx):
+        segments = DOCXParser().parse(realistic_srs_docx)
+
+        assert [s.text for s in segments if s.is_list_item] == ["PDF", "CSV"]

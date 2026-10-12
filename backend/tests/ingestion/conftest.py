@@ -94,3 +94,123 @@ def sample_docx_structured(tmp_path):
     doc.save(str(path))
 
     return str(path)
+
+
+def _write_pages(path, pages, *, header=None, footer=None):
+    """Write a PDF where each page is a list of (text, fontsize) paragraphs, wrapped to width."""
+    doc = pymupdf.open()
+    width, height = 595, 842
+    for number, paragraphs in enumerate(pages, start=1):
+        page = doc.new_page(width=width, height=height)
+        if header:
+            page.insert_text((50, 30), header, fontsize=8)
+        if footer:
+            page.insert_text((270, 820), footer.format(n=number, total=len(pages)), fontsize=8)
+        y = 90
+        for text, size in paragraphs:
+            box = pymupdf.Rect(50, y, width - 50, y + 200)
+            unused = page.insert_textbox(box, text, fontsize=size)
+            y += (200 - unused) + 12
+    doc.save(str(path))
+    doc.close()
+
+
+@pytest.fixture
+def realistic_srs_pdf(tmp_path):
+    """Three-page SRS: title + TOC, running header/footer, wrapped lines, a requirement
+    split across a page break, a bullet list, ID-less statements and a duplicate ID."""
+    path = tmp_path / "library_srs.pdf"
+    _write_pages(
+        path,
+        [
+            [
+                ("Software Requirements Specification", 16),
+                ("Online Library System", 12),
+                ("Table of Contents", 12),
+                ("1 Introduction ........................................ 2", 10),
+                ("2 Functional Requirements ............................. 2", 10),
+                ("3 Non-Functional Requirements ......................... 3", 10),
+            ],
+            [
+                ("1 Introduction", 13),
+                (
+                    "This document describes the requirements for the Online Library System "
+                    "used by members and librarians of the city library.",
+                    10,
+                ),
+                ("2 Functional Requirements", 13),
+                (
+                    "REQ-001: The system shall allow a registered member to search the catalogue "
+                    "by title, author, ISBN or subject, and shall return results within two "
+                    "seconds for up to 10,000 records.",
+                    10,
+                ),
+                ("REQ-002: The system shall support the following notification channels:", 10),
+                ("- Email", 10),
+                ("- SMS", 10),
+                (
+                    "REQ-003: A member must not borrow more than five items at the same time. "
+                    "This limit applies across all branches.",
+                    10,
+                ),
+                (
+                    "Librarians shall be able to override the borrowing limit for a single "
+                    "member. The override shall be logged.",
+                    10,
+                ),
+                (
+                    "REQ-004: The system shall send a reminder to the member three days before "
+                    "an item is due and again on the day the item becomes overdue, unless the "
+                    "member has",
+                    10,
+                ),
+            ],
+            [
+                ("disabled reminders in their profile settings.", 10),
+                ("3 Non-Functional Requirements", 13),
+                ("NFR-01: The system should be available 99.5% of the time, measured monthly.", 10),
+                ("The user interface will be easy to use.", 10),
+                ("REQ-003: The catalogue shall be updated nightly.", 10),
+            ],
+        ],
+        header="Online Library System - SRS v1.0",
+        footer="Page {n} of {total}",
+    )
+    return str(path)
+
+
+@pytest.fixture
+def realistic_srs_docx(tmp_path):
+    """DOCX with styled headings, a glossary, Word bullet list, and a table with a header row."""
+    path = tmp_path / "library_srs.docx"
+
+    doc = docx.Document()
+    doc.add_heading("Online Library System SRS", 0)
+    doc.add_heading("1 Introduction", 1)
+    doc.add_paragraph("This SRS describes the Online Library System.")
+    doc.add_heading("1.1 Glossary", 2)
+    doc.add_paragraph("Member: a registered library user.")
+    doc.add_heading("2 Functional Requirements", 1)
+    doc.add_paragraph(
+        "FR-1: The system shall let members reserve items. Reservations expire after 48 hours."
+    )
+    doc.add_paragraph("FR-2: The system shall export reports in these formats:")
+    doc.add_paragraph("PDF", style="List Bullet")
+    doc.add_paragraph("CSV", style="List Bullet")
+    doc.add_paragraph("The system shall lock an account after five failed login attempts.")
+    doc.add_heading("2.1 Fines", 2)
+    doc.add_paragraph("Fines are calculated daily.")
+    table = doc.add_table(rows=3, cols=3)
+    rows = [
+        ("ID", "Requirement", "Priority"),
+        ("FR-10", "The system shall calculate fines daily.", "High"),
+        ("FR-11", "Fines must not exceed the item price.", "Medium"),
+    ]
+    for r, row in enumerate(rows):
+        for c, value in enumerate(row):
+            table.cell(r, c).text = value
+    doc.add_heading("3 Non-Functional Requirements", 1)
+    doc.add_paragraph("NFR-1: Pages should load within 2 seconds.")
+    doc.save(str(path))
+
+    return str(path)
