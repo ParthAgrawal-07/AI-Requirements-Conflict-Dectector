@@ -19,8 +19,7 @@ def sample_pdf(tmp_path):
     page = doc.new_page()
     page.insert_text(
         (50, 50),
-        "REQ-001: The system shall allow user login.\n"
-        "REQ-002: The system shall support logout.",
+        "REQ-001: The system shall allow user login.\nREQ-002: The system shall support logout.",
     )
     doc.save(str(path))
     doc.close()
@@ -74,6 +73,24 @@ def sample_docx_multi(tmp_path):
     doc.add_paragraph("")  # empty paragraph — should be skipped
     doc.add_paragraph("This is an introductory paragraph with no ID.")
     doc.add_paragraph("NFR-02: Performance requirement.")
+    doc.save(str(path))
+
+    return str(path)
+
+
+@pytest.fixture
+def sample_docx_structured(tmp_path):
+    """Create a DOCX with a heading and a requirements table (ID | Description)."""
+    path = tmp_path / "structured.docx"
+
+    doc = docx.Document()
+    doc.add_heading("3. Functional Requirements", level=1)
+    doc.add_paragraph("REQ-001: The system shall allow login.")
+    table = doc.add_table(rows=2, cols=2)
+    table.cell(0, 0).text = "REQ-010"
+    table.cell(0, 1).text = "The system shall encrypt data at rest."
+    table.cell(1, 0).text = "REQ-011"
+    table.cell(1, 1).text = "The system shall store data unencrypted."
     doc.save(str(path))
 
     return str(path)

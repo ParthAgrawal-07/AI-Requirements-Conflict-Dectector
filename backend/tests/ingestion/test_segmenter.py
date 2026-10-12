@@ -14,6 +14,7 @@ class TestSegmenter:
                 text="REQ-001: The user shall log in.\nREQ-002: The user shall log out.",
                 source_document="test.pdf",
                 page_or_paragraph=1,
+                location_type="page",
                 order_index=0,
             )
         ]
@@ -34,6 +35,7 @@ class TestSegmenter:
                 text="FR-1: Feature one.\nFR-1.2: Sub-feature.\nNFR-01: Performance.",
                 source_document="spec.docx",
                 page_or_paragraph=1,
+                location_type="page",
                 order_index=0,
             )
         ]
@@ -51,6 +53,7 @@ class TestSegmenter:
                 text="This is an intro paragraph.",
                 source_document="test.pdf",
                 page_or_paragraph=2,
+                location_type="page",
                 order_index=1,
             )
         ]
@@ -69,12 +72,14 @@ class TestSegmenter:
                 text="REQ-001: The user shall log in.\nREQ-002: The user shall log out.",
                 source_document="test.pdf",
                 page_or_paragraph=1,
+                location_type="page",
                 order_index=0,
             ),
             RawSegment(
                 text="This is an intro paragraph.",
                 source_document="test.pdf",
                 page_or_paragraph=2,
+                location_type="page",
                 order_index=1,
             ),
         ]
@@ -94,6 +99,7 @@ class TestSegmenter:
                 text="REQ-001: First.\n\n\nREQ-002: Second.",
                 source_document="test.pdf",
                 page_or_paragraph=1,
+                location_type="page",
                 order_index=0,
             )
         ]
@@ -110,6 +116,7 @@ class TestSegmenter:
                 text="REQ-010: Something.",
                 source_document="my_srs.pdf",
                 page_or_paragraph=5,
+                location_type="page",
                 order_index=4,
             )
         ]
@@ -118,7 +125,7 @@ class TestSegmenter:
         requirements = segmenter.segment(raw_segments)
 
         assert requirements[0].source_document == "my_srs.pdf"
-        assert "5" in requirements[0].location
+        assert requirements[0].location == "page 5"
 
     def test_returns_requirement_type(self):
         """All items in the output must be Requirement instances."""
@@ -127,6 +134,7 @@ class TestSegmenter:
                 text="REQ-001: Test.",
                 source_document="test.pdf",
                 page_or_paragraph=1,
+                location_type="page",
                 order_index=0,
             )
         ]
@@ -142,3 +150,54 @@ class TestSegmenter:
         requirements = segmenter.segment([])
 
         assert requirements == []
+
+    def test_cross_reference_is_not_treated_as_own_id(self):
+        """An ID mentioned mid-sentence is a reference, not the line's own ID."""
+        raw_segments = [
+            RawSegment(
+                text="This statement contradicts FR-1 above.",
+                source_document="spec.docx",
+                page_or_paragraph=3,
+                location_type="paragraph",
+                order_index=0,
+            )
+        ]
+
+        requirements = Segmenter().segment(raw_segments)
+
+        assert requirements[0].id == "UNKNOWN-3-0"
+        assert requirements[0].source_req_id is None
+        assert requirements[0].location == "paragraph 3"
+
+    def test_leading_bullets_and_nested_ids(self):
+        """IDs after bullets/brackets are found, and multi-level IDs are kept whole."""
+        raw_segments = [
+            RawSegment(
+                text="\u2022 FR-1.2.3: Nested.\n[DR-03] Data rule.\n- REQ-7 Dash bullet.",
+                source_document="spec.pdf",
+                page_or_paragraph=1,
+                location_type="page",
+                order_index=0,
+            )
+        ]
+
+        requirements = Segmenter().segment(raw_segments)
+
+        assert [r.id for r in requirements] == ["FR-1.2.3", "DR-03", "REQ-7"]
+        assert all(r.source_req_id == r.id for r in requirements)
+
+    def test_carries_section_heading(self):
+        raw_segments = [
+            RawSegment(
+                text="REQ-001: Something.",
+                source_document="spec.docx",
+                page_or_paragraph=2,
+                location_type="paragraph",
+                section_heading="3. Functional Requirements",
+                order_index=0,
+            )
+        ]
+
+        requirements = Segmenter().segment(raw_segments)
+
+        assert requirements[0].section_heading == "3. Functional Requirements"

@@ -1,7 +1,9 @@
 """Tests for PDFParser."""
 
+import pymupdf
 import pytest
 
+from app.ingestion.errors import DocumentParseError
 from app.ingestion.models import RawSegment
 from app.ingestion.parsers.pdf_parser import PDFParser
 
@@ -66,3 +68,25 @@ class TestPDFParser:
         parser = PDFParser()
         with pytest.raises(FileNotFoundError, match="File not found"):
             parser.parse("/nonexistent/path/document.pdf")
+
+    def test_corrupted_pdf_raises_parse_error(self, tmp_path):
+        bad = tmp_path / "broken.pdf"
+        bad.write_bytes(b"not a pdf")
+
+        with pytest.raises(DocumentParseError, match="corrupted"):
+            PDFParser().parse(str(bad))
+
+    def test_encrypted_pdf_raises_parse_error(self, tmp_path):
+        path = tmp_path / "locked.pdf"
+        doc = pymupdf.open()
+        doc.new_page().insert_text((50, 50), "REQ-001: Secret.")
+        doc.save(
+            str(path),
+            encryption=pymupdf.PDF_ENCRYPT_AES_256,
+            owner_pw="owner",
+            user_pw="user",
+        )
+        doc.close()
+
+        with pytest.raises(DocumentParseError, match="password-protected"):
+            PDFParser().parse(str(path))

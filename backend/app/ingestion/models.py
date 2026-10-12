@@ -7,6 +7,7 @@ final output of segmentation.
 """
 
 from datetime import UTC, datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -18,8 +19,10 @@ class RawSegment(BaseModel):
     Attributes:
         text: The extracted text content.
         source_document: Filename or path of the source document.
-        page_or_paragraph: 1-based page number (PDF) or paragraph index (DOCX).
-        section_heading: Nearest section heading, if detected. None in Sprint 0.
+        page_or_paragraph: 1-based page number (PDF) or body-block index (DOCX;
+            each paragraph and each table row counts as one block).
+        location_type: Whether page_or_paragraph is a "page" or a "paragraph".
+        section_heading: Nearest preceding heading (DOCX only for now; None for PDF).
         order_index: 0-based global ordering across the entire document.
     """
 
@@ -28,6 +31,7 @@ class RawSegment(BaseModel):
     text: str
     source_document: str
     page_or_paragraph: int
+    location_type: Literal["page", "paragraph"]
     section_heading: str | None = None
     order_index: int
 
@@ -48,18 +52,21 @@ class Requirement(BaseModel):
     Attributes:
         id: Requirement identifier (e.g. "REQ-001") or a deterministic
             fallback ID if none was detected.
+        source_req_id: The ID as written in the document, or None if the line
+            had no ID (maps to requirements.source_req_id in the data model).
         raw_text: The full text of the requirement line.
         source_document: Filename or path of the source document.
         location: Human-readable location string (e.g. "page 3" or "paragraph 12").
+        section_heading: Heading the requirement appears under, if known.
         extracted_at: UTC timestamp of when this requirement was extracted.
     """
 
     model_config = {"frozen": True}
 
     id: str
+    source_req_id: str | None = None
     raw_text: str
     source_document: str
     location: str
-    extracted_at: datetime = Field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    section_heading: str | None = None
+    extracted_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

@@ -48,9 +48,10 @@ class Segmenter:
                 if not line:
                     continue
 
-                match = REQUIREMENT_ID_PATTERN.search(line)
-                if match:
-                    req_id = match.group(0)
+                match = REQUIREMENT_ID_PATTERN.match(line)
+                source_req_id = match.group("id") if match else None
+                if source_req_id:
+                    req_id = source_req_id
                 else:
                     # Deterministic fallback — preserves traceability
                     req_id = f"UNKNOWN-{segment.page_or_paragraph}-{line_idx}"
@@ -65,9 +66,11 @@ class Segmenter:
                 requirements.append(
                     Requirement(
                         id=req_id,
+                        source_req_id=source_req_id,
                         raw_text=line,
                         source_document=segment.source_document,
-                        location=f"page/para {segment.page_or_paragraph}",
+                        location=f"{segment.location_type} {segment.page_or_paragraph}",
+                        section_heading=segment.section_heading,
                     )
                 )
 
