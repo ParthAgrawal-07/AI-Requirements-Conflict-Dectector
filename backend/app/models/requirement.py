@@ -29,9 +29,8 @@ if TYPE_CHECKING:
 class Requirement(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     """One extracted requirement statement.
 
-    Maps from ``app.ingestion.models.Requirement``: ``source_req_id`` -> ``source_req_id``,
-    ``raw_text`` -> ``body``, ``review_reasons`` -> ``review_reason`` (joined with "; ");
-    other fields map by name. See ``app.ingestion.service``.
+    Maps from ``app.ingestion.models.Requirement``: ``id`` -> ``source_req_id``,
+    ``raw_text`` -> ``body``, ``location`` -> ``location``.
     """
 
     __tablename__ = "requirements"
@@ -47,11 +46,7 @@ class Requirement(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     source_req_id: Mapped[str | None] = mapped_column(String(64))
     body: Mapped[str] = mapped_column(Text)
     location: Mapped[str | None] = mapped_column(String(64))  # e.g. "page 3", "paragraph 12"
-    section_heading: Mapped[str | None] = mapped_column(String(255))  # source section (US-07)
     order_index: Mapped[int] = mapped_column(default=0, server_default=text("0"))
-    # Set by ingestion when segmentation is uncertain (US-02): shown for manual review.
-    needs_review: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
-    review_reason: Mapped[str | None] = mapped_column(Text)
     stakeholder_group: Mapped[str | None] = mapped_column(String(120))  # FR-05, DR-11
     # Compliance-critical: never auto-resolved, all access audited (FR-21, DR-05, NFR-13).
     is_protected: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
