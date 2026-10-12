@@ -5,7 +5,6 @@ import shutil
 import pymupdf
 import pytest
 
-from app.ingestion.errors import DocumentParseError
 from app.ingestion.models import Requirement
 from app.ingestion.pipeline import ingest
 
@@ -63,16 +62,15 @@ class TestPipeline:
         for r in reqs:
             assert r.extracted_at is not None
 
-    def test_rejects_pdf_without_text(self, tmp_path):
-        """Scanned/blank PDFs should fail loudly, not return an empty list."""
+    def test_pdf_without_text_yields_no_requirements(self, tmp_path):
+        """Scanned/blank PDFs give an empty result, which orchestration reports to the user."""
         path = tmp_path / "scanned.pdf"
         doc = pymupdf.open()
         doc.new_page()
         doc.save(str(path))
         doc.close()
 
-        with pytest.raises(DocumentParseError, match="No extractable text"):
-            ingest(str(path))
+        assert ingest(str(path)) == []
 
     def test_docx_table_requirements_end_to_end(self, sample_docx_structured):
         reqs = ingest(sample_docx_structured)

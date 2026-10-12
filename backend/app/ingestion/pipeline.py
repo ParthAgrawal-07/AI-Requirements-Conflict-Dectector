@@ -14,7 +14,6 @@ Usage:
 import logging
 from pathlib import Path
 
-from app.ingestion.errors import DocumentParseError
 from app.ingestion.models import Requirement, SegmentationResult
 from app.ingestion.parsers.base import Parser
 from app.ingestion.parsers.docx_parser import DOCXParser
@@ -63,8 +62,10 @@ def ingest_document(file_path: str) -> SegmentationResult:
     Raises:
         FileNotFoundError: If the file does not exist.
         ValueError: If the file format is not supported.
-        DocumentParseError: (a ValueError) if the file is corrupted, encrypted,
-            or contains no extractable text (e.g. a scanned PDF).
+        DocumentParseError: (a ValueError) if the file is corrupted or encrypted.
+
+    A file with no extractable text (e.g. a scanned PDF) is not an error: it yields an
+    empty result, which callers report as "no requirements found".
     """
     path = Path(file_path)
     if not path.is_file():
@@ -88,10 +89,10 @@ def ingest_document(file_path: str) -> SegmentationResult:
     logger.info("Extracted %d raw segments from %s", len(raw_segments), path.name)
 
     if not raw_segments:
-        raise DocumentParseError(
-            f"No extractable text found in '{path.name}'. "
-            "Scanned/image-only PDFs are not supported (no OCR)."
-        )
+        # An empty result is the "nothing found" signal callers act on
+        # (app.services.processing reports it to the user); scanned PDFs land here.
+        logger.warning("No extractable text in %s (scanned/image-only PDF?)", path.name)
+        return SegmentationResult(requirements=[])
 
     result = Segmenter().run(raw_segments)
 
