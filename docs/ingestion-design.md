@@ -100,14 +100,15 @@ Implemented in `segmentation/segmenter.py`; patterns in `segmentation/rules.py`.
 
 Design rule: **when unsure, keep and flag** (US-02: low-confidence segmentation is surfaced for manual review, not silently dropped).
 
-## 10. Storage and the Celery task (Sprint 1)
-- `app/ingestion/tasks.py`: Celery task `ingestion.extract_document(document_id)`, discovered automatically by `app.core.celery_app`. The upload endpoint (US-01) should call `extract_document_task.delay(str(document.id))` after saving the file and the `Document` row. The stored file must keep its `.pdf`/`.docx` extension.
-- `app/ingestion/service.py`: `extract_document(session, document_id)`:
-  - Status `QUEUED → PROCESSING → DONE`, or `FAILED` with a user-facing `error_message`. Corrupt, encrypted and scanned files, and documents with no requirements, are all reported. The message shows the uploaded filename and never the server storage path.
-  - Stores one `requirements` row per requirement (`source_req_id`, `body`, `location`, `section_heading`, `order_index`, `needs_review`, `review_reason`), plus a version-1 `requirement_versions` snapshot (`changed_by` NULL = system).
-  - Safe to re-run: Celery uses `acks_late`, so a task can arrive twice. A `DONE` document is skipped, and rows left by an interrupted run are replaced.
-- Migration `0002` adds `requirements.section_heading`, `needs_review`, `review_reason`.
-- Currently the task ends at `DONE`. When embeddings land (Sprint 2), orchestration should chain the next stage here.
+## 10. Integration with orchestration
+Storing results and running the Celery task belong to Role 5 (Parth): `app.services.processing.process_document` (PR #7) calls `ingest(path)` and saves each returned `Requirement` (`id`, `raw_text`, `location`).
+
+Handled by the pipeline, which `process_document` relies on:
+- every failure is a `ValueError` (`DocumentParseError` for corrupt, encrypted or text-less files);
+- an empty list means no requirements were found;
+- fallback IDs look like `UNKNOWN-…`, which never match `REQUIREMENT_ID_PATTERN`.
+
+**Follow-up after PR #7 merges:** add migration `0003` with `requirements.section_heading`, `needs_review` and `review_reason`, and have `process_document` save `section_heading`, `needs_review` and `review_reasons` (joined with "; "). Until then, review flags are computed but not stored.
 
 ## 11. Known Limitations
 - Multi-column PDFs: blocks are read top-to-bottom, so two columns can interleave.
@@ -115,4 +116,4 @@ Design rule: **when unsure, keep and flag** (US-02: low-confidence segmentation 
 - Heading detection in PDFs is text-based (numbering, case), not font-based.
 - No OCR: scanned PDFs fail with a clear message.
 - `.txt` and ReqIF (listed in US-01) are not supported yet.
-- FR-06 (user corrects segmentation errors) is not implemented. The `needs_review` flags are what that UI should show first.
+- FR-06 (user corrects segmentation errors) is not implemented. The `needs_review` flags are what that UI should show first, once they are stored (see §10).
