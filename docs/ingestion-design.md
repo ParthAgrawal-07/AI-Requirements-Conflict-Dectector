@@ -33,7 +33,8 @@ Any attempt to ingest these will raise a clear `ValueError` exception.
 Supported-format files that cannot be read raise `DocumentParseError` (a `ValueError` subclass), so the upload endpoint can catch one exception type and show the user a message:
 - corrupted / not-really-a-PDF or DOCX file
 - password-protected PDF
-- no extractable text at all (e.g. scanned, image-only PDF — we do no OCR)
+
+A file with no extractable text (e.g. a scanned, image-only PDF; we do no OCR) is not an error. It yields an empty result, which the processing service reports as "no requirements found".
 
 ## 6. RawSegment Schema
 The intermediate model representing extracted chunks (before requirement segmentation):
@@ -104,7 +105,7 @@ Design rule: **when unsure, keep and flag** (US-02: low-confidence segmentation 
 Storing results and running the Celery task belong to Role 5 (Parth): `app.services.processing.process_document` (PR #7) calls `ingest(path)` and saves each returned `Requirement` (`id`, `raw_text`, `location`).
 
 Handled by the pipeline, which `process_document` relies on:
-- every failure is a `ValueError` (`DocumentParseError` for corrupt, encrypted or text-less files);
+- every failure is a `ValueError` (`DocumentParseError` for corrupt or encrypted files);
 - an empty list means no requirements were found;
 - fallback IDs look like `UNKNOWN-…`, which never match `REQUIREMENT_ID_PATTERN`.
 
