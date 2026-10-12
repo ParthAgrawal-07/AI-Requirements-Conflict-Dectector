@@ -6,11 +6,14 @@ paragraph and one per non-empty table row (cells joined with " | "), since SRS
 documents frequently list requirements in ID/description tables.
 
 Heading paragraphs are not emitted as segments; their text is attached as
-`section_heading` to the segments that follow them.
+`section_heading` to the segments that follow them. Table-of-contents paragraphs
+(Word's "TOC n" styles) are skipped. List paragraphs are marked is_list_item,
+because Word bullets/numbering are formatting and never appear in the text.
 
 Unsupported formats (.doc, .txt, .odt, etc.) raise a clear ValueError.
 """
 
+from typing import Literal
 from zipfile import BadZipFile
 
 import docx
@@ -31,9 +34,19 @@ _UNSUPPORTED_ALTERNATIVES = {
 }
 
 
-def _is_heading(para: Paragraph) -> bool:
-    style_name = para.style.name if para.style is not None else ""
-    return style_name == "Title" or style_name.startswith("Heading")
+_BlockKind = Literal["text", "heading", "list", "toc"]
+
+
+def _paragraph_kind(para: Paragraph) -> _BlockKind:
+    style_name = (para.style.name if para.style is not None else None) or ""
+    if style_name.startswith("TOC"):  # "TOC 1", "TOC 2", ..., "TOC Heading"
+        return "toc"
+    if style_name == "Title" or style_name.startswith("Heading"):
+        return "heading"
+    p_pr = para._p.pPr
+    if style_name.startswith("List") or (p_pr is not None and p_pr.numPr is not None):
+        return "list"
+    return "text"
 
 
 def _row_text(row) -> str:
@@ -69,23 +82,23 @@ class DOCXParser(Parser):
                 f"'{doc_name}' is not a valid .docx file or is corrupted."
             ) from exc
 
-        # Flatten the body into (block_text, is_heading) in reading order;
+        # Flatten the body into (block_text, kind) in reading order;
         # each table row is its own block so a row = one candidate requirement.
-        blocks: list[tuple[str, bool]] = []
+        blocks: list[tuple[str, _BlockKind]] = []
         for item in document.iter_inner_content():
             if isinstance(item, Paragraph):
-                blocks.append((item.text.strip(), _is_heading(item)))
+                blocks.append((item.text.strip(), _paragraph_kind(item)))
             elif isinstance(item, Table):
-                blocks.extend((_row_text(row), False) for row in item.rows)
+                blocks.extend((_row_text(row), "text") for row in item.rows)
 
         segments: list[RawSegment] = []
         current_heading: str | None = None
         order_index = 0
 
-        for i, (text, is_heading) in enumerate(blocks):
-            if not text:
+        for i, (text, kind) in enumerate(blocks):
+            if not text or kind == "toc":
                 continue
-            if is_heading:
+            if kind == "heading":
                 current_heading = text
                 continue
 
@@ -96,6 +109,7 @@ class DOCXParser(Parser):
                     page_or_paragraph=i + 1,  # 1-based block index
                     location_type="paragraph",
                     section_heading=current_heading,
+                    is_list_item=kind == "list",
                     order_index=order_index,
                 )
             )

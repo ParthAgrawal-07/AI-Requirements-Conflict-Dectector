@@ -1,4 +1,4 @@
-# Document Ingestion & Extraction Module Design (Sprint 0)
+# Document Ingestion & Extraction Module Design (Sprints 0–1)
 
 ## 1. Purpose of the Ingestion Module
 The ingestion module is responsible for reading source Software Requirements Specifications (SRS) documents and parsing them into a structured format. It performs the initial extraction of text and basic segmentation to isolate individual requirements before they are sent to the embedding and classification stages.
@@ -42,6 +42,7 @@ The intermediate model representing extracted chunks (before requirement segment
 - `page_or_paragraph` (int)
 - `location_type` (`"page"` | `"paragraph"`)
 - `section_heading` (str | None)
+- `is_list_item` (bool) — DOCX list paragraph (Word bullets are formatting, not text)
 - `order_index` (int)
 
 *Note: For PDFs, `page_or_paragraph` is the page number. For DOCX it is the 1-based body-block index, where each paragraph and each table row counts as one block. `location_type` says which, so the schema stays format-agnostic while locations remain human-readable.*
@@ -56,22 +57,62 @@ The final output model representing a segmented requirement:
 - `source_document` (str)
 - `location` (str) — e.g. `"page 3"` or `"paragraph 12"`
 - `section_heading` (str | None)
+- `order_index` (int) — position in the document
+- `needs_review` (bool) and `review_reasons` (tuple[str, ...]) — see §9.3
 - `extracted_at` (datetime)
+
+`ingest_document()` returns a `SegmentationResult`: the requirements plus `excluded` — every passage dropped as non-requirement text, with a reason (`toc`, `fragment`, `non_requirement_section`), so exclusions can be audited.
 
 ## 8. Parser Abstraction
 We define a generic `Parser` abstract base class with a `parse(file_path: str) -> List[RawSegment]` method. Both `PDFParser` and `DOCXParser` implement this, ensuring a uniform interface for the rest of the pipeline.
 
-## 9. Basic Segmentation Approach
-In Sprint 0, segmentation is a simple, deterministic proof-of-concept. It iterates through the text of each segment line-by-line and uses a regex to look for a requirement ID **at the start of the line** (after optional whitespace, bullet or bracket): `REQ-001`, `FR-1.2.3`, `NFR-01`, `DR-03`. IDs that appear mid-sentence are treated as cross-references ("conflicts with FR-1"), not as the line's own ID. If no ID is found, it falls back to a deterministic unknown ID format: `UNKNOWN-<page/para_num>-<index>`.
+## 9. Segmentation (Sprint 1, US-02 / T10)
 
-## 10. Known Sprint 0 Limitations
-- Segmentation is extremely basic (regex line matching) and NOT production-ready.
-- Layout reconstruction for PDFs (e.g., detecting multi-column layouts, tables) is not implemented.
-- Section headings are detected for DOCX (via paragraph styles) but not yet for PDFs.
-- A requirement that wraps over several PDF lines becomes several requirements (one per line); the continuation lines get `UNKNOWN-…` IDs.
-- Headings, intro text, and page headers/footers in PDFs also become `UNKNOWN-…` requirements.
+Implemented in `segmentation/segmenter.py`; patterns in `segmentation/rules.py`.
 
-## 11. What will be improved in Sprint 1
-- Production-quality segmentation (T10: spaCy sentence splitting + REQ-ID preservation), including merging wrapped continuation lines into the preceding requirement.
-- Better parsing of structured lists and headings as context.
-- Advanced layout heuristics for PDF extraction.
+### 9.1 Layout clean-up (PDF parser)
+- Text is read per PyMuPDF block, with blocks separated by a blank line, so a paragraph break can be told apart from a wrapped line.
+- **Headers/footers:** a block in the top/bottom 10% of the page is dropped if it is a bare page number (`3`, `Page 3 of 10`, `- 3 -`) or if the same text (digits ignored) is in the margin of at least half the pages. Blocks containing a requirement ID or `shall`/`must` are never dropped.
+
+### 9.2 Grouping lines into units
+- A line starting with a requirement ID (`REQ-001`, `FR-1.2.3`, `NFR-01`, `DR-03`, `SR-`, `UR-`, `BR-`, `SYS-`) starts a new unit. IDs mid-sentence are cross-references, not the line's own ID.
+- Wrapped lines are re-joined (`real-` + `time` → `real-time`).
+- A new paragraph starts a new unit unless the current one is still open:
+  - it ends with `:` (a list follows);
+  - it is a bare ID (ID and text in separate blocks or cells);
+  - it was cut off by a page break mid-sentence.
+- **Lists:** items after a lead-in (`…the following channels:`) stay with it as sub-items; an item that is itself a `shall`/`must` statement stands alone.
+- **Headings** (numbered like `3.2 Functional Requirements`, or short Title Case / UPPER CASE lines; DOCX heading styles) are not requirements; they become `section_heading` of what follows. Figure/table captions are not headings.
+- **Table of contents:** lines with dot leaders, DOCX `TOC n` paragraphs, and entries following a `Contents` title are excluded.
+
+### 9.3 Classification
+- A unit **with an ID** is one requirement and keeps its ID (DR-03). It is flagged for review if:
+  - the ID has no text;
+  - it holds several `shall`/`must` sentences (possibly several requirements);
+  - it is over 1000 characters.
+- A unit **without an ID** is split into sentences with spaCy's rule-based `sentencizer` (`spacy.blank("en")`, so no model download in Docker/CI). Each sentence with a modal verb starts a new requirement, and other sentences stay attached as context. Chunks are slices of the original text, so the wording is preserved (FR-04).
+- Text without an ID:
+  - `shall`/`must`: requirement. Flagged if it sits in an intro/glossary-type section.
+  - `should`/`will`/`can`/`may`: requirement, flagged ("weaker modal verb").
+  - no modal: excluded if it is a fragment (under 4 words, no punctuation, e.g. a table header) or sits under a non-requirement heading (Introduction, Purpose, Scope, Glossary, References, …). Otherwise it is kept and flagged.
+- Duplicate source IDs in one document are all flagged (duplicate IDs are themselves a finding).
+- Requirements without a source ID get `UNKNOWN-<page/para>-<n>`.
+
+Design rule: **when unsure, keep and flag** (US-02: low-confidence segmentation is surfaced for manual review, not silently dropped).
+
+## 10. Storage and the Celery task (Sprint 1)
+- `app/ingestion/tasks.py`: Celery task `ingestion.extract_document(document_id)`, discovered automatically by `app.core.celery_app`. The upload endpoint (US-01) should call `extract_document_task.delay(str(document.id))` after saving the file and the `Document` row. The stored file must keep its `.pdf`/`.docx` extension.
+- `app/ingestion/service.py`: `extract_document(session, document_id)`:
+  - Status `QUEUED → PROCESSING → DONE`, or `FAILED` with a user-facing `error_message`. Corrupt, encrypted and scanned files, and documents with no requirements, are all reported. The message shows the uploaded filename and never the server storage path.
+  - Stores one `requirements` row per requirement (`source_req_id`, `body`, `location`, `section_heading`, `order_index`, `needs_review`, `review_reason`), plus a version-1 `requirement_versions` snapshot (`changed_by` NULL = system).
+  - Safe to re-run: Celery uses `acks_late`, so a task can arrive twice. A `DONE` document is skipped, and rows left by an interrupted run are replaced.
+- Migration `0002` adds `requirements.section_heading`, `needs_review`, `review_reason`.
+- Currently the task ends at `DONE`. When embeddings land (Sprint 2), orchestration should chain the next stage here.
+
+## 11. Known Limitations
+- Multi-column PDFs: blocks are read top-to-bottom, so two columns can interleave.
+- Tables in PDFs are read as text blocks; DOCX tables are read row by row (`cell | cell | cell`), including non-ID columns such as priority.
+- Heading detection in PDFs is text-based (numbering, case), not font-based.
+- No OCR: scanned PDFs fail with a clear message.
+- `.txt` and ReqIF (listed in US-01) are not supported yet.
+- FR-06 (user corrects segmentation errors) is not implemented. The `needs_review` flags are what that UI should show first.
