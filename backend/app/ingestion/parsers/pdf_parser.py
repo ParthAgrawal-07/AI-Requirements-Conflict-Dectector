@@ -7,6 +7,7 @@ Empty pages are skipped. No OCR is performed.
 
 import pymupdf  # PyMuPDF (fitz API is deprecated)
 
+from app.ingestion.errors import DocumentParseError
 from app.ingestion.models import RawSegment
 from app.ingestion.parsers.base import Parser
 
@@ -27,7 +28,17 @@ class PDFParser(Parser):
         doc_name = path.name
         order_index = 0
 
-        with pymupdf.open(str(path)) as doc:
+        try:
+            doc = pymupdf.open(str(path))
+        except pymupdf.FileDataError as exc:
+            raise DocumentParseError(f"'{doc_name}' is not a valid PDF or is corrupted.") from exc
+
+        with doc:
+            if doc.needs_pass:
+                raise DocumentParseError(
+                    f"'{doc_name}' is password-protected. Please upload an unencrypted PDF."
+                )
+
             for page_num in range(len(doc)):
                 page = doc[page_num]
                 text = page.get_text().strip()
@@ -39,6 +50,7 @@ class PDFParser(Parser):
                         text=text,
                         source_document=doc_name,
                         page_or_paragraph=page_num + 1,  # 1-based page number
+                        location_type="page",
                         order_index=order_index,
                     )
                 )

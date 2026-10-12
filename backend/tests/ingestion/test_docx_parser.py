@@ -2,6 +2,7 @@
 
 import pytest
 
+from app.ingestion.errors import DocumentParseError
 from app.ingestion.models import RawSegment
 from app.ingestion.parsers.docx_parser import DOCXParser
 
@@ -69,3 +70,26 @@ class TestDOCXParser:
         parser = DOCXParser()
         with pytest.raises(FileNotFoundError, match="File not found"):
             parser.parse("/nonexistent/path/document.docx")
+
+    def test_extracts_table_rows(self, sample_docx_structured):
+        """Requirements inside tables must not be dropped."""
+        segments = DOCXParser().parse(sample_docx_structured)
+
+        texts = [s.text for s in segments]
+        assert "REQ-010 | The system shall encrypt data at rest." in texts
+        assert "REQ-011 | The system shall store data unencrypted." in texts
+
+    def test_headings_become_section_heading(self, sample_docx_structured):
+        """Headings are attached as context, not emitted as segments."""
+        segments = DOCXParser().parse(sample_docx_structured)
+
+        assert all("Functional Requirements" not in s.text for s in segments)
+        assert all(s.section_heading == "3. Functional Requirements" for s in segments)
+        assert all(s.location_type == "paragraph" for s in segments)
+
+    def test_corrupted_docx_raises_parse_error(self, tmp_path):
+        bad = tmp_path / "broken.docx"
+        bad.write_bytes(b"not a zip archive")
+
+        with pytest.raises(DocumentParseError, match="corrupted"):
+            DOCXParser().parse(str(bad))

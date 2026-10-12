@@ -12,6 +12,7 @@ Usage:
 import logging
 from pathlib import Path
 
+from app.ingestion.errors import DocumentParseError
 from app.ingestion.models import Requirement
 from app.ingestion.parsers.base import Parser
 from app.ingestion.parsers.docx_parser import DOCXParser
@@ -54,6 +55,8 @@ def ingest(file_path: str) -> list[Requirement]:
     Raises:
         FileNotFoundError: If the file does not exist.
         ValueError: If the file format is not supported.
+        DocumentParseError: (a ValueError) if the file is corrupted, encrypted,
+            or contains no extractable text (e.g. a scanned PDF).
     """
     path = Path(file_path)
     if not path.is_file():
@@ -75,6 +78,12 @@ def ingest(file_path: str) -> list[Requirement]:
     raw_segments = parser.parse(file_path)
 
     logger.info("Extracted %d raw segments from %s", len(raw_segments), path.name)
+
+    if not raw_segments:
+        raise DocumentParseError(
+            f"No extractable text found in '{path.name}'. "
+            "Scanned/image-only PDFs are not supported (no OCR)."
+        )
 
     segmenter = Segmenter()
     requirements = segmenter.segment(raw_segments)
