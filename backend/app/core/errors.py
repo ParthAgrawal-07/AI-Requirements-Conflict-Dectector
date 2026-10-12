@@ -30,6 +30,7 @@ _STATUS_CODES: dict[int, str] = {
     415: "unsupported_media_type",
     422: "validation_error",
     429: "too_many_requests",
+    503: "service_unavailable",
 }
 
 
@@ -56,6 +57,38 @@ class AppError(Exception):
             self.code = code
         self.headers = dict(headers) if headers else None
         self.details = list(details) if details else None
+
+
+class BadRequestError(AppError):
+    """The request is well-formed HTTP but its content is unacceptable (400).
+
+    Pass a specific machine-readable ``code`` (e.g. ``unsupported_file_type``) so clients can
+    branch on it without parsing the human-readable message.
+    """
+
+    status_code = 400
+    code = "bad_request"
+
+    def __init__(self, message: str, *, code: str | None = None) -> None:
+        super().__init__(message, code=code)
+
+
+class PayloadTooLargeError(AppError):
+    status_code = 413
+    code = "payload_too_large"
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+
+
+class ServiceUnavailableError(AppError):
+    """A backing service (e.g. the job queue) is temporarily unreachable (503)."""
+
+    status_code = 503
+    code = "service_unavailable"
+
+    def __init__(self, message: str, *, code: str | None = None) -> None:
+        super().__init__(message, code=code)
 
 
 class NotAuthenticatedError(AppError):
