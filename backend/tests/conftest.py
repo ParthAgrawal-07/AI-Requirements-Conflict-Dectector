@@ -292,5 +292,3 @@ def sample_srs_path() -> Path:
         if path.exists():
             return path
     pytest.skip("Sample SRS not yet available; see Step 3 of sprint 0")
-
-
