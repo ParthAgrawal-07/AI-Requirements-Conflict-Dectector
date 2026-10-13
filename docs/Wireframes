@@ -12,26 +12,6 @@ Allows users to upload a Software Requirements Specification (SRS) document for 
 - **Figma link:** https://www.figma.com/design/PADr7NlGN7xi5wTPNaxCmE/Upload-Page?node-id=0-1&t=bx3JUXbKhtgGhEip-1
 - **Export:** `upload-screen.pdf`
 
-# UI Wireframes
-
-This directory contains the Figma wireframes for the user interface of the **AI Requirements Conflict Detector** project. The designs cover requirement extraction, findings analysis, conflict review, and clarification workflows.
-
-## Design Files
-
-- **Design tool:** Figma
-- **Findings, Review, and Clarification:** https://www.figma.com/design/rfcwa3ANROemNzU2DUkluA/Findings--Review-and-Clarification?node-id=1669-162202&t=yUx9A0uHd3gD5eK8-1
-- **Upload Screen:** https://www.figma.com/design/PADr7NlGN7xi5wTPNaxCmE/Upload-Page?node-id=0-1&t=bx3JUXbKhtgGhEip-1
-
-## Screens
-
-### 1. Upload Screen
-
-Allows users to upload a Software Requirements Specification (SRS) document for analysis.
-
-- **Design tool:** Figma
-- **Figma link:** https://www.figma.com/design/PADr7NlGN7xi5wTPNaxCmE/Upload-Page?node-id=0-1&t=bx3JUXbKhtgGhEip-1
-- **Export:** `upload-screen.pdf`
-
 ### 2. Requirements List
 
 Displays extracted requirements with their source references and associated findings.
