@@ -2,7 +2,7 @@
 
 **Role 4 — Clarification & Impact Analysis**  
 **Author:** Madhav Bhatt  
-**Traces to:** US-09, US-11, US-12 · FR-22, FR-23, FR-24, FR-25, FR-26 · DR-04, DR-05, DR-08 · NFR-15, NFR-17  
+**Traces to:** US-09, US-11, US-12 · FR-17, FR-22, FR-23, FR-24, FR-25, FR-26, FR-27 · DR-04, DR-05, DR-08 · NFR-15, NFR-17, NFR-21  
 **Status:** Sprint 0 Deliverable (Design & Data Modeling Specification)  
 
 ---
@@ -24,37 +24,55 @@ This design document establishes the architectural foundation and data models fo
 
 ### 2.1 Traceability Matrix
 
-| Requirement ID | Type | Summary | Owning Task |
+The table below traces this module to the official project requirements. Exact wording is transcribed directly from [`docs/engineering/requirements-spec.md`](engineering/requirements-spec.md) and [`docs/engineering/feature-deep-dive.md`](engineering/feature-deep-dive.md):
+
+| Requirement ID | Type | Source Requirement Wording | Owning Task |
 |---|---|---|---|
-| **US-09** | User Story | QA Engineer wants clarification questions generated for Ambiguous or Conflicting findings to resolve issues without further discussion. | T25, T26 (Sprint 3) |
-| **US-11** | User Story | Project Manager wants to see everything a requirement edit might affect before saving it to prevent introducing new conflicts. | T31, T32 (Sprint 3) |
-| **US-12** | User Story | Software Architect wants version history maintained for every requirement edit. | T34 (Sprint 3) |
-| **FR-22** | Functional | For every requirement flagged as Ambiguous or Conflicting, generate a clarification question sufficient for a QA engineer to resolve without further discussion. | T25 |
-| **FR-23** | Functional | Allow a user to mark a clarification question as answered and attach the resolution text. | T26 |
-| **FR-24** | Functional | Whenever a requirement is modified, perform change-impact analysis identifying all affected requirements, design elements, or test cases. | T31 |
-| **FR-25** | Functional | Present the list of potentially impacted requirements before a proposed change is saved (pre-save preview). | T32 |
-| **FR-26** | Functional | Maintain version history for every requirement (prior text, edits, resolution status) for change comparison and audit. | T34 |
-| **DR-04** | Domain Rule | The system shall not silently delete, merge, or alter requirement text; human approval is strictly required. | Core Architecture |
-| **DR-08** | Domain Rule | Maintain a full change history for every requirement consistent with software configuration management. | Data Layer |
-| **NFR-15** | Non-Functional | Clarification questions and explanations must be understandable to QA/BA without requiring knowledge of the underlying AI model. | Prompt / LLM |
+| **US-09** | User Story | *As a QA Engineer, I want a clarification question generated for every Ambiguous or Conflicting finding, so that I can resolve the issue without further discussion.* | T25, T26 (Sprint 3) |
+| **US-11** | User Story | *As a Project Manager, I want to see everything a requirement edit might affect before I save it, so that I don't introduce a new conflict without realizing it.* | T31, T32 (Sprint 3) |
+| **US-12** | User Story | *As a Software Architect, I want a version history maintained for every requirement, so that I can compare changes and audit past edits.* | T34 (Sprint 3) |
+| **FR-17** | Functional | The system shall allow authorized users to define and adjust the criteria that qualify two requirements as "dependent" on one another. | T19, T31 |
+| **FR-22** | Functional | For every requirement flagged as Ambiguous or Conflicting, the system shall generate a clarification question sufficient for a QA engineer to resolve the issue without further discussion. | T25 |
+| **FR-23** | Functional | The system shall allow a user to mark a clarification question as answered and attach the resolution text. | T26 |
+| **FR-24** | Functional | Whenever a requirement is modified, the system shall perform a change-impact analysis identifying all requirements, related design elements, or test cases affected. | T31 |
+| **FR-25** | Functional | The system shall present the list of potentially impacted requirements before a proposed change is saved. | T32 |
+| **FR-26** | Functional | The system shall maintain a version history for every requirement, including prior text, edits, and resolution status, to support change comparison and audit. | T34 |
+| **FR-27** | Functional | The system shall display a summary dashboard showing counts of flagged issues by type (Conflict / Duplicate / Ambiguous / Dependent). | T36 |
+| **DR-04** | Domain Rule | The system shall not silently delete, merge, or alter a requirement's original text; any suggested resolution must be presented for human approval — automated tools assist but do not replace human sign-off. | Core Architecture |
+| **DR-05** | Domain Rule | Requirements explicitly marked compliance-critical or regulatory (e.g., HIPAA, GDPR) shall be exempt from automatic duplicate-removal suggestions and routed to mandatory manual review instead. | Core Architecture |
+| **DR-08** | Domain Rule | The system shall maintain a full change history for every requirement, consistent with configuration-management practice, so any resolved conflict can be audited later. | Data Layer |
+| **NFR-15** | Non-Functional | Clarification questions and flag explanations shall be understandable to a QA engineer or BA without needing to know the underlying AI/NLP model. | Prompt / LLM |
+| **NFR-17** | Non-Functional | Every AI-generated finding shall carry evidence/rationale and be clearly distinguishable from human-authored/approved information. | Core Architecture |
+| **NFR-21** | Non-Functional | False-positive rate for conflict/duplicate detection shall remain below an agreed threshold, validated against a labeled benchmark set (precision/recall/F1). | Testing / Evaluation |
 
 ---
 
 ## 3. Clarification-Question Data Model (US-09)
 
-### 3.1 Problem Analysis & Cardinality Decision
+### 3.1 Problem Analysis & Cardinality Proposal (1:1 vs. 1:N)
 
-In the initial Sprint 0 schema ([`backend/app/models/analysis.py`](file:///C:/Users/madha/.gemini/antigravity/scratch/AI-Requirements-Conflict-Dectector/backend/app/models/analysis.py#L111-L127)), a baseline `Clarification` model was drafted with a unique foreign key:
+In the initial Sprint 0 schema ([`backend/app/models/analysis.py`](../backend/app/models/analysis.py#L111-L127)), a baseline `Clarification` model was drafted with a unique foreign key:
 ```python
 finding_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("findings.id", ondelete="CASCADE"), unique=True)
 ```
 
-#### Cardinality Trade-off: Strict 1:1 vs. 1:N
-- **Strict 1:1 (`unique=True`)**:
-  - *Limitation*: When a complex conflict involves conflicting parameters (e.g., Performance SLA vs. Battery Consumption), or when a requirement contains multiple ambiguous phrases (e.g., "fast response" AND "user-friendly navigation"), a single prompt-generated question is frequently insufficient.
-- **Recommended 1:N Design (Finding $\rightarrow$ Clarifications)**:
-  - By relaxing the `unique=True` constraint on `finding_id` and adding an `order_index` or question identifier, a finding can host **multiple targeted questions** where appropriate (e.g., Question 1 addressing threshold values, Question 2 addressing fallback modes).
-  - For single questions, $N=1$ behaves identically to a 1:1 relation, making this design strictly superior and backwards-compatible.
+#### Cardinality Trade-off & Proposal
+- **Existing 1:1 Schema (`unique=True`)**:
+  - *Limitation*: When a complex conflict involves multiple conflicting parameters (e.g. latency vs throughput tradeoffs) or a requirement contains multiple ambiguous phrases (e.g. "fast response" and "user-friendly"), a single prompt-generated question is frequently insufficient to fully resolve the issue.
+- **Proposed 1:N Design (Finding $\rightarrow$ Clarifications)**:
+  - Relaxing the `unique=True` constraint on `finding_id` and adding an `order_index` allows a finding to host **multiple targeted questions** where appropriate (e.g. Question 1 addressing threshold values, Question 2 addressing fallback modes).
+  - For single questions, $N=1$ behaves identically to a 1:1 relation, making this design backwards-compatible.
+
+> [!IMPORTANT]
+> **Status: Proposal Pending Backend / DB Lead Approval (Parth Agrawal)**  
+> The 1:N model is presented as a design proposal. Adopting this change requires coordination across shared artifacts before implementation:
+> 1. **ORM Model** ([`backend/app/models/analysis.py`](../backend/app/models/analysis.py)): Update `Finding.clarification` from scalar to `Finding.clarifications: Mapped[list[Clarification]] = relationship(back_populates="finding", passive_deletes=True)`.
+> 2. **Alembic Migration** ([`backend/alembic/versions/20260928_0001_initial_schema.py`](../backend/alembic/versions/20260928_0001_initial_schema.py)): A new migration must drop `uq_clarifications_finding_id` and add `uq_clarifications_finding_id_order_index`.
+> 3. **Documentation & Diagrams**: Update ER diagram in [`docs/engineering/data-model.md`](engineering/data-model.md) from `1:0..1` to `1:N`, and the class diagram in [`docs/engineering/diagrams.md`](engineering/diagrams.md).
+> 4. **API Contract** ([`docs/engineering/api-reference.md`](engineering/api-reference.md)): Update `GET /api/v1/findings/{id}/clarification` response contract to return a list `{ "clarifications": [...] }`.
+> 5. **Missing Resolution Endpoint (FR-23)**: Currently, `api-reference.md` defines no endpoint for answering a clarification question. We propose adding `PATCH /api/v1/clarifications/{id}` (or `PATCH /api/v1/findings/{id}/clarifications/{cid}`) accepting `{ "resolution": "..." }` to record the human resolution and mark the question answered.
+>
+> **No shared models or migrations have been modified in Sprint 0.** These changes await Parth's review and sign-off.
 
 ### 3.2 Question Lifecycle & State Machine
 
@@ -71,16 +89,17 @@ stateDiagram-v2
 
 - **`PENDING`**: Initial state upon generation. Awaiting stakeholder review.
 - **`ANSWERED`**: Resolution text provided. Triggers optional requirement update draft.
-- **`DISMISSED`**: Finding was deemed acceptable or false positive; question dismissed without altering requirement.
-- **`SUPERSEDED`**: The parent requirement was modified elsewhere in the document, rendering this question obsolete.
+- **`DISMISSED`**: Finding was deemed acceptable or false positive; question dismissed without altering requirement text.
+- **`SUPERSEDED`**: The underlying requirement was modified elsewhere before an answer was attached, rendering this question obsolete.
 
-### 3.3 Database Schema: `clarifications` Table
+### 3.3 Database Schema: Proposed `clarifications` Table
 
-Extending the conventions established in [`backend/app/models/base.py`](file:///C:/Users/madha/.gemini/antigravity/scratch/AI-Requirements-Conflict-Dectector/backend/app/models/base.py):
+Following the conventions established in [`backend/app/models/base.py`](../backend/app/models/base.py), new domain enums belong in [`backend/app/models/enums.py`](../backend/app/models/enums.py):
 
 ```python
-"""Proposed refinement to app.models.analysis.Clarification."""
+"""Proposed additions to app.models.enums and app.models.analysis."""
 
+from enum import StrEnum
 import uuid
 from datetime import datetime
 from sqlalchemy import (
@@ -89,16 +108,16 @@ from sqlalchemy import (
     Index,
     Integer,
     Text,
-    func,
+    UniqueConstraint,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin, enum_column
-from app.models.enums import StrEnum
 
 
+# Proposed addition to app.models.enums
 class ClarificationStatus(StrEnum):
     """Lifecycle status of a clarification question."""
     PENDING = "pending"
@@ -107,12 +126,16 @@ class ClarificationStatus(StrEnum):
     SUPERSEDED = "superseded"
 
 
+# Proposed refinement to app.models.analysis.Clarification
 class Clarification(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     """A clarification question generated for a finding (FR-22, FR-23)."""
 
     __tablename__ = "clarifications"
     __table_args__ = (
-        Index("ix_clarifications_finding_id", "finding_id"),
+        UniqueConstraint(
+            "finding_id", "order_index",
+            name="uq_clarifications_finding_id_order_index"
+        ),
         Index("ix_clarifications_status", "status"),
     )
 
@@ -152,12 +175,15 @@ class Clarification(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 
 ### 3.4 Pydantic Schemas for Clarification API (Role 4 Contract)
 
-These schemas will live in `backend/app/schemas/clarification.py`:
+These schemas will live in `backend/app/schemas/clarification.py`, adhering to Pydantic v2 `ConfigDict` and domain enum typing:
 
 ```python
 from datetime import datetime
 import uuid
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.models.enums import FindingCategory
+from app.models.enums import ClarificationStatus  # proposed domain enum
 
 
 class ClarificationBase(BaseModel):
@@ -178,23 +204,24 @@ class ClarificationResolutionSubmit(BaseModel):
 class ClarificationResponse(ClarificationBase):
     id: uuid.UUID
     finding_id: uuid.UUID
-    status: str
+    status: ClarificationStatus
     resolution: str | None = None
     resolved_by: uuid.UUID | None = None
     resolved_at: datetime | None = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class FindingClarificationDetail(BaseModel):
     """Aggregate payload returned when inspecting a finding's clarifications."""
     finding_id: uuid.UUID
-    category: str
+    category: FindingCategory
     rationale: str
     involved_requirement_ids: list[str]
     clarifications: list[ClarificationResponse]
+
+    model_config = ConfigDict(from_attributes=True)
 ```
 
 ---
@@ -226,11 +253,11 @@ Impact links are categorized into distinct relationship types:
 
 | Relationship Type | Description | Origin | Default Severity |
 |---|---|---|---|
-| `DIRECT_DEPENDENCY` | $R_{target}$ functionally depends on $R_{source}$ (`FR-17`, `FindingCategory.DEPENDENT`). | Finding or explicit link | High |
-| `CONFLICT_PARTNER` | $R_{target}$ contradicts $R_{source}$ (`FindingCategory.CONFLICTING`). Editing one can resolve or worsen the conflict. | Finding | High |
-| `SEMANTIC_SIMILARITY` | High cosine similarity via vector store (`pgvector`). Changes in terminology or scope may cause semantic drift. | CandidatePair / Vector pre-filter | Medium |
-| `DUPLICATE_OVERLAP` | $R_{target}$ is an identified duplicate (`FindingCategory.DUPLICATE`). Changes must be mirrored or consolidated. | Finding | Medium |
-| `SHARED_CONSTRAINT` | Requirements share regulatory/compliance constraints (e.g. HIPAA/GDPR `is_protected = True`). | Domain rule `DR-05` | Critical |
+| `DIRECT_DEPENDENCY` | $R_{target}$ functionally depends on $R_{source}$ (`FR-17`, `FindingCategory.DEPENDENT`). | Finding or explicit link | `Severity.HIGH` |
+| `CONFLICT_PARTNER` | $R_{target}$ contradicts $R_{source}$ (`FindingCategory.CONFLICTING`). Editing one can resolve or worsen the conflict. | Finding | `Severity.HIGH` |
+| `SEMANTIC_SIMILARITY` | High cosine similarity via vector store (`pgvector`). Changes in terminology or scope may cause semantic drift. | CandidatePair / Vector pre-filter | `Severity.MEDIUM` |
+| `DUPLICATE_OVERLAP` | $R_{target}$ is an identified duplicate (`FindingCategory.DUPLICATE`). Changes must be mirrored or consolidated. | Finding | `Severity.MEDIUM` |
+| `SHARED_CONSTRAINT` | Requirements share regulatory/compliance constraints (e.g. HIPAA/GDPR `is_protected = True`). | Domain rule `DR-05` | `Severity.CRITICAL` |
 
 ### 4.3 Distinguishing Potential vs. Confirmed Impacts
 
@@ -249,7 +276,7 @@ Role 4 evaluates two architectural implementation options:
 #### Option A: Dedicated Persisted Table (`requirement_impact_links`)
 Stores explicit graph edges in PostgreSQL.
 - **Pros**: Direct SQL queries, easy to index, enables manual analyst-defined dependency links.
-- **Cons**: Requires additional synchronization when findings or embeddings change.
+- **Cons**: Requires additional synchronization when findings or embeddings change; introduces extra table maintenance.
 
 #### Option B: Dynamic Graph Query over Existing Tables (`CandidatePair` + `Finding`)
 Computes the impact graph dynamically on-demand from existing records.
@@ -258,13 +285,16 @@ Computes the impact graph dynamically on-demand from existing records.
 
 #### Recommendation: Hybrid Strategy
 - **Sprint 0 / Sprint 3 MVP**: Implement **Option B** (Dynamic Graph Engine in `impact_analysis.py`) exposed via Pydantic response models.
-- **Sprint 4+ Extension**: Introduce the `requirement_impact_links` table (detailed below) if explicit manual dependency linking (FR-17) is requested.
+- **Sprint 4+ Extension**: Introduce **Option A** (`requirement_impact_links` table, detailed below) if explicit manual dependency linking (FR-17) or persistent edge caching is required.
 
 ### 4.5 Schema: `requirement_impact_links` (for Persisted Option)
 
-```python
-"""Proposed schema for explicit impact links."""
+Reusing the existing [`Severity`](../backend/app/models/enums.py#L48) enum rather than creating a duplicate enum:
 
+```python
+"""Proposed schema for explicit impact links (Sprint 4+ extension)."""
+
+from enum import StrEnum
 import uuid
 from datetime import datetime
 from sqlalchemy import (
@@ -273,17 +303,16 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Index,
-    String,
     Text,
     UniqueConstraint,
-    func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin, enum_column
-from app.models.enums import StrEnum
+from app.models.enums import Severity
 
 
+# Proposed additions to app.models.enums
 class ImpactType(StrEnum):
     DIRECT_DEPENDENCY = "direct_dependency"
     CONFLICT_PARTNER = "conflict_partner"
@@ -295,13 +324,6 @@ class ImpactType(StrEnum):
 class ImpactStatus(StrEnum):
     POTENTIAL = "potential"      # Heuristic / AI predicted
     CONFIRMED = "confirmed"      # Human verified / domain confirmed
-
-
-class ImpactSeverity(StrEnum):
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
 
 
 class RequirementImpactLink(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
@@ -340,17 +362,18 @@ class RequirementImpactLink(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         server_default=ImpactStatus.POTENTIAL.value,
         nullable=False,
     )
-    severity: Mapped[ImpactSeverity] = mapped_column(
-        enum_column(ImpactSeverity, "impact_severity"),
-        default=ImpactSeverity.MEDIUM,
-        server_default=ImpactSeverity.MEDIUM.value,
+    # Reuses existing Severity enum (low, medium, high, critical)
+    severity: Mapped[Severity] = mapped_column(
+        enum_column(Severity, "impact_severity"),
+        default=Severity.MEDIUM,
+        server_default=Severity.MEDIUM.value,
         nullable=False,
     )
     
     confidence: Mapped[float] = mapped_column(Float, default=1.0)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
     
-    # Optional link back to the finding or candidate pair that triggered this link
+    # Optional link back to the finding that triggered this link
     finding_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("findings.id", ondelete="SET NULL"), nullable=True
     )
@@ -369,18 +392,27 @@ class RequirementImpactLink(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     )
 ```
 
+#### Canonical Ordering for Symmetric Links
+To prevent symmetric relationships (`CONFLICT_PARTNER`, `DUPLICATE_OVERLAP`, `SEMANTIC_SIMILARITY`) from being stored twice as both $A \rightarrow B$ and $B \rightarrow A$:
+- **Canonical Ordering Rule**: Consistent with [`CandidatePair.ordered()`](../backend/app/models/analysis.py#L57) (`requirement_a_id < requirement_b_id`), symmetric links are normalized such that `source_requirement_id < target_requirement_id`. Queries for requirement $X$ evaluate both directions: `(source_id = X OR target_id = X) AND link_type IN ('conflict_partner', 'duplicate_overlap', 'semantic_similarity')`.
+- **Genuinely Directed Links**: `DIRECT_DEPENDENCY` ($A \text{ depends on } B$) is directional. The canonical ordering rule does NOT apply to `DIRECT_DEPENDENCY`, keeping directionality intact.
+
 ### 4.6 Handling Duplicate Links & Cyclic Relationships
 
 1. **Duplicate Links**:
    - Guarded at the database level by `UniqueConstraint("source_requirement_id", "target_requirement_id", "link_type")`.
    - In dynamic traversal, edges are deduplicated via a Python set key: `(source_id, target_id, link_type)`.
-2. **Cyclic Relationships**:
-   - In real SRS documents, circular dependencies are common (e.g., $A$ depends on $B$, $B$ depends on $C$, $C$ depends on $A$).
-   - Without protection, an impact analysis traversal algorithm would enter an infinite loop.
-   - **Protection Algorithm**:
-     - Depth-bounded Breadth-First Search (BFS) / Depth-First Search (DFS) with a strict `max_depth = 3`.
-     - Explicit `visited` tracking set: if a requirement has already been evaluated on the current traversal branch, traversal stops and a `has_cycle = True` metadata flag is attached to the analysis report.
-     - Detecting cycles serves a double purpose: it protects our backend performance **and** provides an actionable architectural finding to the user ("Circular dependency detected between REQ-A, REQ-B, REQ-C").
+2. **Cyclic Relationships & Diamond Graph Distinction**:
+   - **Diamond Graphs are Valid DAGs**: In directed graphs, reaching a node $D$ via two distinct paths (such as $A \rightarrow B \rightarrow D$ and $A \rightarrow C \rightarrow D$) is a standard diamond topology and must **never** be flagged as a cycle.
+   - **Cycle Definition**: A cycle exists if and only if a directed edge traverses back to an ancestor node that is currently on the active DFS recursion call stack (a true back-edge).
+   - **Scope Limitation**: Cycle detection applies **strictly to directed `DIRECT_DEPENDENCY` edges**. Symmetric relationships (`CONFLICT_PARTNER`, `DUPLICATE_OVERLAP`, `SEMANTIC_SIMILARITY`) are non-directional mutual associations and must NOT be treated as cycle-forming edges.
+   - **Traversal Algorithm**:
+     - Three-state node tracking:
+       - `UNVISITED` (white): Node not yet encountered.
+       - `VISITING` (gray / active recursion stack): Node is on the active recursion path. An incoming directed dependency edge encountering a `VISITING` node indicates a circular dependency cycle.
+       - `VISITED` (black): Node and all its descendants have been fully explored. Traversing into a `VISITED` node safely terminates branch expansion without flagging a cycle.
+     - Traversal bound: `max_depth = 3`.
+     - When a circular dependency is detected, `has_circular_dependency = True` is set and the cycle path (e.g. `["REQ-014", "REQ-022", "REQ-055", "REQ-014"]`) is returned in the API payload.
 
 ### 4.7 Integration with Requirement Versioning (FR-26)
 
@@ -389,17 +421,24 @@ When an analyst modifies a requirement after reviewing its impact:
 2. `PATCH /api/v1/requirements/{id}`: Analyst confirms and submits updated text.
 3. The backend:
    - Increments `Requirement.current_version`.
-   - Inserts a new record into [`requirement_versions`](file:///C:/Users/madha/.gemini/antigravity/scratch/AI-Requirements-Conflict-Dectector/backend/app/models/requirement.py#L64-L85) capturing the snapshot, `changed_by`, `changed_at`, and rationale.
+   - Inserts a new record into [`requirement_versions`](../backend/app/models/requirement.py#L64-L85) capturing `version_no`, `body_snapshot`, `changed_by`, and `changed_at`.
    - Invalidates or re-evaluates linked `POTENTIAL` impact links.
+
+> [!NOTE]
+> **Edit Rationale Schema Note (Sprint 3 Proposal)**:  
+> The existing [`RequirementVersion`](../backend/app/models/requirement.py#L64-L85) model currently contains columns for `version_no`, `body_snapshot`, `changed_by`, and `changed_at`. It does **not** currently contain an edit rationale column. Persisting an analyst's change reason will require a database migration adding a nullable `change_reason: Mapped[str | None] = mapped_column(Text, nullable=True)` to `requirement_versions` (proposed for Sprint 3, Task T34).
 
 ### 4.8 Pydantic Schemas for Impact Analysis API
 
-These schemas will live in `backend/app/schemas/impact.py`:
+These schemas will live in `backend/app/schemas/impact.py`, using Pydantic v2 `ConfigDict` and typed domain enums:
 
 ```python
 from datetime import datetime
 import uuid
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.models.enums import Severity
+from app.models.enums import ImpactType, ImpactStatus  # proposed domain enums
 
 
 class ImpactItem(BaseModel):
@@ -407,12 +446,14 @@ class ImpactItem(BaseModel):
     source_req_id: str | None = None
     body_preview: str
     location: str | None = None
-    relationship_type: str
-    status: str  # "potential" or "confirmed"
-    severity: str  # "low", "medium", "high", "critical"
+    relationship_type: ImpactType
+    status: ImpactStatus
+    severity: Severity
     reason: str
     depth: int = 1  # 1 = direct impact, 2+ = transitive impact
     is_protected: bool = False
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ImpactAnalysisResult(BaseModel):
@@ -423,8 +464,11 @@ class ImpactAnalysisResult(BaseModel):
     analyzed_at: datetime
     total_impacted_count: int
     has_circular_dependency: bool = False
+    circular_dependency_path: list[str] | None = None
     critical_impacts_count: int
     impacted_requirements: list[ImpactItem]
+
+    model_config = ConfigDict(from_attributes=True)
 ```
 
 ---
@@ -462,6 +506,7 @@ class ImpactAnalysisResult(BaseModel):
   "analyzed_at": "2026-10-12T16:35:00Z",
   "total_impacted_count": 2,
   "has_circular_dependency": false,
+  "circular_dependency_path": null,
   "critical_impacts_count": 1,
   "impacted_requirements": [
     {
@@ -501,7 +546,7 @@ class ImpactAnalysisResult(BaseModel):
 | **Role 1 (Ingestion — Bansil)** | Requirements extraction | Upstream $\rightarrow$ Role 4 | `Requirement` table (`body`, `source_req_id`, `location`). |
 | **Role 2 (Embeddings — Keval)** | Similarity retrieval | Upstream $\rightarrow$ Role 4 | Querying `CandidatePair` similarity scores for potential impact links. |
 | **Role 3 (Classification — Heet)** | Classification results | Upstream $\rightarrow$ Role 4 | Ingesting `Finding` records where category is `Ambiguous` or `Conflicting`. |
-| **Role 5 (Backend / DB — Parth)** | API Routes & Database | Bidirectional | `GET /findings/{id}/clarification` in `backend/app/api/findings.py`; `GET /requirements/{id}/impact` in `backend/app/api/requirements.py`. |
+| **Role 5 (Backend / DB — Parth)** | API Routes & Database | Bidirectional | `GET /findings/{id}/clarification` in `backend/app/api/findings.py`; `GET /requirements/{id}/impact` in `backend/app/api/requirements.py`; proposed `PATCH /clarifications/{id}` for FR-23. |
 | **Role 6 & 7 (Frontend UI)** | Dashboard & React Flow | Role 4 $\rightarrow$ Downstream | Findings panel renders clarification Q&A; Pre-save modal renders impact warning graph. |
 
 ---
@@ -512,12 +557,14 @@ The following design decisions are documented for team review prior to Sprint 3 
 
 | # | Item | Options | Proposed Recommendation | Team Stakeholder |
 |---|---|---|---|---|
-| **D1** | **Clarification Cardinality** | (A) Strict 1:1 (`unique=True` on `finding_id`)<br>(B) 1:N (`unique` removed, `order_index` added) | **Option B (1:N)**: Enables generating multiple targeted questions for multi-clause conflicts. | **Parth** (Role 5 Lead) |
-| **D2** | **Impact Link Storage** | (A) In-memory traversal of `CandidatePair` + `Finding`<br>(B) Explicit `requirement_impact_links` table | **Option A for Sprint 3 MVP**, with Option B as a documented schema upgrade if manual dependency editing is needed. | **Parth** (DB schema) |
-| **D3** | **Clarification Status Enum** | (A) Infer from `resolution IS NOT NULL`<br>(B) Explicit `ClarificationStatus` enum (`pending`, `answered`, `dismissed`) | **Option B**: Provides clean database indexing and filtering for dashboard metrics (FR-27). | **Parth** (Enums) |
+| **D1** | **Clarification Cardinality** | (A) Strict 1:1 (`unique=True` on `finding_id`)<br>(B) 1:N (`unique` removed, `order_index` added) | **Option B (1:N)**: Enables generating multiple targeted questions for multi-clause conflicts. Marked as a proposal pending Parth's sign-off. | **Parth** (Role 5 Lead) |
+| **D2** | **Impact Link Storage** | (A) Explicit `requirement_impact_links` table<br>(B) Dynamic traversal of `CandidatePair` + `Finding` | **Option B for Sprint 3 MVP**, with Option A as a documented schema upgrade if manual dependency editing is needed. | **Parth** (DB schema) |
+| **D3** | **Clarification Status Enum** | (A) Infer from `resolution IS NOT NULL`<br>(B) Explicit `ClarificationStatus` enum (`pending`, `answered`, `dismissed`, `superseded`) | **Option B**: Provides clean database indexing and filtering for dashboard metrics (FR-27). | **Parth** (Enums) |
 | **D4** | **Impact Pre-filter Threshold** | (A) Use default `SIMILARITY_THRESHOLD_DEFAULT` (0.75)<br>(B) Use relaxed threshold (e.g. 0.65) for transitive impacts | **Option B**: Allows catching subtle indirect dependencies that stricter conflict detection ignores. | **Keval** (Role 2) |
 | **D5** | **Structured Clarification Output** | (A) Raw string from LLM<br>(B) JSON schema with `question` + `suggested_options` | **Option B**: Enables interactive radio/dropdown options in UI to accelerate human review. | **Heet** (Role 3 prompts) |
 | **D6** | **Impact Graph Edge Styling** | (A) Generic edges in React Flow<br>(B) Color-coded edges by `severity` and dashed for `potential` | **Option B**: Visually distinguishes AI predictions from human-confirmed links. | **Heet / Parth** (Role 7 graph) |
+| **D7** | **Missing FR-23 Endpoint** | (A) Embed answer in `PATCH /findings/{id}`<br>(B) Add dedicated `PATCH /api/v1/clarifications/{id}` | **Option B**: Clean resource-oriented API for answering clarification questions. | **Parth** (API Lead) |
+| **D8** | **Requirement Version Rationale** | (A) Omit edit rationale<br>(B) Add nullable `change_reason` to `requirement_versions` | **Option B in Sprint 3 (T34)**: Enables capturing rationale during requirement modifications. | **Parth** (DB schema) |
 
 ---
 
