@@ -1,0 +1,20 @@
+# UI Wireframes
+
+This directory contains the Figma wireframes for the user interface of the **AI Requirements Conflict Detector** project.
+
+## Screens
+
+### 1. Upload Screen
+
+Allows users to upload a Software Requirements Specification (SRS) document for analysis.
+
+- **Design tool:** Figma
+- **Figma link:** https://www.figma.com/design/PADr7NlGN7xi5wTPNaxCmE/Upload-Page?node-id=0-1&t=qdo0OrYoofwsK5hk-1
+- **Export:** `upload-screen.pdf`
+
+
+## Notes
+
+- These wireframes represent the proposed UI design and may evolve during implementation.
+- The Figma links are provided for viewing the designs.
+- PDF exports are included for convenient access to the designs directly from the repository.
