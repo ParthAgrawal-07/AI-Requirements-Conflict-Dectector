@@ -6,7 +6,7 @@
 |---|---|
 | **Backend** | Pytest |
 | **Frontend** | Vitest + React Testing Library |
-| **Status** | Planned — no tests written yet |
+| **Status** | Backend: auth, config, security, Celery, migration/schema and ingestion tests on `main`, run in CI with coverage. Frontend: harness in review (PR #17) |
 
 ---
 
@@ -19,6 +19,10 @@
 | Contract / schema | Pydantic validation tests | LLM classification output never reaches the DB unless schema-valid (FR-15) |
 | UI / component | React Testing Library | Findings review actions, dashboard rendering, graph interactions |
 | End-to-end (manual) | US-22 low-fidelity preview session | QA Engineer walk-through before full deployment |
+
+### Pytest markers
+
+Registered in `backend/pytest.ini` (`--strict-markers`): `unit`; `integration` (needs Postgres/Redis; skipped locally if they are down, a hard failure in CI via `REQUIRE_DB=1`); `llm` (calls a real model; excluded by default with `-m "not llm"`); and `slow`.
 
 ## 2. Sample Test Cases by Story
 
@@ -39,7 +43,7 @@
 
 Classification accuracy is validated with precision/recall/F1 against a labeled benchmark set of requirement pairs, not an arbitrary "80% agreement" target (a deliberate merge decision — see `requirements-spec.md`). The confidence-scoring mechanism is re-validated periodically against user feedback captured via the dismiss/resolve loop (US-15).
 
-- Build a small labeled benchmark set (pairs pre-tagged Conflicting/Duplicate/Ambiguous/Incomplete/Dependent/None) before Sprint 2's integration checkpoint.
+- **Benchmark v1 exists:** `sample_docs/planted_conflicts/srs_v1.md` (31 requirements) with ground truth in `srs_v1_labels.json`, labeled per `LABELING_GUIDE.md`. Grow it before the Week 7 checkpoint.
 - Track precision, recall, and F1 per category, not just an aggregate score — some categories (e.g., Incomplete) are expected to be harder than others.
 - Log every dismiss/reclassify action (already required by FR-19, FR-20) as future benchmark-set candidates.
 

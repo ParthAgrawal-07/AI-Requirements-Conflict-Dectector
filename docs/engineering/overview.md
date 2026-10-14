@@ -5,8 +5,8 @@
 | | |
 |---|---|
 | **Course** | IT314 — Software Engineering, Autumn 2026–27 |
-| **Team** | 7 members |
-| **Status** | Planning complete, pre-Sprint 0 |
+| **Team** | 10 members in three groups: Backend (5), Frontend (3), Testing (2). See [`../sprint-plan.md`](../sprint-plan.md) |
+| **Status** | Sprint 0 complete; Sprint 1 in review (see `project-status.md`) |
 
 ---
 
@@ -34,7 +34,7 @@ Manually cross-checking every requirement pair does not scale as SRS size grows 
 
 ### In scope for the semester MVP
 
-- Upload → extraction → segmentation of SRS documents (PDF, DOCX, plain text)
+- Upload → extraction → segmentation of SRS documents (PDF, DOCX; plain text is a post-MVP Could, CR-16)
 - Embedding-based candidate-pair pre-filter (pgvector) ahead of LLM classification
 - LLM classification into the 5-category taxonomy with confidence + rationale
 - Human review workflow: confirm, dismiss, merge, reclassify
@@ -57,7 +57,7 @@ Manually cross-checking every requirement pair does not scale as SRS size grows 
 | Layer | Choice |
 |---|---|
 | Frontend | React (Vite) + TypeScript, Tailwind CSS + shadcn/ui, React Flow, TanStack Query |
-| Backend | FastAPI (Python), Pydantic, SQLAlchemy/SQLModel, Celery + Redis |
+| Backend | FastAPI (Python), Pydantic, SQLAlchemy 2.x + Alembic, Celery + Redis |
 | AI / NLP | Anthropic Claude API / OpenAI API, Sentence-Transformers (all-MiniLM-L6-v2), pgvector |
 | Ingestion | PyMuPDF (PDF), python-docx (Word), spaCy (segmentation) |
 | Database / Infra | PostgreSQL + pgvector, Redis, Docker Compose, Railway/Render, Vercel, GitHub Actions |

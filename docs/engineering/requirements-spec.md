@@ -5,20 +5,17 @@
 | | |
 |---|---|
 | **Source** | IT314 Lab Assignment 6 — Requirement Formalization & Process Modeling |
-| **Numbering** | FR-01–FR-41 · NFR-01–NFR-23 · DR-01–DR-12 |
-| **Status** | All requirements below are planned — no implementation exists yet |
+| **Numbering** | FR-01–FR-42 · NFR-01–NFR-23 · DR-01–DR-12 (canonical — see Section 0) |
+| **Status** | Mostly planned. Implemented so far: FR-37 (JWT login) and the schema behind FR-05/FR-19/FR-20/FR-26 — see `project-status.md` |
 
 ---
 
-## 0. Important Note on Numbering
+## 0. Numbering & Taxonomy (Resolved)
 
-Two requirements artifacts exist in parallel and have **NOT** yet been reconciled into a single canonical numbering scheme:
-
-- This document uses the official Lab 6 submission numbering (FR-01–FR-41 / NFR-01–NFR-23 / DR-01–DR-12), which is what the Consolidated Product Backlog (see `feature-catalog.md`) traces its FR references against in some places.
-- A separately maintained "Consolidated Requirements Baseline" draft (~34 FR / ~24 NFR / ~14 DR, grouped by pipeline stage) was developed in parallel by the team and uses different numbers for the same concepts.
-- The issue taxonomy itself is also inconsistent across the two artifacts: DR-01 below states the "four standard categories" (Conflicting, Duplicate, Ambiguous, Dependent), while the team's adopted, authoritative taxonomy is 5 categories, adding **Incomplete** — three of the seven original drafts used 4 categories, but one draft plus the official project brief text explicitly include "Incomplete," so 5 was adopted.
-
-> **Open action item:** reconcile these into one canonical FR/NFR/DR numbering scheme before Sprint 1 development begins, and correct DR-01 to reflect the 5-category taxonomy. Tracked in `decision-log.md` and `project-status.md`.
+- **This numbering is canonical.** The Lab 6 numbering (FR-01–FR-42 / NFR-01–NFR-23 / DR-01–DR-12) is the single scheme every other document traces against. The earlier, separately drafted "Consolidated Requirements Baseline" (~34 FR, grouped by pipeline stage) is superseded. Backlog FR traces were corrected to this scheme in the Step 6 conflict review (CR-21; see `../product-backlog.md`, Section 0).
+- **5-category taxonomy.** Conflicting, Duplicate, Ambiguous, Incomplete, Dependent (ADR-02). FR-11, FR-27 and DR-01 below are amended to match; three of the seven original drafts used 4 categories, which is where the old wording came from.
+- **FR-22** now covers Incomplete as well as Ambiguous and Conflicting findings, matching US-09.
+- **FR-42 (severity)** was added for US-08/US-13. Its wording below is taken from US-08's acceptance criteria.
 
 ## 1. Functional Requirements (FR)
 
@@ -46,7 +43,7 @@ Two requirements artifacts exist in parallel and have **NOT** yet been reconcile
 
 | ID | Requirement | Source Stakeholder(s) |
 |---|---|---|
-| FR-11 | The system shall classify each candidate requirement pair into one of: Conflicting, Duplicate, Ambiguous, or Dependent. | Business Analysts; Architects |
+| FR-11 | The system shall classify issues into one of five categories: Conflicting, Duplicate, or Dependent (assessed on candidate requirement pairs) and Ambiguous or Incomplete (assessed on individual requirements). | Business Analysts; Architects |
 | FR-12 | The system shall distinguish true duplicates from merely similar requirements using the configurable similarity threshold and LLM judgment together. | Business Analysts |
 | FR-13 | The system shall return a confidence/trust score alongside each classification result so users can judge reliability before acting on it. | Business Analysts |
 | FR-14 | The system shall attach supporting context to every flagged issue: related requirement ID(s), source document section, and a natural-language rationale for the flag. | QA Engineers; Business Analysts |
@@ -67,7 +64,7 @@ Two requirements artifacts exist in parallel and have **NOT** yet been reconcile
 
 | ID | Requirement | Source Stakeholder(s) |
 |---|---|---|
-| FR-22 | For every requirement flagged as Ambiguous or Conflicting, the system shall generate a clarification question sufficient for a QA engineer to resolve the issue without further discussion. | QA Engineers |
+| FR-22 | For every requirement flagged as Ambiguous, Incomplete or Conflicting, the system shall generate a clarification question sufficient for a QA engineer to resolve the issue without further discussion. | QA Engineers |
 | FR-23 | The system shall allow a user to mark a clarification question as answered and attach the resolution text. | QA Engineers; Business Analysts |
 
 ### 1.6 Change & Impact Analysis — FR-24–FR-26
@@ -82,7 +79,7 @@ Two requirements artifacts exist in parallel and have **NOT** yet been reconcile
 
 | ID | Requirement | Source Stakeholder(s) |
 |---|---|---|
-| FR-27 | The system shall display a summary dashboard showing counts of flagged issues by type (Conflict / Duplicate / Ambiguous / Dependent). | Project Managers; Business Analysts |
+| FR-27 | The system shall display a summary dashboard showing counts of flagged issues by type (Conflicting / Duplicate / Ambiguous / Incomplete / Dependent). | Project Managers; Business Analysts |
 | FR-28 | The system shall allow drill-down navigation from a summary count to the underlying list of flagged requirements. | Business Analysts |
 | FR-29 | The system shall render a visual relationship graph of requirements, with requirements as nodes and detected relationships as connections. | Architects; Project Managers |
 | FR-30 | The system shall allow users to generate and export flagged-issue and impact-analysis reports in multiple formats (on-screen dashboard, PDF/CSV, scheduled email digest). | Project Managers |
@@ -112,6 +109,12 @@ Two requirements artifacts exist in parallel and have **NOT** yet been reconcile
 | FR-39 | The system shall provide read/write integration with common engineering tools (e.g., Jira, Confluence, GitHub) to import requirements and export flagged issues as tickets. | IT/DevOps / System Admins |
 | FR-40 | The system shall expose a documented, versioned REST API (JSON) allowing third-party developers to submit SRS content and retrieve conflict/ambiguity analysis results programmatically, with configurable per-consumer rate limits. | Third-Party API Consumers |
 | FR-41 | The system shall provide a mechanism to intake survey or existing customer-feedback data on how delayed/unclear requirements affected end customers. | End Customers (Indirect) |
+
+### 1.11 Triage — FR-42
+
+| ID | Requirement | Source Stakeholder(s) |
+|---|---|---|
+| FR-42 | The system shall assign each flagged issue a severity level (Low, Medium or High) that is proposed by the system, can be overridden by a reviewer with the override recorded, and is shown separately from the confidence score. | Business Analysts; Product Owner |
 
 *FR-39, FR-40, FR-41 are industry-extension items and are explicitly out of scope for the semester MVP (see `overview.md`, Section 3).*
 
@@ -147,7 +150,7 @@ Two requirements artifacts exist in parallel and have **NOT** yet been reconcile
 
 | ID | Requirement |
 |---|---|
-| DR-01 | The system shall recognize and classify requirement relationships using the four standard categories established in requirements-engineering literature — Conflicting, Duplicate, Ambiguous, and Dependent — not an arbitrary or ad hoc taxonomy. |
+| DR-01 | The system shall recognize and classify requirement issues using a fixed taxonomy grounded in requirements-engineering literature — Conflicting, Duplicate, Ambiguous, Incomplete, and Dependent — not an arbitrary or ad hoc taxonomy (amended from four categories; ADR-02). |
 | DR-02 | The system shall be able to process SRS documents structured according to common industry templates (e.g., IEEE 830 / ISO/IEC/IEEE 29148-style sections). |
 | DR-03 | The system shall preserve unique requirement identifiers present in the source document (e.g., REQ-001, FR-12) rather than regenerating its own numbering scheme. |
 | DR-04 | The system shall not silently delete, merge, or alter a requirement's original text; any suggested resolution must be presented for human approval — automated tools assist but do not replace human sign-off. |

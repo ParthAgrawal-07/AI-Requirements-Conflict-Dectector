@@ -34,13 +34,15 @@ Requirements documents (SRS) are typically written by multiple stakeholders over
 
 Finding these manually doesn't scale past a few dozen requirements. This project automates the process: upload an SRS document, and the system extracts individual requirements, filters candidate pairs using vector similarity, classifies issues with an LLM, generates clarification questions, and surfaces everything on a dashboard with full traceability back to the source document.
 
-This isn't just an LLM wrapper — the system encodes real requirements-engineering discipline (see [`docs/domain-requirements.md`](docs/domain-requirements.md)): human review always takes precedence over AI suggestions, compliance-critical requirements are protected from auto-resolution, and semantic similarity is treated as a retrieval signal, never as proof of conflict on its own.
+This isn't just an LLM wrapper — the system encodes real requirements-engineering discipline (see the Domain Requirements, DR-01–DR-12, in [`docs/engineering/requirements-spec.md`](docs/engineering/requirements-spec.md#3-domain-requirements-dr)): human review always takes precedence over AI suggestions, compliance-critical requirements are protected from auto-resolution, and semantic similarity is treated as a retrieval signal, never as proof of conflict on its own.
 
 ---
 
 ## Core Features
 
-- 📄 **Multi-format ingestion** — PDF, DOCX, plain text, ReqIF
+This is the target feature set for the semester. See [Project Status](#project-status) for what is built today.
+
+- 📄 **Document ingestion** — born-digital PDF and DOCX (plain text and ReqIF are post-MVP; decision CR-16 in the backlog)
 - 🔍 **Vector similarity pre-filter** — pgvector + Sentence-Transformers reduce LLM calls by ~70% vs. brute-force all-pairs comparison
 - 🤖 **LLM-based classification** — 5-category issue detection with confidence scoring and natural-language rationale
 - 💬 **Auto-generated clarification questions** — for every ambiguous, incomplete, or conflicting requirement
@@ -49,7 +51,7 @@ This isn't just an LLM wrapper — the system encodes real requirements-engineer
 - 🔐 **Compliance-critical protection** — tagged requirements are never auto-merged or removed without manual sign-off
 - 🧾 **Full audit trail** — every finding, override, and sign-off is logged and traceable
 
-Full feature list: [`docs/requirements-baseline.md`](docs/requirements-baseline.md) (FR-01–FR-34) and [`docs/product-backlog.md`](docs/product-backlog.md) (user stories US-01–US-23).
+Full feature list: [`docs/engineering/requirements-spec.md`](docs/engineering/requirements-spec.md) (FR-01–FR-42, NFR-01–NFR-23, DR-01–DR-12) and [`docs/product-backlog.md`](docs/product-backlog.md) (user stories US-01–US-23).
 
 ---
 
@@ -64,7 +66,7 @@ Full feature list: [`docs/requirements-baseline.md`](docs/requirements-baseline.
 **Backend**
 - FastAPI (Python)
 - Pydantic — request/response validation & structured LLM output
-- SQLAlchemy / SQLModel — ORM
+- SQLAlchemy 2.x — ORM, Alembic — migrations
 - Celery + Redis — background job queue for async document processing
 
 **AI / NLP Core**
@@ -123,74 +125,46 @@ Each stage runs as an independently maintainable module (ingestion, embedding, c
 
 ## Repository Structure
 
+Folders marked *(stub)* exist but hold only placeholders so far. See [Project Status](#project-status).
+
 ```
-ai-requirements-conflict-detector/
-├── .github/
-│   └── workflows/
-│       ├── backend-ci.yml
-│       └── frontend-ci.yml
+.
+├── .github/workflows/
+│   ├── backend-ci.yml             # ruff, mypy, pytest (+ Postgres/Redis services), pip-audit, Docker build
+│   └── frontend-ci.yml            # eslint, tsc, vitest, Docker build
 ├── backend/
 │   ├── app/
-│   │   ├── api/                  # FastAPI route handlers
-│   │   │   ├── auth.py
-│   │   │   ├── documents.py
-│   │   │   ├── requirements.py
-│   │   │   ├── findings.py
-│   │   │   └── reports.py
-│   │   ├── ingestion/             # Role 1 — document parsing & extraction
-│   │   │   ├── pdf_parser.py
-│   │   │   ├── docx_parser.py
-│   │   │   └── segmenter.py
-│   │   ├── embeddings/            # Role 2 — embedding & similarity search
-│   │   │   ├── embed.py
-│   │   │   ├── vector_store.py
-│   │   │   └── candidate_filter.py
-│   │   ├── classification/        # Role 3 — LLM classification pipeline
-│   │   │   ├── prompts/
-│   │   │   ├── classifier.py
-│   │   │   └── schemas.py         # Pydantic models for structured LLM output
-│   │   ├── clarification/         # Role 4 — clarification & impact analysis
-│   │   │   ├── question_gen.py
-│   │   │   └── impact_analysis.py
-│   │   ├── core/                  # Role 5 — orchestration, auth, config
-│   │   │   ├── auth.py
-│   │   │   ├── config.py
-│   │   │   ├── celery_app.py
-│   │   │   └── database.py
-│   │   ├── models/                # SQLAlchemy / SQLModel ORM models
+│   │   ├── api/                   # FastAPI routers: auth, health (live); documents, requirements, findings, reports (stub)
+│   │   ├── core/                  # Role 5 — config, database, JWT auth, errors, logging, Celery app
+│   │   ├── models/                # SQLAlchemy 2.x models: 10 tables + shared enums
+│   │   ├── schemas/               # Pydantic request/response models
+│   │   ├── services/              # Business logic (user provisioning)
+│   │   ├── ingestion/             # Role 1 — PDF/DOCX parsers + requirement segmentation
+│   │   ├── embeddings/            # Role 2 — (stub)
+│   │   ├── classification/        # Role 3 — (stub) prompts/ will hold versioned prompts
+│   │   ├── clarification/         # Role 4 — (stub) see docs/clarification-impact-design.md
+│   │   ├── cli.py                 # `make seed-demo` / `make create-user`
 │   │   └── main.py
-│   ├── tests/
-│   ├── alembic/                   # DB migrations
-│   ├── requirements.txt
-│   └── Dockerfile
+│   ├── alembic/versions/          # DB migrations (0001_initial_schema)
+│   ├── tests/                     # pytest — unit / integration / llm / slow markers
+│   ├── requirements.txt, requirements-dev.txt
+│   └── Dockerfile, entrypoint.sh  # entrypoint runs `alembic upgrade head`
 ├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── upload/            # Role 6 — core UI
-│   │   │   ├── requirements-list/
-│   │   │   ├── findings-panel/
-│   │   │   └── graph/             # Role 7 — React Flow visualization
-│   │   ├── pages/
-│   │   ├── hooks/
-│   │   ├── lib/                   # API client, React Query setup
-│   │   └── App.tsx
+│   ├── src/                       # Role 6 / Role 7 — (stub) App.tsx, lib/api-client.ts
 │   ├── tests/
-│   ├── package.json
-│   └── Dockerfile
+│   └── package.json, Dockerfile
 ├── docs/
-│   ├── project-plan.md            # 14-week execution plan
-│   ├── stakeholder-elicitation.md
-│   ├── requirements-baseline.md   # Consolidated FR / NFR / Domain Requirements
-│   ├── product-backlog.md         # Consolidated user stories
-│   ├── domain-requirements.md
-│   └── architecture-diagrams/
-│       └── activity-diagram.png
-├── sample-data/
-│   └── test-srs-with-planted-conflicts.pdf
-├── docker-compose.yml
-├── .env.example
-├── .gitignore
-└── README.md
+│   ├── README.md                  # Start here: map of all documentation
+│   ├── product-backlog.md         # 23 user stories with acceptance criteria
+│   ├── engineering/               # Requirements, architecture, data model, API, ADRs, plans
+│   ├── ingestion-design.md        # Role 1 module design
+│   ├── clarification-impact-design.md  # Role 4 module design
+│   └── wireframes/                # UI wireframes (Figma links + PDF exports)
+├── sample_docs/
+│   └── planted_conflicts/         # Labeled benchmark SRS (srs_v1) + labeling guide
+├── docker-compose.yml             # db, redis, migrate, backend, worker, frontend
+├── Makefile                       # `make help` lists every dev command
+└── .env.example
 ```
 
 ---
@@ -210,8 +184,8 @@ Desktop / Docker Engine — not the legacy standalone `docker-compose` v1 binary
 
 ```bash
 # Clone the repo
-git clone https://github.com/<org>/ai-requirements-conflict-detector.git
-cd ai-requirements-conflict-detector
+git clone https://github.com/ParthAgrawal-07/AI-Requirements-Conflict-Dectector.git
+cd AI-Requirements-Conflict-Dectector
 
 # Copy and fill in environment variables
 cp .env.example .env
@@ -278,44 +252,59 @@ See [`.env.example`](.env.example) for the full, commented list. Key variables:
 
 ## Team & Roles
 
-| Role | Responsibility |
-|---|---|
-| Document Ingestion | PDF/Word parsing, sentence segmentation |
-| Embedding & Similarity Search | Vector embeddings, pgvector, candidate-pair filtering |
-| LLM Classification Pipeline | Prompt design, classification, structured output validation |
-| Clarification & Impact Analysis | Clarification questions, change-impact analysis |
-| Backend API & Orchestration | FastAPI, Celery/Redis, auth, end-to-end wiring |
-| Frontend — Core UI | Upload flow, requirements list, findings UI |
-| Frontend — Visualization + DevOps | Dependency graph (React Flow), Docker, CI/CD, deployment |
+| Group | Member | Owns |
+|---|---|---|
+| Backend | Bansil ([@Bansil08](https://github.com/Bansil08)) | Document ingestion & extraction |
+| Backend | Heet ([@the-heet-shah](https://github.com/the-heet-shah)) | Embeddings & similarity search |
+| Backend | Keval ([@kevaldarji6126](https://github.com/kevaldarji6126)) | LLM classification pipeline |
+| Backend | Madhav ([@PrimeNotFound](https://github.com/PrimeNotFound)) | Clarification & change-impact analysis |
+| Backend | Parth ([@ParthAgrawal-07](https://github.com/ParthAgrawal-07)) | Backend API, auth & orchestration |
+| Frontend | Pranshu ([@pranshu-chovatiya](https://github.com/pranshu-chovatiya)) | Upload & requirements-list UI |
+| Frontend | Abhijeet ([@aprk05](https://github.com/aprk05)) | Findings, review & clarification UI |
+| Frontend | Dhvani ([@DC-01051](https://github.com/DC-01051)) | Dashboard, graph & DevOps |
+| Testing | Abhyudit ([@abhyudits](https://github.com/abhyudits)) | Backend & pipeline testing |
+| Testing | Affan ([@Affan689](https://github.com/Affan689)) | Frontend & E2E testing |
 
-Full role breakdown and 14-week execution plan: [`docs/project-plan.md`](docs/project-plan.md).
+Per-sprint assignments: [`docs/sprint-plan.md`](docs/sprint-plan.md). Full role breakdown: [`docs/engineering/roles-and-access.md`](docs/engineering/roles-and-access.md). Sprint plan and task list: [`docs/engineering/project-status.md`](docs/engineering/project-status.md) and [`docs/engineering/task-breakdown.md`](docs/engineering/task-breakdown.md).
 
 ---
 
 ## Project Status
 
-🚧 **In development** — semester project, IT314 Autumn 2026–27.
+🚧 **In development.** Sprint 0 (setup) is merged; Sprint 1 (upload and extraction) is in review.
 
-- [x] Stakeholder identification & elicitation
-- [x] Functional / Non-Functional / Domain requirements baseline
-- [x] User story backlog
-- [ ] Ingestion pipeline (Week 3)
-- [ ] Embedding pipeline (Week 4)
-- [ ] LLM classification pipeline (Week 6)
-- [ ] Integration Checkpoint 1 (Week 7)
-- [ ] Frontend v1 (Week 8)
-- [ ] Integration Checkpoint 2 (Week 11)
-- [ ] Deployment (Week 13)
-- [ ] Demo (Week 14)
+**Sprint 0 — done (on `main`)**
+- [x] Requirements, backlog (23 stories) and sprint plan
+- [x] DB schema (10 tables) + first Alembic migration, pgvector enabled
+- [x] JWT login (`POST /api/v1/auth/login`, `GET /api/v1/auth/me`), role model, demo-user CLI
+- [x] Docker Compose (db, redis, migrate, backend, worker, frontend), Makefile, CI for backend and frontend
+- [x] Ingestion scaffold: PDF and DOCX parsers
+- [x] Design docs for clarification/impact analysis, upload-screen wireframe, labeled planted-conflicts benchmark (`srs_v1`)
+
+**Sprint 1 — in review (open PRs)**
+- [ ] US-01 document upload endpoint, validation and storage (#7)
+- [ ] US-02 requirement extraction and segmentation (#8)
+- [ ] Frontend test harness + per-story QA checklists (#17)
+
+**Later**
+- [ ] Embedding pipeline and LLM classification (Sprint 2, Integration Checkpoint 1 — Week 7)
+- [ ] Review workflow, clarifications, impact analysis (Sprint 3)
+- [ ] Dashboard and graph (Sprint 4, Integration Checkpoint 2 — Week 11)
+- [ ] Hardening and deployment (Sprint 5, Week 13) · Demo (Week 14)
+
+Live status and risks: [`docs/engineering/project-status.md`](docs/engineering/project-status.md).
 
 ---
 
 ## Documentation
 
-- [Stakeholder Identification & Elicitation Plan](docs/stakeholder-elicitation.md)
-- [Consolidated Requirements Baseline (FR / NFR / Domain)](docs/requirements-baseline.md)
-- [Consolidated Product Backlog (User Stories)](docs/product-backlog.md)
-- [Project Plan & Timeline](docs/project-plan.md)
+Start at [`docs/README.md`](docs/README.md), which maps every document. Most-used:
+
+- [Product Backlog (user stories + acceptance criteria)](docs/product-backlog.md)
+- [Requirements Specification (FR / NFR / DR)](docs/engineering/requirements-spec.md)
+- [Architecture](docs/engineering/architecture.md) · [Data Model](docs/engineering/data-model.md) · [API Reference](docs/engineering/api-reference.md)
+- [Architecture Decision Records](docs/engineering/decision-log.md)
+- [DevOps Guide (local setup, CI)](docs/engineering/devops-guide.md)
 
 ---
 
