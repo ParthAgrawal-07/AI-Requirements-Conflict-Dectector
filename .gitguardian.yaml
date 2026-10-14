@@ -2,3 +2,4 @@ version: 2
 secret:
   ignored-paths:
     - ".env.example"
+    - "backend/tests/**"
