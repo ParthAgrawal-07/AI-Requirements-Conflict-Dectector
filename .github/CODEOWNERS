@@ -1,0 +1,44 @@
+# Code owners are asked for review automatically when a PR touches their paths.
+# Source: docs/sprint-plan.md, Section 1 (standing ownership). The LAST matching rule wins,
+# so general rules come first and specific ones after.
+
+# Default: backend lead / repo owner
+*                                   @ParthAgrawal-07
+
+# ── Backend: API, auth, orchestration, schema (Parth) ──────────────────────
+/backend/                           @ParthAgrawal-07
+/docker-compose.yml                 @ParthAgrawal-07
+/Makefile                           @ParthAgrawal-07
+/.env.example                       @ParthAgrawal-07
+
+# ── Backend: one owner per pipeline stage ──────────────────────────────────
+/backend/app/ingestion/             @Bansil08
+/backend/app/embeddings/            @the-heet-shah
+/backend/app/classification/        @kevaldarji6126
+/backend/app/clarification/         @PrimeNotFound
+
+# ── Backend tests: testing pod + the stage owner ───────────────────────────
+/backend/tests/                     @abhyudits @ParthAgrawal-07
+/backend/tests/ingestion/           @abhyudits @Bansil08
+/backend/tests/embeddings/          @abhyudits @the-heet-shah
+/backend/tests/classification/      @abhyudits @kevaldarji6126
+/backend/tests/clarification/       @abhyudits @PrimeNotFound
+/sample_docs/                       @abhyudits
+
+# ── Frontend ───────────────────────────────────────────────────────────────
+/frontend/                          @pranshu-chovatiya @aprk05 @DC-01051
+/frontend/src/components/upload/            @pranshu-chovatiya
+/frontend/src/components/requirements-list/ @pranshu-chovatiya
+/frontend/src/components/findings-panel/    @aprk05
+/frontend/src/components/graph/             @DC-01051
+/frontend/Dockerfile                @DC-01051
+/frontend/tests/                    @Affan689
+
+# ── CI / DevOps (Dhvani + Parth) ───────────────────────────────────────────
+/.github/                           @DC-01051 @ParthAgrawal-07
+
+# ── Docs: module design docs follow their module owner ─────────────────────
+/docs/ingestion-design.md           @Bansil08
+/docs/clarification-impact-design.md @PrimeNotFound
+/docs/wireframes/                   @pranshu-chovatiya @aprk05 @DC-01051
+/docs/qa/                           @Affan689
