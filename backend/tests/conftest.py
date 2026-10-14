@@ -278,17 +278,12 @@ def auth_headers(user: User) -> dict[str, str]:
 # ── Sample data ──────────────────────────────────────────────────────────────
 @pytest.fixture(scope="session")
 def sample_srs_path() -> Path:
-    """Path to the canonical sample SRS used by ingestion/classification tests.
+    """Path to the labeled benchmark SRS used by ingestion/classification tests.
 
-    Update once the team confirms whether ``sample-data/`` or ``sample_docs/`` is canonical.
+    ``sample_docs/`` is the canonical folder for sample documents.
     """
-    repo_root = BACKEND_DIR.parent
-    # TODO: confirm with team which of these is canonical
-    candidates = [
-        repo_root / "sample-data" / "srs_v1.md",
-        repo_root / "sample_docs" / "srs_v1.md",
-    ]
-    for path in candidates:
-        if path.exists():
-            return path
-    pytest.skip("Sample SRS not yet available; see Step 3 of sprint 0")
+    path = BACKEND_DIR.parent / "sample_docs" / "planted_conflicts" / "srs_v1.md"
+    if not path.exists():
+        # Inside the backend container only backend/ is mounted, so the repo root is absent.
+        pytest.skip(f"Sample SRS not found at {path}")
+    return path
