@@ -2,7 +2,7 @@
 
 **Class, Sequence, State & Activity Diagrams (Design Stage)**
 
-> Status: Design diagrams — no code exists yet; these describe planned structure.
+> Status: Diagram 1 matches the implemented models (simplified; full columns in `data-model.md`). Diagrams 2–4 describe the planned pipeline.
 > These render natively as diagrams in GitHub's markdown viewer (Mermaid fenced code blocks) — no extra tooling needed.
 
 A hand-drawn activity diagram for the core pipeline workflow was submitted with Lab 6 as a separate photograph. Diagram 4 below is a typed Mermaid re-expression of that same workflow for repo documentation purposes.
@@ -13,24 +13,44 @@ A hand-drawn activity diagram for the core pipeline workflow was submitted with 
 
 ```mermaid
 classDiagram
+  class Workspace {
+    +uuid id
+    +string name
+    +float similarity_threshold
+  }
+  class User {
+    +uuid id
+    +string email
+    +Role role
+    +bool is_active
+  }
   class Document {
     +uuid id
     +string filename
     +string format
     +string status
+    +int progress_percent
     +datetime uploaded_at
   }
   class Requirement {
     +uuid id
     +string source_req_id
     +text body
+    +string location
     +string stakeholder_group
-    +int version
+    +bool is_protected
+    +int current_version
+  }
+  class RequirementVersion {
+    +uuid id
+    +int version_no
+    +text body_snapshot
   }
   class Embedding {
     +uuid id
     +uuid requirement_id
-    +vector_384 embedding
+    +vector_384 vector
+    +string model_version
   }
   class CandidatePair {
     +uuid id
@@ -44,6 +64,8 @@ classDiagram
     +float confidence
     +text rationale
     +string status
+    +string severity
+    +json original_ai_output
   }
   class Clarification {
     +uuid id
@@ -53,14 +75,18 @@ classDiagram
   }
   class AuditLogEntry {
     +uuid id
-    +string actor
+    +uuid actor_id
     +string action
     +datetime at
   }
+  Workspace "1" --> "many" User
+  Workspace "1" --> "many" Document
   Document "1" --> "many" Requirement
-  Requirement "1" --> "1" Embedding
+  Requirement "1" --> "many" RequirementVersion
+  Requirement "1" --> "0..1" Embedding
   Requirement "1" --> "many" CandidatePair
-  CandidatePair "1" --> "many" Finding
+  CandidatePair "1" --> "many" Finding : pairwise
+  Requirement "1" --> "many" Finding : single-requirement
   Finding "1" --> "0..1" Clarification
   Finding "1" --> "many" AuditLogEntry
 ```
@@ -127,7 +153,7 @@ flowchart TD
   F -- No --> G[Discard pair, no LLM call]
   F -- Yes --> H{Protected requirement involved?}
   H -- Yes --> H1[Route to mandatory manual review]
-  H -- No --> I[LLM classification: 5 categories]
+  H -- No --> I["LLM classification: pairs to Conflicting / Duplicate / Dependent, each requirement to Ambiguous / Incomplete"]
   I --> J{Schema-valid output?}
   J -- No --> J1[Retry up to 3x, then flag failure]
   J -- Yes --> K[Persist finding + confidence + rationale]

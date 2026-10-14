@@ -2,7 +2,7 @@
 
 **7 ADRs — LLM Gateway, pgvector, and Key Trade-offs**
 
-> Status: Planning-stage decisions — recorded before implementation begins
+> Status: All seven ADRs are accepted and reflected in the Sprint 0 code. Add new ADRs at the end; never renumber.
 
 ---
 
@@ -28,7 +28,8 @@
 **Decision:** 5 categories were adopted as authoritative: Conflicting, Duplicate, Ambiguous, Incomplete, Dependent.
 
 **Consequences**
-- The Lab 6 submission's DR-01 still states the 4-category framing and has not yet been corrected — tracked as an open item in `requirements-spec.md`.
+- DR-01, FR-11 and FR-27 were amended to the 5 categories (`requirements-spec.md`, Section 0). The `FindingCategory` enum has exactly these five values.
+- Conflicting, Duplicate and Dependent are judged on candidate pairs; Ambiguous and Incomplete on single requirements. The `findings` table enforces this with a CHECK that exactly one of `candidate_pair_id` / `requirement_id` is set.
 - Classification stories that some drafts split into 3–4 separate stories were merged into a single epic (US-05) to match how the pipeline actually executes.
 
 ## ADR-03: PostgreSQL + pgvector Over a Dedicated Vector DB

@@ -2,7 +2,7 @@
 
 **Module Ownership, Pipeline Flow, and Deployment**
 
-> Status: Planned — architecture is locked, no code written yet
+> Status: Architecture locked. Implemented: `core/` (config, auth, errors, Celery app), `models/` (10 tables), ingestion parsers. Embeddings, classification and clarification are still stubs. See `project-status.md`.
 
 ---
 
@@ -11,7 +11,7 @@
 The core value proposition is the conflict-detection pipeline. It runs as an asynchronous job (Celery + Redis) once a document is uploaded, so the user can track progress (US-03) rather than blocking on a long-running request.
 
 ```
-1. Upload SRS document (PDF / DOCX / plain text)  [FR-01, FR-02]
+1. Upload SRS document (PDF / DOCX)               [FR-01, FR-02]
 2. Validate file (format, size, integrity)         [FR-02]
 3. Extract & segment into requirement statements   [FR-03, FR-04]
 4. Generate embeddings (Sentence-Transformers)      [FR-07]
@@ -19,6 +19,8 @@ The core value proposition is the conflict-detection pipeline. It runs as an asy
 6. Rank candidate pairs by similarity threshold     [FR-09, FR-10]
 7. Protected-requirement check (skip auto-merge)    [DR-05, FR-21]
 8. LLM classification (5-category taxonomy)         [FR-11-FR-17]
+   - pairs  -> Conflicting / Duplicate / Dependent
+   - single requirements -> Ambiguous / Incomplete
 9. Validate structured output (schema check)        [FR-15]
 10. Persist finding + confidence + rationale         [FR-13, FR-14, FR-19]
 11. Generate clarification question if flagged       [FR-22]
@@ -31,17 +33,18 @@ This is the same workflow the team's hand-drawn Lab 6 activity diagram models; s
 
 ## 2. Module Ownership (Backend)
 
-| Module (planned path) | Owning role | Responsibility |
+| Module | Owning role | Responsibility |
 |---|---|---|
-| `backend/app/ingestion/` | Role 1 | PDF/Word parsing (PyMuPDF, python-docx), sentence segmentation (spaCy) |
+| `backend/app/ingestion/` | Role 1 | `parsers/` (PyMuPDF, python-docx), `segmentation/` (basic regex on `main`; the rule-based + spaCy version is in PR #8), `pipeline.py` entry point. See `../ingestion-design.md` |
 | `backend/app/embeddings/` | Role 2 | Sentence-Transformers embedding generation, pgvector similarity search, threshold config |
 | `backend/app/classification/` | Role 3 | LLM prompt design, classification calls, structured/schema output validation |
 | `backend/app/clarification/` | Role 4 | Clarification-question generation, change-impact analysis |
-| `backend/app/core/` | Role 5 | FastAPI app, Celery/Redis wiring, JWT auth, cross-cutting orchestration |
+| `backend/app/core/` | Role 5 | Settings, DB session, JWT auth + roles, error format, request-ID logging, Celery app |
+| `backend/app/models/`, `schemas/`, `services/`, `api/` | Role 5 | ORM models + enums, Pydantic schemas, business logic, routers (see `data-model.md`, `api-reference.md`) |
 
 ### Module Ownership (Frontend)
 
-| Module (planned path) | Owning role | Responsibility |
+| Module (planned) | Owning role | Responsibility |
 |---|---|---|
 | `frontend/src/components/upload/` | Role 6 | Upload flow, requirements list, findings review UI |
 | `frontend/src/components/graph/` | Role 7 | React Flow dependency/conflict graph, dashboard, CI/CD, deployment config |
@@ -49,7 +52,7 @@ This is the same workflow the team's hand-drawn Lab 6 activity diagram models; s
 ## 3. Architectural Layers
 
 - **Frontend** — React (Vite) + TypeScript, Tailwind + shadcn/ui components, TanStack Query for server state, React Flow for the relationship graph.
-- **Backend API** — FastAPI with Pydantic schemas; SQLAlchemy/SQLModel for the ORM layer.
+- **Backend API** — FastAPI with Pydantic schemas; SQLAlchemy 2.x for the ORM layer, Alembic for migrations. Routers are thin: they validate input, check auth/workspace, and call `services/`.
 - **Async processing** — Celery workers backed by Redis handle the long-running pipeline (embedding → classification) so the API stays responsive (NFR-01, NFR-02).
 - **AI/NLP layer** — Sentence-Transformers (all-MiniLM-L6-v2) for embeddings; Anthropic Claude API / OpenAI API for classification and clarification generation.
 - **Data layer** — PostgreSQL with the pgvector extension for vector similarity search, alongside standard relational tables (see `data-model.md`).

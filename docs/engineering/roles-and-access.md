@@ -4,22 +4,22 @@
 
 | | |
 |---|---|
-| **Status** | Planned — no auth/RBAC implementation exists yet |
+| **Status** | Implemented in Sprint 0: JWT login, the `Role` enum and `require_roles(...)`. Workspace-scoping helper planned (T15, Sprint 2) |
 | **Traces to** | FR-37, FR-38, FR-21, NFR-11, NFR-13 |
 
 ---
 
 ## 1. Application-Level Roles (Planned RBAC)
 
-Derived from FR-37 (authenticated access), FR-38 (workspace-scoped access), FR-21/NFR-13 (protected requirements), and NFR-11 (role-based access control). These are the in-product roles the auth system (US-19) will need to support — distinct from the 10 requirements-elicitation stakeholders and the 7 team-member roles below.
+Derived from FR-37 (authenticated access), FR-38 (workspace-scoped access), FR-21/NFR-13 (protected requirements), and NFR-11 (role-based access control). These are the in-product roles the auth system (US-19) will need to support — distinct from the 10 requirements-elicitation stakeholders and the team roles below.
 
-| Role | Can do | Cannot do |
+| Role (`Role` enum value) | Can do | Cannot do |
 |---|---|---|
-| Analyst (default) | Upload documents, view extractions, review/confirm/dismiss/merge flags, generate clarifications, view dashboard | Change similarity/ambiguity thresholds, mark requirements "protected" |
-| Architect / Admin | Everything an Analyst can, plus tune thresholds (US-06), define ambiguity/dependency criteria (FR-16/17), manage workspace users | Bypass the protected-requirement review requirement (DR-05) |
-| Compliance Reviewer | View/resolve findings on requirements marked "protected"; view full audit trail | Auto-resolve or bulk-dismiss protected-requirement findings |
-| Executive / Read-Only | View dashboard and executive summary reports (US-13, US-17) | Upload documents, act on findings, change configuration |
-| System / Service Account | Used by the async worker (Celery) and, in the deferred REST API (US-20), by third-party integrations | Access the UI directly |
+| Analyst (`analyst`, default) | Upload documents, view extractions, review/confirm/dismiss/merge flags, generate clarifications, view dashboard | Change similarity/ambiguity thresholds, mark requirements "protected" |
+| Architect / Admin (`admin`) | Everything an Analyst can, plus tune thresholds (US-06), define ambiguity/dependency criteria (FR-16/17), manage workspace users | Bypass the protected-requirement review requirement (DR-05) |
+| Compliance Reviewer (`compliance_reviewer`) | View/resolve findings on requirements marked "protected"; view full audit trail | Auto-resolve or bulk-dismiss protected-requirement findings |
+| Executive / Read-Only (`read_only`) | View dashboard and executive summary reports (US-13, US-17) | Upload documents, act on findings, change configuration |
+| System / Service Account (`service`) | Used by the async worker (Celery) and, in the deferred REST API (US-20), by third-party integrations | Access the UI directly |
 
 *Auth mechanism for the MVP is JWT only (US-19); SSO/LDAP federation is named in FR-37 as an "or organization's existing SSO/LDAP where applicable" but is explicitly out of scope for the semester deliverable (see `overview.md`).*
 
@@ -44,16 +44,19 @@ These are the people the requirements were elicited from — the intended users 
 | End Customers (indirect) | Never interact with the tool directly — outcome-tracked only | None |
 | Third-Party API Consumers | Deferred (US-20) — REST API access | System / Service Account (future) |
 
-## 4. Project Team Roles (7 members)
+## 4. Project Team (10 members)
 
-Distinct from the two role sets above — this is how the 7-person team divides implementation ownership. See `architecture.md` for how these map to repo modules.
+This is a third set of roles, separate from the two above: how the team divides the work. The original plan had 7 roles. The sprint plan ([`../sprint-plan.md`](../sprint-plan.md)) staffs them with 10 people in three groups: the 5 backend roles keep one owner each, the 2 frontend roles are split across 3 people by screen, and testing is its own 2-person group. The same table drives `.github/CODEOWNERS`.
 
-| # | Role | Owns |
-|---|---|---|
-| 1 | Document Ingestion | PDF/Word parsing, sentence segmentation |
-| 2 | Embedding & Similarity Search | Sentence-Transformers, pgvector, candidate-pair filtering, threshold tuning |
-| 3 | LLM Classification Pipeline | Prompt design, classification, structured output validation |
-| 4 | Clarification & Impact Analysis | Clarification question generation, change-impact analysis |
-| 5 | Backend API & Orchestration | FastAPI, Celery/Redis, auth, end-to-end wiring |
-| 6 | Frontend — Core UI | Upload flow, requirements list, findings UI |
-| 7 | Frontend — Visualization + DevOps | React Flow graph, Docker, CI/CD, deployment |
+| Group | Original role | Person (GitHub) | Owns |
+|---|---|---|---|
+| Backend | 1 — Document Ingestion | Bansil (@Bansil08) | `backend/app/ingestion/` — parsing, segmentation |
+| Backend | 2 — Embedding & Similarity | Heet (@the-heet-shah) | `backend/app/embeddings/` — pgvector, candidate pairs, thresholds |
+| Backend | 3 — LLM Classification | Keval (@kevaldarji6126) | `backend/app/classification/` — prompts, structured output |
+| Backend | 4 — Clarification & Impact | Madhav (@PrimeNotFound) | `backend/app/clarification/` — questions, impact analysis |
+| Backend | 5 — API & Orchestration | Parth (@ParthAgrawal-07) | `core/`, `api/`, `models/`, Alembic, Docker Compose |
+| Frontend | 6 — Core UI | Pranshu (@pranshu-chovatiya) | Upload, requirements list, version history, dashboard UI |
+| Frontend | 6 — Core UI | Abhijeet (@aprk05) | Findings, review, clarification, severity/threshold UI |
+| Frontend | 7 — Visualization & DevOps | Dhvani (@DC-01051) | Graph (React Flow), impact UI, CI/CD, deployment |
+| Testing | — | Abhyudit (@abhyudits) | Backend tests, classification accuracy benchmark |
+| Testing | — | Affan (@Affan689) | Frontend tests, E2E, manual QA against acceptance criteria |

@@ -4,17 +4,30 @@
 
 | | |
 |---|---|
-| **Status** | All tasks below are planned — none started yet |
+| **Status** | Sprint 0 tasks done; Sprint 1 in review. See "Progress" below |
 | **Source** | Derived from the team's Sprint Plan and Consolidated Product Backlog acceptance criteria |
 
 ---
+
+**Who is "Role N"?** Role 1 Bansil · Role 2 Heet · Role 3 Keval · Role 4 Madhav · Role 5 Parth · Role 6 Pranshu (upload, list, dashboard) and Abhijeet (findings, review, clarification) · Role 7 Dhvani · "QA" Abhyudit (backend) and Affan (frontend). Where this table and [`../sprint-plan.md`](../sprint-plan.md) disagree, the sprint plan wins. For example, the plan gives the dashboard UI (T37) to Pranshu and its backend (T36) to Parth.
+
+## 0. Progress (as of 2026-10-14)
+
+| State | Tasks |
+|---|---|
+| ✅ Done (on `main`) | T01 scaffold · T02 schema + migration 0001 · T03 Docker Compose · T08 PDF extraction · T09 DOCX extraction · T13 JWT auth backend (pulled forward from Sprint 2) |
+| 🟡 Partly done | T04 wireframes: upload screen done (#11, #14, #15); findings and dashboard to do. Another wireframe PR (#12) is open |
+| 🔄 In review | T05 + T06 upload endpoint and validation (PR #7) · T10 segmentation + REQ-ID preservation (PR #8) |
+| Extra (not in the plan) | Planted-conflicts benchmark `srs_v1` + labeling guide (#16) supports NFR-21 / `test-plan.md` §3 · Clarification/impact design doc (#9) prepares T25–T35 |
+
+Update this table when a PR merges.
 
 ## 1. Full Task List
 
 | # | Task | Sprint | Owner | Depends on |
 |---|---|---|---|---|
 | T01 | Scaffold monorepo (backend/, frontend/, docs/) | Sprint 0 | Role 5 | — |
-| T02 | Design initial DB schema (7 tables) + alembic setup | Sprint 0 | Role 2 | — |
+| T02 | Design initial DB schema (10 tables) + alembic setup | Sprint 0 | Role 2 | — |
 | T03 | Docker Compose (Postgres+pgvector, Redis, backend, frontend) | Sprint 0 | Role 7 | T01 |
 | T04 | Low-fidelity wireframes (upload, findings, dashboard) | Sprint 0 | Role 6 | — |
 | T05 | Upload endpoint (POST /documents) | Sprint 1 | Role 1 / Role 5 | T01, T02 |

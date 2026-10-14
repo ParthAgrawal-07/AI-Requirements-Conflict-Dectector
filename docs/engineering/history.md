@@ -1,10 +1,26 @@
 # Changelog
 
-**Planning-Phase Changes, With Developer Attribution**
+**Changes by Sprint, With Developer Attribution**
 
-> Note: No code has been written yet. All entries below are planning/documentation milestones (Week 0, pre-Sprint 0).
+> Newest first. Add an entry when a sprint closes, listing the merged PRs.
 
 ---
+
+## Sprint 0 — Setup (merged by 2026-10-14)
+
+| Change | PR | Owner |
+|---|---|---|
+| Repo structure, docs set, CI with lint/type-check/Docker build | #1, #2, #3 | Parth Agrawal |
+| Ingestion module scaffold: `Parser` base, PDF (PyMuPDF) and DOCX (python-docx) parsers, basic segmentation | #4 | Bansil Bhanderi |
+| DB schema (10 tables) + Alembic migration 0001, JWT auth + roles, error format, Docker Compose (db/redis/migrate/backend/worker/frontend), Makefile, CI with Postgres/Redis services | #6 | Parth Agrawal |
+| Clarification & change-impact design document (Role 4) | #9 | Madhav Bhatt |
+| Upload-screen wireframe (Figma + PDF) | #11, #14, #15 | Pranshu Chovatiya |
+| Pytest markers, placeholder test packages, sample-SRS fixture | #13 | Abhyudit (abhyudits) |
+| Planted-conflicts benchmark: `srs_v1`, labels, labeling guide | #16 | Abhyudit (abhyudits) |
+
+**Carried into Sprint 1 (open PRs):** #7 upload endpoint (US-01), #8 extraction and segmentation (US-02), #17 frontend test harness, #12 wireframe docs, #5 foundation fixes.
+
+**Resolved from Week 0's open items:** the FR/NFR/DR numbering is reconciled (Lab 6 numbering is canonical, CR-21), DR-01 is amended to 5 categories, and `.env.example` and the Alembic migrations now exist.
 
 ## Week 0 — Project Selection & Planning
 
@@ -23,7 +39,7 @@
 | Sprint plan | Mapped the 23-story backlog into 6 sprints aligned to the Week 7/11 checkpoints, with US-23 excluded as outcome-only | Whole team |
 | Engineering docs (this set) | Generated the docs/engineering document set — status, overview, requirements, features, roles, architecture, diagrams, data model, API, feature deep-dive, tasks, testing, deployment, decisions, changelog, index | Whole team |
 
-## Known Open Items Carried Into Sprint 0
+## Open Items Carried Into Sprint 0 (Week 0 snapshot)
 
 - Numbering mismatch between the Consolidated Requirements Baseline and the Lab 6 submission's FR/NFR/DR numbering — not yet reconciled.
 - DR-01 in the Lab 6 submission still states the 4-category taxonomy rather than the adopted 5-category one — needs correction.
@@ -32,4 +48,4 @@
 
 ## Next Entry
 
-*The next changelog entry is expected at the end of Sprint 0 (Week 2), covering repo scaffolding, DB schema creation, Docker Compose setup, and wireframes.*
+*Sprint 1 (Weeks 3–4): upload, extraction, requirements list.*
