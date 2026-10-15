@@ -41,7 +41,7 @@ Allows reviewers to prepare clarification questions and record responses from re
 - **Key features:** AI-generated questions, answer fields, requirement owners, supporting source references, affected requirements, previous exchanges, and draft/submission status.
 - **Export:** `Clarification-screen.pdf`
 
-- ### 5. Dashboard
+### 5. Dashboard
 
 Provides an overview of requirement analysis results, helping users monitor findings, prioritise issues, and track items requiring review.
 
