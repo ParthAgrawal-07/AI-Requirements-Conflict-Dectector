@@ -7,6 +7,7 @@ final output of segmentation.
 """
 
 from datetime import UTC, datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -18,8 +19,13 @@ class RawSegment(BaseModel):
     Attributes:
         text: The extracted text content.
         source_document: Filename or path of the source document.
-        page_or_paragraph: 1-based page number (PDF) or paragraph index (DOCX).
-        section_heading: Nearest section heading, if detected. None in Sprint 0.
+        page_or_paragraph: 1-based page number (PDF) or body-block index (DOCX;
+            each paragraph and each table row counts as one block).
+        location_type: Whether page_or_paragraph is a "page" or a "paragraph".
+        section_heading: Nearest preceding heading (DOCX only; the segmenter
+            detects PDF headings from the text itself).
+        is_list_item: True for a DOCX list paragraph (Word bullets/numbering are
+            formatting, not text, so the segmenter can't see them otherwise).
         order_index: 0-based global ordering across the entire document.
     """
 
@@ -28,7 +34,9 @@ class RawSegment(BaseModel):
     text: str
     source_document: str
     page_or_paragraph: int
+    location_type: Literal["page", "paragraph"]
     section_heading: str | None = None
+    is_list_item: bool = False
     order_index: int
 
     def __repr__(self) -> str:
@@ -48,18 +56,48 @@ class Requirement(BaseModel):
     Attributes:
         id: Requirement identifier (e.g. "REQ-001") or a deterministic
             fallback ID if none was detected.
-        raw_text: The full text of the requirement line.
+        source_req_id: The ID as written in the document, or None if the line
+            had no ID (maps to requirements.source_req_id in the data model).
+        raw_text: The requirement's full text, verbatim from the source (wrapped
+            lines re-joined; list sub-items kept on their own lines).
         source_document: Filename or path of the source document.
         location: Human-readable location string (e.g. "page 3" or "paragraph 12").
+        section_heading: Heading the requirement appears under, if known.
+        order_index: 0-based position of the requirement within the document.
+        needs_review: True when segmentation is uncertain and a human should
+            check this item (US-02: surfaced for manual review, not dropped).
+        review_reasons: Why needs_review is set; empty when it is not.
         extracted_at: UTC timestamp of when this requirement was extracted.
     """
 
     model_config = {"frozen": True}
 
     id: str
+    source_req_id: str | None = None
     raw_text: str
     source_document: str
     location: str
-    extracted_at: datetime = Field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    section_heading: str | None = None
+    order_index: int = 0
+    needs_review: bool = False
+    review_reasons: tuple[str, ...] = ()
+    extracted_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class ExcludedText(BaseModel):
+    """Text the segmenter decided is not a requirement (kept so it can be audited)."""
+
+    model_config = {"frozen": True}
+
+    text: str
+    location: str
+    reason: str
+
+
+class SegmentationResult(BaseModel):
+    """Everything the segmenter produced for one document."""
+
+    model_config = {"frozen": True}
+
+    requirements: list[Requirement]
+    excluded: list[ExcludedText] = Field(default_factory=list)
