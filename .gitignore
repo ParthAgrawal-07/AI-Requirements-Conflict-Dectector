@@ -24,4 +24,11 @@ Thumbs.db
 # Docker
 *.log
 
+# Test coverage output
+.coverage
+coverage.xml
+htmlcov/
 coverage/
+
+# Uploaded documents (UPLOAD_DIR defaults to ./uploads when run outside Docker)
+uploads/
