@@ -9,7 +9,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 
-from app.api import auth, documents, findings, reports, requirements
+from app.api import auth, documents, findings, join_codes, reports, requirements
 from app.core.auth import get_current_user
 from app.schemas.common import ErrorResponse
 
@@ -45,6 +45,12 @@ api_router.include_router(
     reports.router,
     prefix="/reports",
     tags=["reports"],
+    dependencies=_authenticated,
+    responses=_unauthorized,
+)
+api_router.include_router(
+    join_codes.router,
+    tags=["join_codes"],
     dependencies=_authenticated,
     responses=_unauthorized,
 )

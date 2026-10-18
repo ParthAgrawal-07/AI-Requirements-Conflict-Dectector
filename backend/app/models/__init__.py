@@ -15,9 +15,12 @@ from app.models.enums import (
     DocumentStatus,
     FindingCategory,
     FindingStatus,
+    JoinCodeStatus,
+    JoinRequestStatus,
     Role,
     Severity,
 )
+from app.models.join_code import JoinCode, JoinRequest
 from app.models.requirement import Requirement, RequirementVersion
 from app.models.user import User
 from app.models.workspace import Workspace
@@ -36,6 +39,10 @@ __all__ = [
     "Finding",
     "FindingCategory",
     "FindingStatus",
+    "JoinCode",
+    "JoinCodeStatus",
+    "JoinRequest",
+    "JoinRequestStatus",
     "Requirement",
     "RequirementVersion",
     "Role",

@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     # ── Auth (FR-37, NFR-11, NFR-12) ──────────────────────
     jwt_secret: SecretStr
     access_token_expire_minutes: int = Field(default=60, ge=1, le=24 * 60)
+    join_code_pepper: SecretStr = Field(
+        default=SecretStr("dev-only-join-code-pepper-secret-string-at-least-32-chars"),
+        description="Server-side secret pepper for hashing join codes (US-25, FR-37)",
+    )
 
     # ── HTTP ──────────────────────────────────────────────
     cors_allowed_origins: Annotated[list[str], NoDecode] = ["http://localhost:5173"]
@@ -103,6 +107,12 @@ class Settings(BaseSettings):
                     "JWT_SECRET is too weak for staging/production: use at least "
                     f"{MIN_PRODUCTION_SECRET_LENGTH} random characters — generate one with "
                     '`python -c "import secrets; print(secrets.token_urlsafe(48))"`'
+                )
+            pepper = self.join_code_pepper.get_secret_value()
+            if len(pepper) < MIN_PRODUCTION_SECRET_LENGTH or pepper.startswith(DEV_SECRET_PREFIX):
+                raise ValueError(
+                    "JOIN_CODE_PEPPER is too weak for staging/production: use at least "
+                    f"{MIN_PRODUCTION_SECRET_LENGTH} random characters"
                 )
             if "*" in self.cors_allowed_origins:
                 raise ValueError("CORS_ALLOWED_ORIGINS must list explicit origins, not '*'")

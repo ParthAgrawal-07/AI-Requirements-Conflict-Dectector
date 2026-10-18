@@ -71,3 +71,28 @@ def require_roles(*allowed: Role) -> Callable[[User], User]:
         return user
 
     return dependency
+
+
+# Standard permission catalogue mapping permissions to authorized roles (FR-37, NFR-11)
+PERMISSION_ROLE_MAP: dict[str, set[Role]] = {
+    "join_codes:create": {Role.ADMIN},
+    "join_codes:read": {Role.ADMIN},
+    "join_codes:delete": {Role.ADMIN},
+    "join_requests:read": {Role.ADMIN, Role.ANALYST, Role.READ_ONLY, Role.COMPLIANCE_REVIEWER},
+    "join_requests:decide": {Role.ADMIN},
+    "join_codes:redeem": {Role.ADMIN, Role.ANALYST, Role.READ_ONLY, Role.COMPLIANCE_REVIEWER},
+}
+
+
+def require_permission(permission: str) -> Callable[[User], User]:
+    """Build a dependency that verifies the user holds the specified catalog permission."""
+    allowed_roles = PERMISSION_ROLE_MAP.get(permission)
+    if allowed_roles is None:
+        allowed_roles = {Role.ADMIN}
+
+    def dependency(user: CurrentUser) -> User:
+        if user.role not in allowed_roles:
+            raise ForbiddenError(f"Missing required permission: {permission}")
+        return user
+
+    return dependency

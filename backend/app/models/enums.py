@@ -62,3 +62,26 @@ class AuditAction(StrEnum):
     RECLASSIFIED = "reclassified"
     PROTECTION_CHANGED = "protection_changed"
     SIGNED_OFF = "signed_off"
+    JOIN_CODE_CREATED = "join_code_created"
+    JOIN_CODE_REVOKED = "join_code_revoked"
+    JOIN_CODE_REDEEMED = "join_code_redeemed"
+    JOIN_REQUEST_CREATED = "join_request_created"
+    JOIN_REQUEST_APPROVED = "join_request_approved"
+    JOIN_REQUEST_REJECTED = "join_request_rejected"
+
+
+class JoinCodeStatus(StrEnum):
+    """Lifecycle status of a workspace join code (US-25)."""
+
+    ACTIVE = "active"
+    REVOKED = "revoked"
+    EXPIRED = "expired"
+    EXHAUSTED = "exhausted"
+
+
+class JoinRequestStatus(StrEnum):
+    """Review status of a pending join request created via approval-gated code."""
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"

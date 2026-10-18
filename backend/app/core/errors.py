@@ -99,6 +99,98 @@ class ConflictError(AppError):
         super().__init__(message)
 
 
+class BadRequestError(AppError):
+    status_code = 400
+    code = "bad_request"
+
+    def __init__(self, message: str = "Bad request") -> None:
+        super().__init__(message)
+
+
+class InvalidJoinCodeError(AppError):
+    status_code = 400
+    code = "invalid_join_code"
+
+    def __init__(self, message: str = "Invalid join code format") -> None:
+        super().__init__(message)
+
+
+class JoinCodeNotFoundError(AppError):
+    status_code = 404
+    code = "join_code_not_found"
+
+    def __init__(self, message: str = "Join code not found") -> None:
+        super().__init__(message)
+
+
+class JoinCodeRevokedError(AppError):
+    status_code = 410
+    code = "join_code_revoked"
+
+    def __init__(
+        self, message: str = "This join code has been revoked by an administrator"
+    ) -> None:
+        super().__init__(message)
+
+
+class JoinCodeExpiredError(AppError):
+    status_code = 410
+    code = "join_code_expired"
+
+    def __init__(self, message: str = "This join code has expired") -> None:
+        super().__init__(message)
+
+
+class JoinCodeExhaustedError(AppError):
+    status_code = 410
+    code = "join_code_exhausted"
+
+    def __init__(
+        self, message: str = "This join code has reached its maximum allowed uses"
+    ) -> None:
+        super().__init__(message)
+
+
+class AlreadyMemberError(ConflictError):
+    code = "already_workspace_member"
+
+    def __init__(self, message: str = "User is already a member of this workspace") -> None:
+        super().__init__(message)
+
+
+class DuplicateJoinRequestError(ConflictError):
+    code = "join_request_pending"
+
+    def __init__(
+        self, message: str = "A join request is already pending approval for this workspace"
+    ) -> None:
+        super().__init__(message)
+
+
+class RoleRestrictedError(AppError):
+    status_code = 422
+    code = "invalid_join_role"
+
+    def __init__(
+        self, message: str = "Join codes cannot grant administrator or owner privileges"
+    ) -> None:
+        super().__init__(message)
+
+
+class RateLimitExceededError(AppError):
+    status_code = 429
+    code = "too_many_requests"
+
+    def __init__(
+        self,
+        message: str = "Too many join attempts. Please try again later.",
+        *,
+        retry_after: int | None = None,
+    ) -> None:
+        headers = {"Retry-After": str(retry_after)} if retry_after else None
+        super().__init__(message, headers=headers)
+
+
 def _request_id(request: Request) -> str | None:
     value = getattr(request.state, "request_id", None)
     return value if isinstance(value, str) else None

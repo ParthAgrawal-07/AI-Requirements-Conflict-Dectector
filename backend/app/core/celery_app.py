@@ -37,6 +37,13 @@ celery_app.conf.update(
     task_track_started=True,  # exposes the STARTED state for progress polling (US-03)
     broker_connection_retry_on_startup=True,
     worker_hijack_root_logger=False,
+    # Periodic tasks (US-25: expire stale active join codes)
+    beat_schedule={
+        "expire_join_codes_every_5_minutes": {
+            "task": "security.expire_join_codes",
+            "schedule": 300.0,
+        },
+    },
 )
 
 celery_app.autodiscover_tasks(
