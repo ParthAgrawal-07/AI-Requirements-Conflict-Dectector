@@ -5,7 +5,7 @@
 | **Owner** | Abhyudit (QA: accuracy and backend) |
 | **Reviewers** | Keval (classification), Heet (embeddings and retrieval) |
 | **Status** | Draft for review (Sprint 0) |
-| **Seed material** | `sample-docs/planted-conflicts/` (labeling guide, `srs_v1.md`, `srs_v1_labels.json`) |
+| **Seed material** | `sample_docs/planted_conflicts/` (labeling guide, `srs_v1.md`, `srs_v1_labels.json`) |
 | **Schema** | `schema.json` in this folder |
 
 All numbers below are **proposed targets**. Reviewers may change them; the plan is accepted when Keval and Heet approve it.
@@ -109,7 +109,7 @@ eval/
   run_benchmark.py          (Sprint 2)
 ```
 
-`sample-docs/planted-conflicts/` stays in place until the fixtures that point at it are updated.
+`sample_docs/planted_conflicts/` stays in place until the fixtures that point at it are updated.
 
 ## 7. Schedule
 

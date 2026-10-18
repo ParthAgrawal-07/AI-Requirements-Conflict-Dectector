@@ -2,7 +2,7 @@
 
 Locations are searched in this order: $EVAL_DIR, /eval (container mount),
 <repo root>/eval. The v1 seed labels are looked up under
-<repo root>/sample-docs/planted-conflicts/ or $BENCHMARK_V1_DIR.
+<repo root>/sample_docs/planted_conflicts/ (or the hyphenated spelling) or $BENCHMARK_V1_DIR.
 Tests skip when the files are not reachable (for example when ./eval is not
 mounted into the backend container).
 """
@@ -46,7 +46,8 @@ def _v1_dirs() -> list[Path]:
     dirs = []
     if os.environ.get("BENCHMARK_V1_DIR"):
         dirs.append(Path(os.environ["BENCHMARK_V1_DIR"]))
-    dirs += [Path("/sample-docs/planted-conflicts"), REPO_ROOT / "sample-docs" / "planted-conflicts"]
+    for folder in ("sample_docs/planted_conflicts", "sample-docs/planted-conflicts"):
+        dirs += [Path("/") / folder, REPO_ROOT / folder]
     return dirs
 
 
