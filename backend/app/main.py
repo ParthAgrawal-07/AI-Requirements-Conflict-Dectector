@@ -13,9 +13,19 @@ from app.core.config import get_settings
 from app.core.database import get_engine
 from app.core.errors import install_exception_handlers
 from app.core.logging import configure_logging
-from app.core.middleware import REQUEST_ID_HEADER, RequestContextMiddleware
+from app.core.middleware import (
+    REQUEST_ID_HEADER,
+    BodyLimit,
+    MaxBodySizeMiddleware,
+    RequestContextMiddleware,
+)
+from app.services.documents import too_large_message
 
 logger = logging.getLogger(__name__)
+
+# multipart framing (boundaries, part headers) on top of the file itself
+MULTIPART_OVERHEAD_BYTES = 64 * 1024
+UPLOAD_PATH = ("POST", "/api/v1/documents")
 
 
 @asynccontextmanager
@@ -41,7 +51,18 @@ def create_app() -> FastAPI:
         openapi_url=None if settings.is_production else "/openapi.json",
     )
 
-    # Added last = outermost: request-id/logging wraps everything, including CORS.
+    # Middleware order: the last one added is outermost. The body-size guard is added first so
+    # it sits *inside* CORS — its 413 responses still carry CORS headers and stay readable by
+    # the browser — and request-id/logging (added last) wraps everything.
+    app.add_middleware(
+        MaxBodySizeMiddleware,
+        limits={
+            UPLOAD_PATH: BodyLimit(
+                max_bytes=settings.max_upload_size_bytes + MULTIPART_OVERHEAD_BYTES,
+                message=too_large_message(settings.max_upload_size_mb),
+            )
+        },
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_allowed_origins,

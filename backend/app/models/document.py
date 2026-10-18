@@ -35,6 +35,8 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         CheckConstraint("size_bytes >= 0", name="size_non_negative"),
         Index("ix_documents_workspace_id_uploaded_at", "workspace_id", "uploaded_at"),
         Index("ix_documents_status", "status"),
+        # Re-upload detection (US-01): "has this workspace already uploaded identical content?"
+        Index("ix_documents_workspace_id_sha256", "workspace_id", "sha256"),
     )
 
     workspace_id: Mapped[uuid.UUID] = mapped_column(
