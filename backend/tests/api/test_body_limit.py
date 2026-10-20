@@ -52,7 +52,9 @@ def mini_client(reached: list[int]) -> Iterator[TestClient]:
     install_exception_handlers(app)
     app.add_middleware(
         MaxBodySizeMiddleware,
-        limits={(("POST", "/upload")): BodyLimit(max_bytes=LIMIT, message="Too big for this test.")},
+        limits={
+            (("POST", "/upload")): BodyLimit(max_bytes=LIMIT, message="Too big for this test.")
+        },
     )
 
     @app.post("/upload")
