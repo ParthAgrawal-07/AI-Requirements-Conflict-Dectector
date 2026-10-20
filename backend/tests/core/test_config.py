@@ -59,6 +59,9 @@ def test_cors_origins_read_from_environment(monkeypatch: pytest.MonkeyPatch) -> 
 def test_similarity_threshold_accepts_both_env_names(
     monkeypatch: pytest.MonkeyPatch, name: str
 ) -> None:
+    # Clear both names so values from .env / docker-compose don't leak in
+    monkeypatch.delenv("SIMILARITY_THRESHOLD", raising=False)
+    monkeypatch.delenv("SIMILARITY_THRESHOLD_DEFAULT", raising=False)
     monkeypatch.setenv(name, "0.6")
     assert Settings(_env_file=None).similarity_threshold_default == 0.6  # type: ignore[call-arg]
 

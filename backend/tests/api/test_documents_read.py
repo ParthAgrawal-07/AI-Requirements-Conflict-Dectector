@@ -505,7 +505,6 @@ class TestListRequirements:
         auth_headers: dict[str, str],
         add_document: Callable[..., Document],
     ) -> None:
-        """US-04: empty/failed extraction must be explainable — the UI reads status on /documents/{id}."""
         add_document(user, status=DocumentStatus.FAILED, error_message="[extraction] nothing found")
         response = api.get(requirements_url(project), headers=auth_headers)
         assert response.status_code == 200

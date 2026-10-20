@@ -340,3 +340,17 @@ def make_requirement(
 def auth_headers(user: User) -> dict[str, str]:
     token, _ = security.create_access_token(user.id)
     return {"Authorization": f"Bearer {token}"}
+
+
+# ── Sample data ──────────────────────────────────────────────────────────────
+@pytest.fixture(scope="session")
+def sample_srs_path() -> Path:
+    """Path to the labeled benchmark SRS used by ingestion/classification tests.
+
+    ``sample_docs/`` is the canonical folder for sample documents.
+    """
+    path = BACKEND_DIR.parent / "sample_docs" / "planted_conflicts" / "srs_v1.md"
+    if not path.exists():
+        # Inside the backend container only backend/ is mounted, so the repo root is absent.
+        pytest.skip(f"Sample SRS not found at {path}")
+    return path

@@ -330,7 +330,7 @@ class TestTextHygiene:
     def test_text_is_otherwise_stored_verbatim(
         self, db_session: Session, storage: LocalFileStorage, make_stored_document: MakeDoc
     ) -> None:
-        raw = "  REQ-1: The  system\tshall keep   spacing — and “quotes”.  "
+        raw = "  REQ-1: The  system\tshall keep   spacing — and \u201cquotes\u201d.  "
         item = Extracted(id="REQ-1", raw_text=raw, source_document="s", location="p 1")
         document, _ = self.run_with(db_session, storage, make_stored_document, [item])
         assert requirements_of(db_session, document)[0].body == raw

@@ -82,7 +82,7 @@ NFR-23 requires the system to run identically in local development and productio
 
 ### Uploaded files and the shared volume
 
-`POST /documents` saves the file under `UPLOAD_DIR` (`/data/uploads`) and the **Celery worker reads it from
+`POST /projects/{p}/documents` saves the file under `UPLOAD_DIR` (`/data/uploads`) and the **Celery worker reads it from
 there**, so `backend` and `worker` must see the same directory — in Compose that is the shared `uploads`
 volume. If they don't, documents end `failed` with a `[storage]` message saying so. On Railway/Render, where
 container disks are private and ephemeral, deploying API and worker as separate services needs either one

@@ -3,7 +3,7 @@
 Routes stay thin; this module owns the transaction and the ordering rules. Documents belong to a
 project (ADR-14); every query filters by ``project_id`` as well as being reached through
 ``require_permission`` (FR-38): a document in another project or workspace is indistinguishable
-from one that doesn't exist. Requirement listing (US-04) lives in ``services/requirements.py``.
+from one that doesn't exist. Requirement listing (US-04) lives here too.
 
 Upload ordering, chosen so a failure at any step leaves nothing behind:
 
@@ -221,3 +221,53 @@ def list_documents(
         .offset(offset)
     ).all()
     return [(row[0], int(row[1])) for row in rows], total
+
+
+def _escape_like(term: str) -> str:
+    return term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def list_requirements(
+    db: Session,
+    project_id: uuid.UUID,
+    *,
+    query: str | None,
+    document_id: uuid.UUID | None = None,
+    state: str | None = None,
+    origin: str | None = None,
+    owner: uuid.UUID | None = None,
+    limit: int,
+    offset: int,
+) -> tuple[list[Requirement], int] | None:
+    """Requirements of a project in source order, or ``None`` if the project isn't visible."""
+    from app.models import RequirementOrigin, RequirementState
+    from app.services import projects as project_service
+
+    if project_service.get_project(db, project_id) is None:
+        return None
+
+    conditions: list[Any] = [Requirement.project_id == project_id]
+    if document_id is not None:
+        conditions.append(Requirement.document_id == document_id)
+    if query:
+        pattern = f"%{_escape_like(query.strip())}%"
+        conditions.append(
+            Requirement.body.ilike(pattern, escape="\\")
+            | Requirement.source_req_id.ilike(pattern, escape="\\")
+        )
+    if state is not None:
+        conditions.append(Requirement.state == RequirementState(state))
+    if origin is not None:
+        conditions.append(Requirement.origin == RequirementOrigin(origin))
+    if owner is not None:
+        conditions.append(Requirement.owner_id == owner)
+
+    total = db.scalar(select(func.count(Requirement.id)).where(*conditions)) or 0
+    rows = db.scalars(
+        select(Requirement)
+        .where(*conditions)
+        .order_by(Requirement.order_index, Requirement.id)
+        .limit(limit)
+        .offset(offset)
+    ).all()
+    return list(rows), total
