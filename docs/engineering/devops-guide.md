@@ -8,11 +8,11 @@
 | **Backend deploy** | Railway / Render |
 | **Frontend deploy** | Vercel |
 | **CI/CD** | GitHub Actions |
-| **Status** | Planned — docker-compose.yml, .env.example, and CI workflows not yet created |
+| **Status** | Sprint 0 (Parth): docker-compose.yml, both Dockerfiles, .env.example, DB schema + migrations, auth skeleton, and backend-ci.yml are implemented and passing. Frontend build/deploy steps are still Sprint 5 (Dhavni didi). |
 
 ---
 
-## 1. Local Development Setup (Planned)
+## 1. Local Development Setup
 
 ```bash
 git clone <repo>
@@ -21,45 +21,87 @@ cp .env.example .env          # fill in DB creds, LLM API key
 docker compose up --build
 
 # Services started:
-#   backend   -> FastAPI on :8000
-#   frontend  -> Vite dev server on :5173
 #   db        -> Postgres + pgvector on :5432
 #   redis     -> Redis on :6379
-#   worker    -> Celery worker (consumes Redis queue)
+#   migrate   -> runs `alembic upgrade head` once, then exits 0
+#   backend   -> FastAPI on :8000 (waits for migrate to finish)
+#   worker    -> Celery worker consuming the Redis queue (waits for migrate to finish)
+#   frontend  -> Vite dev server on :5173
 ```
+
+Requires **Docker Compose v2** (the `docker compose` plugin bundled with current Docker
+Desktop / Docker Engine) — the legacy standalone `docker-compose` v1 binary doesn't support
+the `condition: service_completed_successfully` dependency used by the `migrate` service.
+
+No account exists after a fresh `docker compose up` — there is deliberately no open sign-up
+(IT/DevOps stakeholder requirement: nobody can register without a join code). Create the first
+**platform administrator** (the only thing the CLI creates in production), who then creates a
+workspace and issues join codes:
+
+```bash
+make create-admin email=you@example.com name="Your Name"   # prompts for the password
+# development only — a demo workspace with one member per default role, prints the password:
+make seed-demo
+```
+
+By default only platform administrators can create workspaces; set `ALLOW_USER_WORKSPACE_CREATION=true`
+to let any signed-in user do so. Join-code sign-up is limited to `SIGNUP_ATTEMPTS_PER_MINUTE` (default 5)
+attempts per IP address and per e-mail address; behind a reverse proxy set **`TRUSTED_PROXY_HOPS`**
+to the number of proxies in front of the API (Render: `1`), otherwise every client shares one address and sign-up
+is limited to that many attempts per minute *globally*. The limit is kept in Redis; if Redis is unreachable it
+degrades to a per-process counter (and logs a warning) rather than blocking sign-up. `make seed-demo` only runs when
+`ENVIRONMENT` is `development` or `test` — never in staging or production, where its accounts would have a published
+password. Before deploying a migration that changes data (such as `0004`), rehearse it on a copy of the real
+database: see [`migration-runbook.md`](migration-runbook.md).
+
+See the root `Makefile` (`make help`) for the rest of the day-to-day commands (logs, test,
+lint, typecheck, migrations).
 
 ## 2. Environment Configuration
 
 | Variable | Purpose |
 |---|---|
+| `ENVIRONMENT` | `development` / `test` / `staging` / `production` — staging/production enforce a strong `JWT_SECRET` and an explicit CORS list at startup |
 | `DATABASE_URL` | Postgres connection string (pgvector-enabled instance) |
 | `REDIS_URL` | Celery broker/result backend |
 | `JWT_SECRET` | Signing key for auth tokens (FR-37) — never committed (NFR-12) |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | JWT lifetime, default 60 |
 | `LLM_API_KEY` | Anthropic Claude API / OpenAI API key — never exposed client-side (NFR-12) |
 | `SIMILARITY_THRESHOLD_DEFAULT` | Default embedding pre-filter threshold (FR-10), overridable per workspace |
-| `CORS_ALLOWED_ORIGINS` | Frontend origin(s) allowed to call the API |
+| `CORS_ALLOWED_ORIGINS` | Comma-separated frontend origin(s) allowed to call the API |
+| `MAX_UPLOAD_SIZE_MB` | Upload size cap enforced at the API (FR-02), default 25 |
 
-*`.env.example` is referenced in the repo plan but not yet created — a Sprint 0 task (see `task-breakdown.md`, T01).*
+See [`.env.example`](../../.env.example) for the complete, commented list.
 
 ## 3. Docker Compose Topology (Planned)
 
-```yaml
-services:
-  backend:   builds ./backend, depends_on [db, redis]
-  worker:    builds ./backend, runs "celery -A app worker", depends_on [db, redis]
-  frontend:  builds ./frontend, depends_on [backend]
-  db:        image: pgvector/pgvector:pg16
-  redis:     image: redis:7
-```
+See [`docker-compose.yml`](../../docker-compose.yml) for the actual, implemented topology
+(six services: `db`, `redis`, `migrate`, `backend`, `worker`, `frontend`).
 
 NFR-23 requires the system to run identically in local development and production via this same Docker Compose / containerized definition.
 
-## 4. CI/CD Pipeline (GitHub Actions, Planned)
+### Uploaded files and the shared volume
 
-- On every pull request: run Pytest (backend) and Vitest (frontend), lint, and build both images.
-- On merge to main: run the full test suite, then deploy backend to Railway/Render and frontend to Vercel.
-- Alembic migrations run automatically against the target environment as a deploy step, not manually.
-- Integration-checkpoint builds (Week 7, Week 11) are tagged releases so the team can point graders/reviewers at a known-good deployed state.
+`POST /documents` saves the file under `UPLOAD_DIR` (`/data/uploads`) and the **Celery worker reads it from
+there**, so `backend` and `worker` must see the same directory — in Compose that is the shared `uploads`
+volume. If they don't, documents end `failed` with a `[storage]` message saying so. On Railway/Render, where
+container disks are private and ephemeral, deploying API and worker as separate services needs either one
+shared volume or S3-compatible object storage; `app/services/storage.py` is the single place to swap
+(Sprint 5 deployment task).
+
+## 4. CI/CD Pipeline (GitHub Actions)
+
+- **Implemented (`backend-ci.yml`)**, on every push/PR touching `backend/`: ruff (lint +
+  format check), mypy, pytest against real Postgres+pgvector and Redis service containers
+  (not mocks — see `tests/conftest.py`), a check that Alembic has exactly one migration head,
+  a `pip-audit` dependency scan (report-only for now), and a Docker build check.
+- **Not yet implemented:** `frontend-ci.yml` currently runs against the Sprint 0 frontend
+  stub only; deploy-on-merge to Railway/Render (backend) and Vercel (frontend) is Sprint 5
+  (Dhavni didi / Parth, see `Sprint_Work_Assignment`).
+- Alembic migrations run automatically as a deploy step (the `migrate` service / container
+  entrypoint), never applied by hand against a shared environment.
+- Integration-checkpoint builds (Week 7, Week 11) are tagged releases so the team can point
+  graders/reviewers at a known-good deployed state.
 
 ## 5. Production Considerations (NFR-08, NFR-09, NFR-23)
 
@@ -75,12 +117,26 @@ backend/
   app/embeddings/      # Role 2
   app/classification/  # Role 3
   app/clarification/   # Role 4
-  app/core/            # Role 5
-  alembic/             # migrations — not yet created
+  app/core/            # Role 5 — settings, db, security, auth, celery, errors, middleware
+  app/api/             # Role 5 — routes (auth implemented; documents/requirements/
+                       #   findings/reports are Sprint 1+ stubs owned by their roles)
+  app/models/          # Role 5 — SQLAlchemy models for every table
+  app/schemas/         # Role 5 — Pydantic request/response schemas
+  app/services/        # Role 5 — business logic (routes stay thin)
+  alembic/             # migrations — implemented (0001_initial_schema)
+  tests/               # Role 5's own tests; each role adds tests alongside its own package
 frontend/
   src/components/      # Role 6 (core), Role 7 (graph/)
 docs/
   engineering/         # this document set
-.env.example           # not yet created
-docker-compose.yml
+.env.example           # implemented
+docker-compose.yml     # implemented — db, redis, migrate, backend, worker, frontend
+Makefile               # implemented — `make help` for day-to-day commands
 ```
+
+> **Note on role numbering:** this file and `task-breakdown.md` use the original 7-role
+> split (T02 "DB schema" → Role 2, T03 "Docker Compose" → Role 7). The team's later
+> `Sprint_Work_Assignment` reassigns Sprint 0 infra (DB schema, Docker Compose, CI, auth
+> skeleton) to Parth under Role 5, which is what was actually built here. This is the same
+> kind of numbering drift already tracked for FR/NFR/DR in `requirements-spec.md` — not yet
+> reconciled into one canonical assignment, flagged here rather than silently overwritten.
