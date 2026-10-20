@@ -1,8 +1,9 @@
-"""Document service (Role 5 — US-01 upload, US-03 status, US-04 requirement listing).
+"""Document service (Role 5 — US-01 upload, US-03 status).
 
-Routes stay thin; this module owns the transaction and the ordering rules. Every query takes a
-``workspace_id`` and filters by it (FR-38): a document in another workspace is
-indistinguishable from one that doesn't exist.
+Routes stay thin; this module owns the transaction and the ordering rules. Documents belong to a
+project (ADR-14); every query filters by ``project_id`` as well as being reached through
+``require_permission`` (FR-38): a document in another project or workspace is indistinguishable
+from one that doesn't exist. Requirement listing (US-04) lives here too.
 
 Upload ordering, chosen so a failure at any step leaves nothing behind:
 
@@ -23,7 +24,16 @@ from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
 from app.core.errors import PayloadTooLargeError, ServiceUnavailableError
-from app.models import Document, DocumentStatus, Requirement, User
+from app.models import (
+    AuditAction,
+    AuditLog,
+    Document,
+    DocumentStatus,
+    ImportMode,
+    Project,
+    Requirement,
+    User,
+)
 from app.services.storage import LocalFileStorage, StagedFile, UploadTooLargeError
 from app.services.upload_validation import sanitize_filename, validate_upload
 
@@ -53,12 +63,19 @@ def create_document_from_upload(
     db: Session,
     *,
     user: User,
+    project: Project,
     filename: str | None,
     source: BinaryIO,
     storage: LocalFileStorage,
     max_upload_size_mb: int,
+    import_mode: ImportMode = ImportMode.PROPOSALS,
+    stakeholder_group: str | None = None,
 ) -> tuple[Document, uuid.UUID | None]:
-    """Accept an upload. Returns the new document and, if any, the id of an earlier identical one.
+    """Accept an upload into ``project``. Returns the document and an earlier identical one, if any.
+
+    The caller has already checked the permission for ``import_mode`` (``baseline.manage`` for a
+    baseline import, ``doc.upload`` for proposals). Extraction is allowed while the project is in
+    Setup — the initial SRS is uploaded then; only *analysis* is gated (ContextGate).
 
     Raises ``BadRequestError`` (400), ``PayloadTooLargeError`` (413) or
     ``ServiceUnavailableError`` (503); on any error nothing is stored.
@@ -72,9 +89,12 @@ def create_document_from_upload(
         storage.discard(staged)
         raise
 
-    duplicate_of = find_duplicate(db, user.workspace_id, staged.sha256)
+    duplicate_of = find_duplicate(db, project.workspace_id, project.id, staged.sha256)
     document = Document(
-        workspace_id=user.workspace_id,
+        workspace_id=project.workspace_id,
+        project_id=project.id,
+        import_mode=import_mode,
+        stakeholder_group=stakeholder_group,
         uploaded_by=user.id,
         filename=safe_name,
         format=detected_format,
@@ -100,6 +120,19 @@ def create_document_from_upload(
 
     try:
         document.task_id = dispatch_processing(document.id)
+        # Audited only once the upload is certain to stand; identifiers only (CR-04).
+        db.add(
+            AuditLog(
+                workspace_id=document.workspace_id,
+                actor_id=user.id,
+                action=AuditAction.DOCUMENT_UPLOADED,
+                details={
+                    "document_id": str(document.id),
+                    "project_id": str(project.id),
+                    "import_mode": import_mode.value,
+                },
+            )
+        )
         db.commit()
     except Exception as exc:
         # The queue (Redis) is unreachable. Uploading is all-or-nothing: remove what we just
@@ -125,12 +158,19 @@ def _stage(storage: LocalFileStorage, source: BinaryIO, max_upload_size_mb: int)
         raise PayloadTooLargeError(too_large_message(max_upload_size_mb)) from None
 
 
-def find_duplicate(db: Session, workspace_id: uuid.UUID, sha256: str) -> uuid.UUID | None:
-    """The oldest earlier document with identical content that did not fail, if any."""
+def find_duplicate(
+    db: Session, workspace_id: uuid.UUID, project_id: uuid.UUID, sha256: str
+) -> uuid.UUID | None:
+    """The oldest earlier document in the project with identical content that did not fail.
+
+    ``workspace_id`` is redundant for correctness (a project has one workspace) but lets
+    PostgreSQL use ``ix_documents_workspace_id_sha256`` instead of scanning the project.
+    """
     return db.scalar(
         select(Document.id)
         .where(
             Document.workspace_id == workspace_id,
+            Document.project_id == project_id,
             Document.sha256 == sha256,
             Document.status != DocumentStatus.FAILED,
         )
@@ -149,11 +189,11 @@ def _requirement_count() -> Select[Any]:
 
 
 def get_document(
-    db: Session, workspace_id: uuid.UUID, document_id: uuid.UUID
+    db: Session, project_id: uuid.UUID, document_id: uuid.UUID
 ) -> tuple[Document, int] | None:
     row = db.execute(
         select(Document, _requirement_count().scalar_subquery()).where(
-            Document.id == document_id, Document.workspace_id == workspace_id
+            Document.id == document_id, Document.project_id == project_id
         )
     ).first()
     return None if row is None else (row[0], int(row[1]))
@@ -161,13 +201,13 @@ def get_document(
 
 def list_documents(
     db: Session,
-    workspace_id: uuid.UUID,
+    project_id: uuid.UUID,
     *,
     status: DocumentStatus | None,
     limit: int,
     offset: int,
 ) -> tuple[list[tuple[Document, int]], int]:
-    conditions = [Document.workspace_id == workspace_id]
+    conditions = [Document.project_id == project_id]
     if status is not None:
         conditions.append(Document.status == status)
 
@@ -181,39 +221,3 @@ def list_documents(
         .offset(offset)
     ).all()
     return [(row[0], int(row[1])) for row in rows], total
-
-
-def _escape_like(term: str) -> str:
-    return term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-
-
-def list_requirements(
-    db: Session,
-    workspace_id: uuid.UUID,
-    document_id: uuid.UUID,
-    *,
-    query: str | None,
-    limit: int,
-    offset: int,
-) -> tuple[list[Requirement], int] | None:
-    """Requirements of a document in source order, or ``None`` if the document isn't visible."""
-    if get_document(db, workspace_id, document_id) is None:
-        return None
-
-    conditions = [Requirement.document_id == document_id]
-    if query:
-        pattern = f"%{_escape_like(query.strip())}%"
-        conditions.append(
-            Requirement.body.ilike(pattern, escape="\\")
-            | Requirement.source_req_id.ilike(pattern, escape="\\")
-        )
-
-    total = db.scalar(select(func.count(Requirement.id)).where(*conditions)) or 0
-    rows = db.scalars(
-        select(Requirement)
-        .where(*conditions)
-        .order_by(Requirement.order_index, Requirement.id)
-        .limit(limit)
-        .offset(offset)
-    ).all()
-    return list(rows), total

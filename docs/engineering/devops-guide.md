@@ -33,15 +33,26 @@ Requires **Docker Compose v2** (the `docker compose` plugin bundled with current
 Desktop / Docker Engine) — the legacy standalone `docker-compose` v1 binary doesn't support
 the `condition: service_completed_successfully` dependency used by the `migrate` service.
 
-No superuser account exists yet after a fresh `docker compose up` — there is deliberately no
-public sign-up endpoint (IT/DevOps stakeholder requirement: accounts are provisioned, not
-self-registered). Create one:
+No account exists after a fresh `docker compose up` — there is deliberately no open sign-up
+(IT/DevOps stakeholder requirement: nobody can register without a join code). Create the first
+**platform administrator** (the only thing the CLI creates in production), who then creates a
+workspace and issues join codes:
 
 ```bash
-make seed-demo                      # one demo user per role, dev-only, prints the password
-# or
-make create-user email=you@example.com name="Your Name" role=admin
+make create-admin email=you@example.com name="Your Name"   # prompts for the password
+# development only — a demo workspace with one member per default role, prints the password:
+make seed-demo
 ```
+
+By default only platform administrators can create workspaces; set `ALLOW_USER_WORKSPACE_CREATION=true`
+to let any signed-in user do so. Join-code sign-up is limited to `SIGNUP_ATTEMPTS_PER_MINUTE` (default 5)
+attempts per IP address and per e-mail address; behind a reverse proxy set **`TRUSTED_PROXY_HOPS`**
+to the number of proxies in front of the API (Render: `1`), otherwise every client shares one address and sign-up
+is limited to that many attempts per minute *globally*. The limit is kept in Redis; if Redis is unreachable it
+degrades to a per-process counter (and logs a warning) rather than blocking sign-up. `make seed-demo` only runs when
+`ENVIRONMENT` is `development` or `test` — never in staging or production, where its accounts would have a published
+password. Before deploying a migration that changes data (such as `0004`), rehearse it on a copy of the real
+database: see [`migration-runbook.md`](migration-runbook.md).
 
 See the root `Makefile` (`make help`) for the rest of the day-to-day commands (logs, test,
 lint, typecheck, migrations).
@@ -71,7 +82,7 @@ NFR-23 requires the system to run identically in local development and productio
 
 ### Uploaded files and the shared volume
 
-`POST /documents` saves the file under `UPLOAD_DIR` (`/data/uploads`) and the **Celery worker reads it from
+`POST /projects/{p}/documents` saves the file under `UPLOAD_DIR` (`/data/uploads`) and the **Celery worker reads it from
 there**, so `backend` and `worker` must see the same directory — in Compose that is the shared `uploads`
 volume. If they don't, documents end `failed` with a `[storage]` message saying so. On Railway/Render, where
 container disks are private and ephemeral, deploying API and worker as separate services needs either one

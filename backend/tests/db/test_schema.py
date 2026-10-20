@@ -2,6 +2,7 @@
 
 import uuid
 from collections.abc import Callable
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import delete, select, text, update
@@ -17,8 +18,18 @@ from app.models import (
     Finding,
     FindingCategory,
     FindingStatus,
+    ImportMode,
+    Membership,
+    Project,
+    ProjectMember,
+    ProjectStatus,
     Requirement,
+    RequirementOrigin,
+    RequirementState,
     RequirementVersion,
+    Role,
+    RolePermission,
+    Severity,
     User,
     Workspace,
 )
@@ -46,35 +57,35 @@ def _vector(hot_index: int) -> list[float]:
 
 
 class TestUsersAndWorkspaces:
-    def test_email_must_be_lowercase(self, db_session: Session, workspace: Workspace) -> None:
+    def test_email_must_be_lowercase(self, db_session: Session) -> None:
         with pytest.raises(IntegrityError), db_session.begin_nested():
-            db_session.add(
-                User(
-                    email="Mixed@Case.com",
-                    full_name="X",
-                    hashed_password="h",
-                    workspace_id=workspace.id,
-                )
-            )
+            db_session.add(User(email="Mixed@Case.com", full_name="X", hashed_password="h"))
             db_session.flush()
 
     def test_email_is_unique(self, db_session: Session, user: User) -> None:
         with pytest.raises(IntegrityError), db_session.begin_nested():
-            db_session.add(
-                User(
-                    email=user.email,
-                    full_name="X",
-                    hashed_password="h",
-                    workspace_id=user.workspace_id,
-                )
-            )
+            db_session.add(User(email=user.email, full_name="X", hashed_password="h"))
             db_session.flush()
 
-    def test_role_outside_enum_rejected_by_database(self, db_session: Session, user: User) -> None:
+    def test_platform_role_outside_enum_rejected_by_database(
+        self, db_session: Session, user: User
+    ) -> None:
         with pytest.raises(IntegrityError), db_session.begin_nested():
             db_session.execute(
-                text("UPDATE users SET role = 'superuser' WHERE id = :id"), {"id": user.id}
+                text("UPDATE users SET platform_role = 'superuser' WHERE id = :id"), {"id": user.id}
             )
+
+    def test_users_have_no_workspace_or_role_columns_any_more(self, db_session: Session) -> None:
+        columns = {
+            row[0]
+            for row in db_session.execute(
+                text(
+                    "SELECT column_name FROM information_schema.columns WHERE table_name = 'users'"
+                )
+            )
+        }
+        assert "role" not in columns and "workspace_id" not in columns
+        assert "platform_role" in columns
 
     def test_workspace_defaults_and_threshold_range(
         self, db_session: Session, workspace: Workspace
@@ -86,9 +97,219 @@ class TestUsersAndWorkspaces:
                 {"id": workspace.id},
             )
 
-    def test_workspace_with_users_cannot_be_deleted(self, db_session: Session, user: User) -> None:
+    def test_workspace_names_are_not_unique(self, db_session: Session) -> None:
+        """A unique name would let one tenant learn that another tenant's workspace exists."""
+        db_session.add_all([Workspace(name="Same name"), Workspace(name="Same name")])
+        db_session.commit()
+        assert (
+            len(db_session.scalars(select(Workspace).where(Workspace.name == "Same name")).all())
+            == 2
+        )
+
+    def test_workspace_with_members_cannot_be_deleted(
+        self, db_session: Session, user: User, workspace: Workspace
+    ) -> None:
         with pytest.raises(IntegrityError), db_session.begin_nested():
-            db_session.execute(delete(Workspace).where(Workspace.id == user.workspace_id))
+            db_session.execute(delete(Workspace).where(Workspace.id == workspace.id))
+
+    def test_workspace_with_projects_cannot_be_deleted(
+        self, db_session: Session, project: Project, workspace: Workspace
+    ) -> None:
+        with pytest.raises(IntegrityError), db_session.begin_nested():
+            db_session.execute(delete(Workspace).where(Workspace.id == workspace.id))
+
+
+class TestProjects:
+    def test_defaults(self, db_session: Session, workspace: Workspace) -> None:
+        project = Project(workspace_id=workspace.id, name="P")
+        db_session.add(project)
+        db_session.commit()
+        db_session.refresh(project)
+        assert project.status is ProjectStatus.SETUP  # FR-103: a new project starts in Setup
+        assert project.context_version == 0
+        assert (project.similarity_threshold, project.confidence_threshold) == (0.75, 0.5)
+        assert project.llm_budget_monthly_calls == 2000
+        assert project.required_approvals == 1
+        assert project.chat_detection_enabled is False  # SX-04: chat analysis is opt-in
+
+    def test_names_are_unique_per_workspace_but_not_across_workspaces(
+        self,
+        db_session: Session,
+        project: Project,
+        make_project: Callable[..., Project],
+        make_workspace: Callable[..., Workspace],
+    ) -> None:
+        make_project(workspace=make_workspace(), name=project.name)  # same name, other tenant: ok
+        with pytest.raises(IntegrityError), db_session.begin_nested():
+            db_session.add(Project(workspace_id=project.workspace_id, name=project.name))
+            db_session.flush()
+
+    @pytest.mark.parametrize(
+        "assignment",
+        [
+            "status = 'deleted'",
+            "similarity_threshold = 1.5",
+            "confidence_threshold = -0.1",
+            "llm_budget_monthly_calls = -1",
+            "required_approvals = 0",
+            "required_approvals = 4",
+            "context_version = -1",
+        ],
+    )
+    def test_check_constraints(
+        self, db_session: Session, project: Project, assignment: str
+    ) -> None:
+        with pytest.raises(IntegrityError), db_session.begin_nested():
+            db_session.execute(
+                text(f"UPDATE projects SET {assignment} WHERE id = :id"), {"id": project.id}
+            )
+
+    def test_a_project_with_documents_cannot_be_deleted(
+        self, db_session: Session, project: Project, make_requirement: Callable[..., Requirement]
+    ) -> None:
+        make_requirement()
+        with pytest.raises(IntegrityError), db_session.begin_nested():
+            db_session.execute(delete(Project).where(Project.id == project.id))
+
+
+class TestRolesAndMemberships:
+    def test_the_nine_default_roles_are_seeded_and_global(self, db_session: Session) -> None:
+        roles = db_session.scalars(select(Role).where(Role.is_default)).all()
+        assert len(roles) == 9
+        assert all(role.workspace_id is None for role in roles)
+
+    def test_a_default_role_cannot_belong_to_a_workspace(
+        self, db_session: Session, workspace: Workspace
+    ) -> None:
+        with pytest.raises(IntegrityError), db_session.begin_nested():
+            db_session.add(Role(name="Odd", is_default=True, workspace_id=workspace.id))
+            db_session.flush()
+
+    def test_a_custom_role_must_belong_to_a_workspace(self, db_session: Session) -> None:
+        with pytest.raises(IntegrityError), db_session.begin_nested():
+            db_session.add(Role(name="Orphan", is_default=False, workspace_id=None))
+            db_session.flush()
+
+    def test_role_names_are_unique_among_defaults_and_per_workspace(
+        self, db_session: Session, workspace: Workspace
+    ) -> None:
+        with pytest.raises(IntegrityError), db_session.begin_nested():
+            db_session.add(Role(name="Owner", is_default=True, workspace_id=None))
+            db_session.flush()
+        db_session.add(Role(name="Client reviewer", workspace_id=workspace.id))
+        db_session.commit()
+        with pytest.raises(IntegrityError), db_session.begin_nested():
+            db_session.add(Role(name="Client reviewer", workspace_id=workspace.id))
+            db_session.flush()
+
+    def test_the_same_custom_name_may_exist_in_two_workspaces(
+        self,
+        db_session: Session,
+        workspace: Workspace,
+        make_workspace: Callable[..., Workspace],
+    ) -> None:
+        db_session.add(Role(name="Auditor", workspace_id=workspace.id))
+        db_session.add(Role(name="Auditor", workspace_id=make_workspace().id))
+        db_session.commit()
+
+    def test_a_role_in_use_cannot_be_deleted(self, db_session: Session, user: User) -> None:
+        membership = db_session.scalars(
+            select(Membership).where(Membership.user_id == user.id)
+        ).one()
+        with pytest.raises(IntegrityError), db_session.begin_nested():
+            db_session.execute(delete(Role).where(Role.id == membership.role_id))
+
+    def test_deleting_a_role_removes_its_permission_rows(
+        self, db_session: Session, workspace: Workspace
+    ) -> None:
+        role = Role(name="Temp", workspace_id=workspace.id)
+        db_session.add(role)
+        db_session.flush()
+        db_session.add(RolePermission(role_id=role.id, permission="view"))
+        db_session.commit()
+
+        db_session.execute(delete(Role).where(Role.id == role.id))
+
+        assert (
+            db_session.scalars(
+                select(RolePermission).where(RolePermission.role_id == role.id)
+            ).all()
+            == []
+        )
+
+    def test_a_user_has_at_most_one_active_membership_per_workspace(
+        self, db_session: Session, user: User, workspace: Workspace
+    ) -> None:
+        existing = db_session.scalars(select(Membership).where(Membership.user_id == user.id)).one()
+        with pytest.raises(IntegrityError), db_session.begin_nested():
+            db_session.add(
+                Membership(user_id=user.id, workspace_id=workspace.id, role_id=existing.role_id)
+            )
+            db_session.flush()
+
+    def test_history_rows_do_not_block_rejoining(
+        self, db_session: Session, user: User, workspace: Workspace
+    ) -> None:
+        existing = db_session.scalars(select(Membership).where(Membership.user_id == user.id)).one()
+        existing.ended_at = datetime.now(UTC)
+        db_session.commit()
+
+        db_session.add(
+            Membership(user_id=user.id, workspace_id=workspace.id, role_id=existing.role_id)
+        )
+        db_session.commit()  # no IntegrityError: only *active* memberships are unique
+
+    def test_project_members_are_unique_per_project_and_user(
+        self, db_session: Session, project: Project, user: User
+    ) -> None:
+        db_session.add(ProjectMember(project_id=project.id, user_id=user.id))
+        db_session.commit()
+        with pytest.raises(IntegrityError), db_session.begin_nested():
+            db_session.add(ProjectMember(project_id=project.id, user_id=user.id))
+            db_session.flush()
+
+
+class TestSeverityAndLifecycleColumns:
+    def test_severity_is_low_medium_high_only(
+        self, db_session: Session, make_requirement: Callable[..., Requirement]
+    ) -> None:
+        requirement = make_requirement()
+        for level in ("low", "medium", "high"):
+            db_session.add(
+                _finding(
+                    requirement.document_id,
+                    requirement_id=requirement.id,
+                    severity=Severity(level),
+                )
+            )
+        db_session.commit()
+        with pytest.raises(IntegrityError), db_session.begin_nested():
+            db_session.execute(text("UPDATE findings SET severity = 'critical'"))
+
+    def test_requirement_state_and_origin_defaults_and_checks(
+        self, db_session: Session, make_requirement: Callable[..., Requirement]
+    ) -> None:
+        requirement = make_requirement()
+        db_session.refresh(requirement)
+        assert requirement.state is RequirementState.PROPOSED
+        assert requirement.origin is RequirementOrigin.DOCUMENT
+        assert requirement.owner_id is None
+        for bad in ("state = 'Done'", "origin = 'email'"):
+            with pytest.raises(IntegrityError), db_session.begin_nested():
+                db_session.execute(
+                    text(f"UPDATE requirements SET {bad} WHERE id = :id"), {"id": requirement.id}
+                )
+
+    def test_document_import_mode_default_and_check(
+        self, db_session: Session, make_requirement: Callable[..., Requirement]
+    ) -> None:
+        document = db_session.get(Document, make_requirement().document_id)
+        assert document is not None and document.import_mode is ImportMode.PROPOSALS
+        with pytest.raises(IntegrityError), db_session.begin_nested():
+            db_session.execute(
+                text("UPDATE documents SET import_mode = 'merge' WHERE id = :id"),
+                {"id": document.id},
+            )
 
 
 class TestDocumentsAndRequirements:

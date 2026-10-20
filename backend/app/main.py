@@ -1,6 +1,7 @@
 """FastAPI application entrypoint (Role 5 — Backend API & Orchestration)."""
 
 import logging
+import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -25,7 +26,8 @@ logger = logging.getLogger(__name__)
 
 # multipart framing (boundaries, part headers) on top of the file itself
 MULTIPART_OVERHEAD_BYTES = 64 * 1024
-UPLOAD_PATH = ("POST", "/api/v1/documents")
+# Uploads go to /api/v1/projects/{project_id}/documents (US-01).
+UPLOAD_PATH = ("POST", re.compile(r"/api/v1/projects/[^/]+/documents"))
 
 
 @asynccontextmanager

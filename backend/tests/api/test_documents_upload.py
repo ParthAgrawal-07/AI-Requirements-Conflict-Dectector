@@ -1,7 +1,7 @@
-"""POST /api/v1/documents — US-01 acceptance criteria and failure atomicity."""
+"""POST /api/v1/projects/{p}/documents — US-01 acceptance criteria and failure atomicity."""
 
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 
 import pytest
 from fastapi.testclient import TestClient
@@ -9,13 +9,34 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models import Document, DocumentFormat, DocumentStatus, Role, User, Workspace
+from app.core.permissions import DefaultRole, holders_of
+from app.models import (
+    AuditAction,
+    AuditLog,
+    Document,
+    DocumentFormat,
+    DocumentStatus,
+    ImportMode,
+    Project,
+    ProjectStatus,
+    User,
+    Workspace,
+)
 from app.services import documents as document_service
 from app.services.storage import LocalFileStorage
-from app.services.users import create_user
-from tests.api.conftest import DOCUMENTS, headers_for, stored_files
-from tests.conftest import TEST_PASSWORD
+from tests.api.conftest import documents_url, headers_for, stored_files
 from tests.factories import OLE_HEADER, make_docx, make_pdf, pad_pdf, unique_docx
+
+# The project the helper below uploads into; bound per test by the autouse fixture so the many
+# ``upload(api, ...)`` calls stay short. Tests that target another project pass ``project=``.
+_CURRENT: dict[str, Project] = {}
+
+
+@pytest.fixture(autouse=True)
+def _bind_project(project: Project) -> Iterator[None]:
+    _CURRENT["project"] = project
+    yield
+    _CURRENT.clear()
 
 
 def upload(
@@ -24,8 +45,16 @@ def upload(
     name: str,
     headers: dict[str, str],
     mime: str = "application/octet-stream",
+    *,
+    project: Project | None = None,
+    **form: str,
 ):
-    return api.post(DOCUMENTS, files={"file": (name, data, mime)}, headers=headers)
+    return api.post(
+        documents_url(project or _CURRENT["project"]),
+        files={"file": (name, data, mime)},
+        data=form,
+        headers=headers,
+    )
 
 
 def document_count(db: Session) -> int:
@@ -38,6 +67,7 @@ class TestAccepted:
         api: TestClient,
         auth_headers: dict[str, str],
         user: User,
+        project: Project,
         db_session: Session,
         storage: LocalFileStorage,
         dispatched: list[uuid.UUID],
@@ -61,15 +91,19 @@ class TestAccepted:
         assert body["error_message"] is None
         assert body["uploaded_by"] == str(user.id)
         assert body["duplicate_of"] is None
+        assert body["project_id"] == str(project.id)
+        assert body["import_mode"] == "proposals"  # the safe default
+        assert body["stakeholder_group"] is None
         assert "storage_path" not in body
         assert "sha256" not in body
 
         document = db_session.get(Document, document_id)
         assert document is not None
-        assert document.workspace_id == user.workspace_id
+        assert document.workspace_id == project.workspace_id
+        assert document.project_id == project.id
         assert document.status is DocumentStatus.QUEUED
         assert document.task_id == "task-1"
-        assert document.storage_path == f"{user.workspace_id}/{document_id}.pdf"
+        assert document.storage_path == f"{project.workspace_id}/{document_id}.pdf"
         assert storage.resolve(document.storage_path).read_bytes() == pdf
         assert dispatched == [document_id]
 
@@ -78,10 +112,32 @@ class TestAccepted:
         assert response.status_code == 202
         assert response.json()["format"] == "docx"
 
-    def test_admin_may_upload(
-        self, api: TestClient, as_role: Callable[[Role], dict[str, str]]
+    @pytest.mark.parametrize("role", holders_of("doc.upload"))
+    def test_every_role_holding_doc_upload_may_upload_proposals(
+        self, api: TestClient, as_role: Callable[[DefaultRole], dict[str, str]], role: DefaultRole
     ) -> None:
-        assert upload(api, make_pdf(), "a.pdf", as_role(Role.ADMIN)).status_code == 202
+        assert upload(api, make_pdf(), "a.pdf", as_role(role)).status_code == 202
+
+    def test_upload_is_audited_with_identifiers_only(
+        self,
+        api: TestClient,
+        user: User,
+        project: Project,
+        auth_headers: dict[str, str],
+        db_session: Session,
+    ) -> None:
+        body = upload(api, make_pdf(), "secret-plans.pdf", auth_headers).json()
+        row = db_session.scalar(
+            select(AuditLog).where(AuditLog.action == AuditAction.DOCUMENT_UPLOADED)
+        )
+        assert row is not None
+        assert row.actor_id == user.id and row.workspace_id == project.workspace_id
+        assert row.details == {
+            "document_id": body["document_id"],
+            "project_id": str(project.id),
+            "import_mode": "proposals",
+        }
+        assert "secret-plans" not in str(row.details)  # no file or requirement text (CR-04)
 
     def test_client_filename_is_sanitised_and_never_used_as_a_path(
         self,
@@ -178,7 +234,9 @@ class TestRejected:
     def test_missing_file_part_is_a_422(
         self, api: TestClient, auth_headers: dict[str, str]
     ) -> None:
-        response = api.post(DOCUMENTS, data={"note": "no file here"}, headers=auth_headers)
+        response = api.post(
+            documents_url(_CURRENT["project"]), data={"note": "no file here"}, headers=auth_headers
+        )
         assert response.status_code == 422
         assert response.json()["error"]["details"][0]["field"] == "file"
 
@@ -244,6 +302,7 @@ class TestAtomicity:
         self,
         api: TestClient,
         user: User,
+        project: Project,
         db_session: Session,
         storage: LocalFileStorage,
         monkeypatch: pytest.MonkeyPatch,
@@ -257,6 +316,7 @@ class TestAtomicity:
             document_service.create_document_from_upload(
                 db_session,
                 user=user,
+                project=project,
                 filename="a.pdf",
                 source=__import__("io").BytesIO(make_pdf()),
                 storage=storage,
@@ -279,20 +339,32 @@ class TestDuplicates:
         assert second.json()["duplicate_of"] == first["document_id"]
         assert second.json()["document_id"] != first["document_id"]
 
-    def test_the_same_content_in_another_workspace_is_not_a_duplicate(
-        self, api: TestClient, auth_headers: dict[str, str], db_session: Session
+    def test_the_same_content_in_another_project_is_not_a_duplicate(
+        self,
+        api: TestClient,
+        auth_headers: dict[str, str],
+        make_project: Callable[..., Project],
     ) -> None:
         pdf = make_pdf("REQ-8: shared text")
         upload(api, pdf, "a.pdf", auth_headers)
-        other = create_user(
-            db_session,
-            email="other@example.com",
-            password=TEST_PASSWORD,
-            full_name="O",
-            role=Role.ANALYST,
-            workspace=_new_workspace(db_session),
-        )
-        assert upload(api, pdf, "a.pdf", headers_for(other)).json()["duplicate_of"] is None
+        response = upload(api, pdf, "a.pdf", auth_headers, project=make_project())
+        assert response.json()["duplicate_of"] is None
+
+    def test_the_same_content_in_another_workspace_is_not_a_duplicate(
+        self,
+        api: TestClient,
+        auth_headers: dict[str, str],
+        make_user: Callable[..., User],
+        make_workspace: Callable[..., Workspace],
+        make_project: Callable[..., Project],
+    ) -> None:
+        pdf = make_pdf("REQ-8: shared text")
+        upload(api, pdf, "a.pdf", auth_headers)
+        rival_workspace = make_workspace()
+        other = make_user(workspace=rival_workspace)
+        rival_project = make_project(workspace=rival_workspace)
+        response = upload(api, pdf, "a.pdf", headers_for(other), project=rival_project)
+        assert response.json()["duplicate_of"] is None
 
     def test_a_failed_earlier_upload_does_not_count(
         self, api: TestClient, auth_headers: dict[str, str], db_session: Session
@@ -307,19 +379,92 @@ class TestDuplicates:
         assert upload(api, pdf, "a.pdf", auth_headers).json()["duplicate_of"] is None
 
 
+class TestImportMode:
+    """FR-01 / SX-08: import as baseline (Approved) needs baseline.manage; as proposals needs doc.upload."""
+
+    @pytest.mark.parametrize("role", holders_of("baseline.manage"))
+    def test_roles_with_baseline_manage_may_import_a_baseline(
+        self,
+        api: TestClient,
+        as_role: Callable[[DefaultRole], dict[str, str]],
+        db_session: Session,
+        role: DefaultRole,
+    ) -> None:
+        response = upload(api, make_pdf(), "a.pdf", as_role(role), import_mode="baseline")
+        assert response.status_code == 202
+        assert response.json()["import_mode"] == "baseline"
+        document = db_session.get(Document, uuid.UUID(response.json()["document_id"]))
+        assert document is not None and document.import_mode is ImportMode.BASELINE
+
+    @pytest.mark.parametrize(
+        "role",
+        [r for r in holders_of("doc.upload") if r not in holders_of("baseline.manage")],
+    )
+    def test_roles_without_baseline_manage_cannot_import_a_baseline_but_can_propose(
+        self,
+        api: TestClient,
+        as_role: Callable[[DefaultRole], dict[str, str]],
+        db_session: Session,
+        storage: LocalFileStorage,
+        role: DefaultRole,
+    ) -> None:
+        headers = as_role(role)
+        denied = upload(api, unique_docx(), "a.docx", headers, import_mode="baseline")
+        assert denied.status_code == 403
+        assert denied.json()["error"]["code"] == "forbidden"
+        assert document_count(db_session) == 0
+        assert stored_files(storage) == []
+        assert (
+            upload(api, unique_docx(), "a.docx", headers, import_mode="proposals").status_code
+            == 202
+        )
+
+    def test_unknown_import_mode_is_422(
+        self, api: TestClient, auth_headers: dict[str, str]
+    ) -> None:
+        assert (
+            upload(api, make_pdf(), "a.pdf", auth_headers, import_mode="sideways").status_code
+            == 422
+        )
+
+    def test_stakeholder_group_is_stored_trimmed_and_blank_means_none(
+        self, api: TestClient, auth_headers: dict[str, str]
+    ) -> None:
+        tagged = upload(api, make_pdf(), "a.pdf", auth_headers, stakeholder_group="  Finance  ")
+        blank = upload(api, make_pdf(), "b.pdf", auth_headers, stakeholder_group="   ")
+        assert tagged.json()["stakeholder_group"] == "Finance"
+        assert blank.json()["stakeholder_group"] is None
+
+    def test_overlong_stakeholder_group_is_422(
+        self, api: TestClient, auth_headers: dict[str, str]
+    ) -> None:
+        response = upload(api, make_pdf(), "a.pdf", auth_headers, stakeholder_group="x" * 121)
+        assert response.status_code == 422
+
+    def test_uploading_into_a_project_in_setup_is_allowed(
+        self,
+        api: TestClient,
+        auth_headers: dict[str, str],
+        make_project: Callable[..., Project],
+    ) -> None:
+        """The initial SRS is uploaded while the project is still in Setup (design update §12.2)."""
+        setup = make_project(status=ProjectStatus.SETUP)
+        assert upload(api, make_pdf(), "a.pdf", auth_headers, project=setup).status_code == 202
+
+
 class TestAccessControl:
     def test_unauthenticated_is_401(self, api: TestClient) -> None:
         response = upload(api, make_pdf(), "a.pdf", {})
         assert response.status_code == 401
 
-    @pytest.mark.parametrize("role", [Role.READ_ONLY, Role.COMPLIANCE_REVIEWER, Role.SERVICE])
-    def test_roles_that_may_not_upload_get_403_and_nothing_is_stored(
+    @pytest.mark.parametrize("role", [DefaultRole.VIEWER, DefaultRole.COMPLIANCE_REVIEWER])
+    def test_roles_without_upload_permissions_get_403_and_nothing_is_stored(
         self,
         api: TestClient,
-        as_role: Callable[[Role], dict[str, str]],
+        as_role: Callable[[DefaultRole], dict[str, str]],
         db_session: Session,
         storage: LocalFileStorage,
-        role: Role,
+        role: DefaultRole,
     ) -> None:
         response = upload(api, unique_docx(), "a.docx", as_role(role))
         assert response.status_code == 403
@@ -327,12 +472,40 @@ class TestAccessControl:
         assert document_count(db_session) == 0
         assert stored_files(storage) == []
 
+    def test_another_workspaces_project_is_404_and_nothing_is_stored(
+        self,
+        api: TestClient,
+        auth_headers: dict[str, str],
+        make_workspace: Callable[..., Workspace],
+        make_project: Callable[..., Project],
+        db_session: Session,
+        storage: LocalFileStorage,
+    ) -> None:
+        theirs = make_project(workspace=make_workspace())
+        response = upload(api, unique_docx(), "a.docx", auth_headers, project=theirs)
+        assert response.status_code == 404
+        assert response.json()["error"]["code"] == "not_found"
+        assert document_count(db_session) == 0
+        assert stored_files(storage) == []
 
-def _new_workspace(db: Session) -> Workspace:
-    workspace = Workspace(name=f"Other {uuid.uuid4().hex[:8]}")
-    db.add(workspace)
-    db.commit()
-    return workspace
+    def test_unknown_project_is_404(self, api: TestClient, auth_headers: dict[str, str]) -> None:
+        response = api.post(
+            f"/api/v1/projects/{uuid.uuid4()}/documents",
+            files={"file": ("a.pdf", make_pdf(), "application/pdf")},
+            headers=auth_headers,
+        )
+        assert response.status_code == 404
+
+    def test_a_removed_member_cannot_upload(
+        self, api: TestClient, user: User, auth_headers: dict[str, str], db_session: Session
+    ) -> None:
+        from datetime import UTC, datetime
+
+        from app.models import Membership
+
+        db_session.query(Membership).filter_by(user_id=user.id).one().ended_at = datetime.now(UTC)
+        db_session.commit()
+        assert upload(api, make_pdf(), "a.pdf", auth_headers).status_code == 404
 
 
 def test_stored_format_comes_from_the_detected_content(

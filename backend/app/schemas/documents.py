@@ -11,11 +11,18 @@ from datetime import datetime
 from pydantic import BaseModel
 
 from app.models import Document, Requirement
-from app.models.enums import DocumentFormat, DocumentStatus
+from app.models.enums import (
+    DocumentFormat,
+    DocumentStatus,
+    ImportMode,
+    RequirementOrigin,
+    RequirementState,
+)
 
 
 class DocumentRead(BaseModel):
     document_id: uuid.UUID
+    project_id: uuid.UUID
     filename: str
     format: DocumentFormat
     size_bytes: int
@@ -24,9 +31,11 @@ class DocumentRead(BaseModel):
     # Human-readable reason, prefixed with the failed stage, e.g. "[extraction] ..." (US-03).
     error_message: str | None
     requirement_count: int
+    import_mode: ImportMode
+    stakeholder_group: str | None
     uploaded_by: uuid.UUID
     uploaded_at: datetime
-    # Set only on the upload response: the earlier document in this workspace with identical
+    # Set only on the upload response: the earlier document in this project with identical
     # content, if any. Informational — the upload is still accepted.
     duplicate_of: uuid.UUID | None = None
 
@@ -40,6 +49,7 @@ class DocumentRead(BaseModel):
     ) -> "DocumentRead":
         return cls(
             document_id=document.id,
+            project_id=document.project_id,
             filename=document.filename,
             format=document.format,
             size_bytes=document.size_bytes,
@@ -47,6 +57,8 @@ class DocumentRead(BaseModel):
             progress_percent=document.progress_percent,
             error_message=document.error_message,
             requirement_count=requirement_count,
+            import_mode=document.import_mode,
+            stakeholder_group=document.stakeholder_group,
             uploaded_by=document.uploaded_by,
             uploaded_at=document.uploaded_at,
             duplicate_of=duplicate_of,
@@ -55,6 +67,7 @@ class DocumentRead(BaseModel):
 
 class RequirementRead(BaseModel):
     requirement_id: uuid.UUID
+    project_id: uuid.UUID
     document_id: uuid.UUID
     # The identifier printed in the source document ("REQ-014"), or null if it had none —
     # we never present a generated ID as if it came from the document (FR-04).
@@ -65,11 +78,17 @@ class RequirementRead(BaseModel):
     stakeholder_group: str | None
     is_protected: bool
     current_version: int
+    state: RequirementState
+    origin: RequirementOrigin
+    owner_id: uuid.UUID | None
+    owner_name: str | None
 
     @classmethod
     def from_model(cls, requirement: Requirement) -> "RequirementRead":
+        owner = requirement.owner
         return cls(
             requirement_id=requirement.id,
+            project_id=requirement.project_id,
             document_id=requirement.document_id,
             source_req_id=requirement.source_req_id,
             body=requirement.body,
@@ -78,4 +97,8 @@ class RequirementRead(BaseModel):
             stakeholder_group=requirement.stakeholder_group,
             is_protected=requirement.is_protected,
             current_version=requirement.current_version,
+            state=requirement.state,
+            origin=requirement.origin,
+            owner_id=requirement.owner_id,
+            owner_name=None if owner is None else owner.full_name,
         )

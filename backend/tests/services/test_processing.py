@@ -12,7 +12,15 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.ingestion import Requirement as Extracted
-from app.models import Document, DocumentStatus, Requirement, RequirementVersion
+from app.models import (
+    Document,
+    DocumentStatus,
+    ImportMode,
+    Requirement,
+    RequirementOrigin,
+    RequirementState,
+    RequirementVersion,
+)
 from app.services.processing import ProcessingOutcome, process_document
 from app.services.storage import LocalFileStorage
 from tests.factories import make_docx, make_pdf
@@ -230,7 +238,12 @@ class TestIdempotence:
         document = make_stored_document(make_docx("REQ-1: real one", "REQ-2: real two"))
         document.status = DocumentStatus.PROCESSING
         db_session.add(
-            Requirement(document_id=document.id, body="stale partial row", order_index=0)
+            Requirement(
+                document_id=document.id,
+                project_id=document.project_id,
+                body="stale partial row",
+                order_index=0,
+            )
         )
         db_session.commit()
 
@@ -247,6 +260,50 @@ class TestIdempotence:
         assert (
             process_document(db_session, uuid.uuid4(), storage=storage) is ProcessingOutcome.SKIPPED
         )
+
+
+class TestProjectAndLifecycleColumns:
+    """Sprint 1: extracted requirements land in the document's project with a lifecycle state."""
+
+    def test_proposals_import_leaves_requirements_proposed_in_the_documents_project(
+        self, db_session: Session, storage: LocalFileStorage, make_stored_document: MakeDoc
+    ) -> None:
+        document = make_stored_document(make_docx("REQ-1: one", "REQ-2: two"))
+
+        assert process_document(db_session, document.id, storage=storage) is ProcessingOutcome.DONE
+
+        rows = requirements_of(db_session, document)
+        assert {r.project_id for r in rows} == {document.project_id}
+        assert {r.state for r in rows} == {RequirementState.PROPOSED}
+        assert {r.origin for r in rows} == {RequirementOrigin.DOCUMENT}
+        assert {r.owner_id for r in rows} == {None}
+
+    def test_baseline_import_makes_requirements_approved(
+        self, db_session: Session, storage: LocalFileStorage, make_stored_document: MakeDoc
+    ) -> None:
+        document = make_stored_document(
+            make_docx("REQ-1: one"), import_mode=ImportMode.BASELINE, stakeholder_group="Finance"
+        )
+
+        process_document(db_session, document.id, storage=storage)
+
+        (row,) = requirements_of(db_session, document)
+        assert row.state is RequirementState.APPROVED
+        assert row.stakeholder_group == "Finance"  # copied from the document (FR-05)
+
+    def test_a_rerun_keeps_the_import_mode_semantics(
+        self, db_session: Session, storage: LocalFileStorage, make_stored_document: MakeDoc
+    ) -> None:
+        document = make_stored_document(make_docx("REQ-1: one"), import_mode=ImportMode.BASELINE)
+        process_document(db_session, document.id, storage=storage)
+        document.status = DocumentStatus.PROCESSING  # as if the worker crashed after persisting
+        db_session.commit()
+
+        process_document(db_session, document.id, storage=storage)
+
+        assert [r.state for r in requirements_of(db_session, document)] == [
+            RequirementState.APPROVED
+        ]
 
 
 class TestTextHygiene:
@@ -273,7 +330,7 @@ class TestTextHygiene:
     def test_text_is_otherwise_stored_verbatim(
         self, db_session: Session, storage: LocalFileStorage, make_stored_document: MakeDoc
     ) -> None:
-        raw = "  REQ-1: The  system\tshall keep   spacing — and “quotes”.  "
+        raw = "  REQ-1: The  system\tshall keep   spacing — and \u201cquotes\u201d.  "
         item = Extracted(id="REQ-1", raw_text=raw, source_document="s", location="p 1")
         document, _ = self.run_with(db_session, storage, make_stored_document, [item])
         assert requirements_of(db_session, document)[0].body == raw

@@ -1,4 +1,7 @@
-"""User and workspace services (Role 5): authentication, creation, lookup."""
+"""User services (Role 5): authentication, creation, lookup.
+
+Workspace membership and roles live in ``app.services.membership`` / ``workspaces`` (Sprint 0).
+"""
 
 import logging
 import uuid
@@ -15,7 +18,7 @@ from app.core.security import (
     validate_password_strength,
     verify_password,
 )
-from app.models import Role, User, Workspace
+from app.models import PlatformRole, User
 
 logger = logging.getLogger(__name__)
 
@@ -32,25 +35,20 @@ def get_user_by_email(db: Session, email: str) -> User | None:
     return db.scalar(select(User).where(User.email == normalize_email(email)))
 
 
-def get_or_create_workspace(db: Session, name: str) -> Workspace:
-    workspace = db.scalar(select(Workspace).where(Workspace.name == name))
-    if workspace is None:
-        workspace = Workspace(name=name)
-        db.add(workspace)
-        db.commit()
-    return workspace
-
-
 def create_user(
     db: Session,
     *,
     email: str,
     password: str,
     full_name: str,
-    role: Role,
-    workspace: Workspace,
+    platform_role: PlatformRole | None = None,
+    commit: bool = True,
 ) -> User:
-    """Create a user. Raises ``WeakPasswordError`` or ``ConflictError`` on invalid input."""
+    """Create a user. Raises ``WeakPasswordError`` or ``ConflictError`` on invalid input.
+
+    The user belongs to no workspace until a membership is added (``services.membership``).
+    ``commit=False`` only flushes, so sign-up can stay atomic with redeeming the join code.
+    """
     validate_password_strength(password)
     email = normalize_email(email)
     if get_user_by_email(db, email) is not None:
@@ -59,11 +57,13 @@ def create_user(
         email=email,
         full_name=full_name.strip(),
         hashed_password=hash_password(password),
-        role=role,
-        workspace_id=workspace.id,
+        platform_role=platform_role,
     )
     db.add(user)
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     return user
 
 

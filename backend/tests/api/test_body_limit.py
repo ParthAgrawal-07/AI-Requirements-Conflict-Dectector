@@ -13,9 +13,9 @@ from app.core.database import get_db
 from app.core.errors import install_exception_handlers
 from app.core.middleware import BodyLimit, MaxBodySizeMiddleware, _declared_length
 from app.main import create_app
-from app.models import Document
+from app.models import Document, Project
 from app.services.storage import LocalFileStorage, get_storage
-from tests.api.conftest import DOCUMENTS, stored_files
+from tests.api.conftest import documents_url, stored_files
 from tests.factories import make_pdf
 
 LIMIT = 10_000
@@ -52,7 +52,9 @@ def mini_client(reached: list[int]) -> Iterator[TestClient]:
     install_exception_handlers(app)
     app.add_middleware(
         MaxBodySizeMiddleware,
-        limits={("POST", "/upload"): BodyLimit(max_bytes=LIMIT, message="Too big for this test.")},
+        limits={
+            (("POST", "/upload")): BodyLimit(max_bytes=LIMIT, message="Too big for this test.")
+        },
     )
 
     @app.post("/upload")
@@ -67,6 +69,63 @@ def mini_client(reached: list[int]) -> Iterator[TestClient]:
 
     with TestClient(app) as client:
         yield client
+
+
+@pytest.fixture
+def pattern_client() -> Iterator[TestClient]:
+    """Limits keyed by a path *pattern*, as needed for /projects/{id}/documents."""
+    import re
+
+    app = FastAPI()
+    install_exception_handlers(app)
+    app.add_middleware(
+        MaxBodySizeMiddleware,
+        limits={
+            ("POST", re.compile(r"/projects/[^/]+/documents")): BodyLimit(
+                max_bytes=LIMIT, message="Too big for this test."
+            )
+        },
+    )
+
+    @app.post("/projects/{project_id}/documents")
+    def documents(project_id: str, file: UploadFile = File(...)) -> dict[str, int]:  # noqa: B008
+        return {"size": len(file.file.read())}
+
+    @app.post("/projects/{project_id}/documents/extra")
+    def extra(project_id: str, file: UploadFile = File(...)) -> dict[str, int]:  # noqa: B008
+        return {"size": len(file.file.read())}
+
+    @app.get("/projects/{project_id}/documents")
+    def listing(project_id: str) -> dict[str, str]:
+        return {"project": project_id}
+
+    with TestClient(app) as client:
+        yield client
+
+
+class TestPathPatterns:
+    def test_a_matching_path_is_guarded(self, pattern_client: TestClient) -> None:
+        response = pattern_client.post(
+            f"/projects/{uuid.uuid4()}/documents", files={"file": ("a.bin", b"x" * (LIMIT + 100))}
+        )
+        assert response.status_code == 413
+        assert response.json()["error"]["message"] == "Too big for this test."
+
+    def test_a_matching_path_within_the_limit_passes(self, pattern_client: TestClient) -> None:
+        response = pattern_client.post(
+            f"/projects/{uuid.uuid4()}/documents", files={"file": ("a.bin", b"x" * 100)}
+        )
+        assert response.status_code == 200
+
+    def test_the_pattern_must_match_the_whole_path_and_the_method(
+        self, pattern_client: TestClient
+    ) -> None:
+        big = {"file": ("a.bin", b"x" * (LIMIT + 100))}
+        assert (
+            pattern_client.post(f"/projects/{uuid.uuid4()}/documents/extra", files=big).status_code
+            == 200
+        )
+        assert pattern_client.get(f"/projects/{uuid.uuid4()}/documents").status_code == 200
 
 
 class TestMiddleware:
@@ -149,12 +208,13 @@ class TestOnTheRealApp:
         self,
         real_app_client: tuple[TestClient, LocalFileStorage],
         auth_headers: dict[str, str],
+        project: Project,
         db_session: Session,
     ) -> None:
         client, storage = real_app_client
 
         response = client.post(
-            DOCUMENTS,
+            documents_url(project),
             files={"file": ("big.pdf", b"%PDF-" + b"x" * (3 * 1024 * 1024))},
             headers=auth_headers,
         )
@@ -166,11 +226,14 @@ class TestOnTheRealApp:
         assert stored_files(storage) == []
 
     def test_chunked_huge_upload_is_refused_too(
-        self, real_app_client: tuple[TestClient, LocalFileStorage], auth_headers: dict[str, str]
+        self,
+        real_app_client: tuple[TestClient, LocalFileStorage],
+        auth_headers: dict[str, str],
+        project: Project,
     ) -> None:
         client, storage = real_app_client
         response = client.post(
-            DOCUMENTS,
+            documents_url(project),
             content=chunked(b"x" * (2 * 1024 * 1024), chunk=64 * 1024),
             headers={**MULTIPART_HEADERS, **auth_headers},
         )
@@ -178,11 +241,14 @@ class TestOnTheRealApp:
         assert stored_files(storage) == []
 
     def test_the_413_carries_cors_headers_so_the_browser_can_read_it(
-        self, real_app_client: tuple[TestClient, LocalFileStorage], auth_headers: dict[str, str]
+        self,
+        real_app_client: tuple[TestClient, LocalFileStorage],
+        auth_headers: dict[str, str],
+        project: Project,
     ) -> None:
         client, _ = real_app_client
         response = client.post(
-            DOCUMENTS,
+            documents_url(project),
             files={"file": ("big.pdf", b"x" * (2 * 1024 * 1024))},
             headers={**auth_headers, "Origin": "http://localhost:5173"},
         )
@@ -194,6 +260,7 @@ class TestOnTheRealApp:
         self,
         real_app_client: tuple[TestClient, LocalFileStorage],
         auth_headers: dict[str, str],
+        project: Project,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from app.services import documents as document_service
@@ -201,7 +268,7 @@ class TestOnTheRealApp:
         monkeypatch.setattr(document_service, "dispatch_processing", lambda _id: "t")
         client, _ = real_app_client
         response = client.post(
-            DOCUMENTS, files={"file": ("a.pdf", make_pdf())}, headers=auth_headers
+            documents_url(project), files={"file": ("a.pdf", make_pdf())}, headers=auth_headers
         )
         assert response.status_code == 202
         assert uuid.UUID(response.json()["document_id"])

@@ -28,7 +28,15 @@ from sqlalchemy.orm import Session
 from app.ingestion import Requirement as ExtractedRequirement
 from app.ingestion import ingest
 from app.ingestion.segmentation.rules import REQUIREMENT_ID_PATTERN
-from app.models import Document, DocumentStatus, Requirement, RequirementVersion
+from app.models import (
+    Document,
+    DocumentStatus,
+    ImportMode,
+    Requirement,
+    RequirementOrigin,
+    RequirementState,
+    RequirementVersion,
+)
 from app.services.storage import LocalFileStorage, get_storage
 
 logger = logging.getLogger(__name__)
@@ -135,7 +143,7 @@ def _persist(db: Session, document: Document, extracted: list[ExtractedRequireme
         rows = [
             row
             for index, item in enumerate(extracted)
-            if (row := _to_row(document.id, index, item)) is not None
+            if (row := _to_row(document, index, item)) is not None
         ]
         if not rows:
             raise _StageFailure(
@@ -161,14 +169,22 @@ def _persist(db: Session, document: Document, extracted: list[ExtractedRequireme
         ) from None
 
 
-def _to_row(
-    document_id: uuid.UUID, order_index: int, item: ExtractedRequirement
-) -> Requirement | None:
+def _to_row(document: Document, order_index: int, item: ExtractedRequirement) -> Requirement | None:
     body = item.raw_text.replace("\x00", "")
     if not body.strip():
         return None
     return Requirement(
-        document_id=document_id,
+        document_id=document.id,
+        project_id=document.project_id,
+        # "Import as baseline" makes the requirements Approved (the baseline is the Approved
+        # set, DR-13); "import as proposals" leaves them Proposed for review (FR-01, SX-08).
+        state=(
+            RequirementState.APPROVED
+            if document.import_mode is ImportMode.BASELINE
+            else RequirementState.PROPOSED
+        ),
+        origin=RequirementOrigin.DOCUMENT,
+        stakeholder_group=document.stakeholder_group,
         # The segmenter invents "UNKNOWN-<page>-<line>" IDs for lines without one. Those are
         # not identifiers from the document, so they are not stored as such (FR-04).
         source_req_id=item.id if REQUIREMENT_ID_PATTERN.fullmatch(item.id) else None,

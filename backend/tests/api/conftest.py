@@ -8,11 +8,18 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core import security
-from app.models import Role, User
+from app.core.permissions import DefaultRole
+from app.models import Project, User
 from app.services import documents as document_service
 from app.services.storage import LocalFileStorage, get_storage
 
-DOCUMENTS = "/api/v1/documents"
+
+def documents_url(project: Project) -> str:
+    return f"/api/v1/projects/{project.id}/documents"
+
+
+def requirements_url(project: Project) -> str:
+    return f"/api/v1/projects/{project.id}/requirements"
 
 
 @pytest.fixture
@@ -53,10 +60,10 @@ def headers_for(user: User) -> dict[str, str]:
 
 
 @pytest.fixture
-def as_role(make_user: Callable[..., User]) -> Callable[[Role], dict[str, str]]:
-    """Auth headers for a fresh user with the given role, in the default test workspace."""
+def as_role(make_user: Callable[..., User]) -> Callable[[DefaultRole], dict[str, str]]:
+    """Auth headers for a fresh member with the given default role, in the test workspace."""
 
-    def build(role: Role) -> dict[str, str]:
+    def build(role: DefaultRole) -> dict[str, str]:
         return headers_for(make_user(role=role))
 
     return build

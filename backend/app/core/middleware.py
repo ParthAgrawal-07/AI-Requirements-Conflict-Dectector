@@ -70,18 +70,37 @@ class MaxBodySizeMiddleware:
       aborted the moment it crosses the limit.
 
     Only the (method, path) pairs listed in ``limits`` are guarded, so it never surprises other
-    endpoints. The limit should be the file limit plus multipart framing overhead; the endpoint
-    still enforces the exact file size.
+    endpoints. A path is either an exact string or a compiled regular expression that must match
+    the whole path (needed for ``/projects/{id}/documents``). The limit should be the file limit
+    plus multipart framing overhead; the endpoint still enforces the exact file size.
     """
 
-    def __init__(self, app: ASGIApp, *, limits: Mapping[tuple[str, str], BodyLimit]) -> None:
+    def __init__(
+        self, app: ASGIApp, *, limits: Mapping[tuple[str, str | re.Pattern[str]], BodyLimit]
+    ) -> None:
         self.app = app
-        self.limits = dict(limits)
+        self.limits: dict[tuple[str, str], BodyLimit] = {}
+        self.pattern_limits: list[tuple[str, re.Pattern[str], BodyLimit]] = []
+        for (method, path), body_limit in limits.items():
+            if isinstance(path, re.Pattern):
+                self.pattern_limits.append((method, path, body_limit))
+            else:
+                self.limits[(method, path)] = body_limit
+
+    def _limit_for(self, scope: Scope) -> BodyLimit | None:
+        if scope["type"] != "http":
+            return None
+        method, path = scope["method"], scope["path"]
+        exact = self.limits.get((method, path))
+        if exact is not None:
+            return exact
+        for pattern_method, pattern, body_limit in self.pattern_limits:
+            if pattern_method == method and pattern.fullmatch(path):
+                return body_limit
+        return None
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        limit = (
-            self.limits.get((scope["method"], scope["path"])) if scope["type"] == "http" else None
-        )
+        limit = self._limit_for(scope)
         if limit is None:
             await self.app(scope, receive, send)
             return

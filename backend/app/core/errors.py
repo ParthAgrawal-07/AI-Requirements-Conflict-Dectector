@@ -132,6 +132,37 @@ class ConflictError(AppError):
         super().__init__(message)
 
 
+class InvalidJoinCodeError(AppError):
+    """A join code cannot be used: unknown, expired, used up or revoked (NFR-35).
+
+    Raise this **one** error, with this one message, for every such case, so a caller cannot tell
+    which kind of "no" it was. ``POST /auth/signup`` folds it into :class:`SignupRefusedError`.
+    """
+
+    status_code = 400
+    code = "invalid_join_code"
+
+    def __init__(self, message: str = "This join code is not valid.") -> None:
+        super().__init__(message)
+
+
+class SignupRefusedError(AppError):
+    """Sign-up did not happen — deliberately not saying whether the code or the e-mail was the reason.
+
+    An unknown code and an already-registered e-mail get this identical response, so
+    ``POST /auth/signup`` cannot be used to find out which e-mail addresses have accounts.
+    """
+
+    status_code = 400
+    code = "signup_refused"
+
+    def __init__(self) -> None:
+        super().__init__(
+            "We could not create an account with these details. Check the join code. If you "
+            "already have an account, sign in and enter the code there instead."
+        )
+
+
 def _request_id(request: Request) -> str | None:
     value = getattr(request.state, "request_id", None)
     return value if isinstance(value, str) else None

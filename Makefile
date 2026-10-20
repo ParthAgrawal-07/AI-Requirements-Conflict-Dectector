@@ -7,7 +7,7 @@
 COMPOSE := docker compose
 
 .PHONY: help up down restart logs ps build \
-        migrate makemigration seed-demo create-user \
+        migrate makemigration seed-demo create-admin \
         backend-shell test lint fmt typecheck check clean
 
 help: ## Show this help
@@ -37,11 +37,11 @@ migrate: ## Apply Alembic migrations against the running dev database
 makemigration: ## Autogenerate a migration from model changes — usage: make makemigration m="add x"
 	$(COMPOSE) exec backend alembic revision --autogenerate -m "$(m)"
 
-seed-demo: ## Create one demo user per role (development only)
+seed-demo: ## Create a demo workspace with one member per default role (development only)
 	$(COMPOSE) exec backend python -m app.cli seed-demo
 
-create-user: ## Create a user — usage: make create-user email=a@b.com name="A B" role=admin
-	$(COMPOSE) exec backend python -m app.cli create-user --email "$(email)" --name "$(name)" --role "$(role)"
+create-admin: ## Create the first platform administrator — usage: make create-admin email=a@b.com name="A B"
+	$(COMPOSE) exec backend python -m app.cli create-admin --email "$(email)" --name "$(name)"
 
 backend-shell: ## Open a shell in the running backend container
 	$(COMPOSE) exec backend bash

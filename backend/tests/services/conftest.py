@@ -7,7 +7,15 @@ from pathlib import Path
 import pytest
 from sqlalchemy.orm import Session
 
-from app.models import Document, DocumentFormat, DocumentStatus, User, Workspace
+from app.models import (
+    Document,
+    DocumentFormat,
+    DocumentStatus,
+    ImportMode,
+    Project,
+    User,
+    Workspace,
+)
 from app.services.storage import LocalFileStorage
 
 
@@ -18,7 +26,11 @@ def storage(tmp_path: Path) -> LocalFileStorage:
 
 @pytest.fixture
 def make_stored_document(
-    db_session: Session, workspace: Workspace, user: User, storage: LocalFileStorage
+    db_session: Session,
+    workspace: Workspace,
+    project: Project,
+    user: User,
+    storage: LocalFileStorage,
 ) -> Callable[..., Document]:
     """A queued document whose file really is on disk, as the upload endpoint would leave it."""
 
@@ -28,9 +40,12 @@ def make_stored_document(
         extension: str = ".docx",
         status: DocumentStatus = DocumentStatus.QUEUED,
         write_file: bool = True,
+        import_mode: ImportMode = ImportMode.PROPOSALS,
+        stakeholder_group: str | None = None,
     ) -> Document:
         document = Document(
             workspace_id=workspace.id,
+            project_id=project.id,
             uploaded_by=user.id,
             filename=f"srs{extension}",
             format=DocumentFormat(extension.lstrip(".")),
@@ -38,6 +53,8 @@ def make_stored_document(
             sha256=hashlib.sha256(data).hexdigest(),
             storage_path="",
             status=status,
+            import_mode=import_mode,
+            stakeholder_group=stakeholder_group,
         )
         db_session.add(document)
         db_session.flush()
