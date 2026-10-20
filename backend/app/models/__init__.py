@@ -15,10 +15,17 @@ from app.models.enums import (
     DocumentStatus,
     FindingCategory,
     FindingStatus,
-    Role,
+    ImportMode,
+    PlatformRole,
+    ProjectStatus,
+    RequirementOrigin,
+    RequirementState,
     Severity,
 )
+from app.models.membership import Membership, ProjectMember
+from app.models.project import Project
 from app.models.requirement import Requirement, RequirementVersion
+from app.models.role import Role, RolePermission
 from app.models.user import User
 from app.models.workspace import Workspace
 
@@ -36,9 +43,18 @@ __all__ = [
     "Finding",
     "FindingCategory",
     "FindingStatus",
+    "ImportMode",
+    "Membership",
+    "PlatformRole",
+    "Project",
+    "ProjectMember",
+    "ProjectStatus",
     "Requirement",
+    "RequirementOrigin",
+    "RequirementState",
     "RequirementVersion",
     "Role",
+    "RolePermission",
     "Severity",
     "User",
     "Workspace",

@@ -23,6 +23,12 @@ EXPECTED_TABLES = {
     "findings",
     "clarifications",
     "audit_log",
+    # Sprint 0 (0004_tenancy_roles)
+    "projects",
+    "roles",
+    "role_permissions",
+    "memberships",
+    "project_members",
 }
 
 
