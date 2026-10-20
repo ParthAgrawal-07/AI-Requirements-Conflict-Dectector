@@ -23,7 +23,7 @@ from app.core.config import get_settings
 from app.core.errors import ForbiddenError, NotFoundError
 from app.models import DocumentStatus, ImportMode
 from app.schemas.common import ErrorResponse, Page
-from app.schemas.documents import DocumentRead, RequirementRead
+from app.schemas.documents import DocumentRead
 from app.services import documents as document_service
 from app.services import projects as project_service
 from app.services.access import AccessContext
@@ -137,46 +137,3 @@ def get_document(
         raise NotFoundError("Document not found")
     document, requirement_count = found
     return DocumentRead.from_model(document, requirement_count=requirement_count)
-
-
-@router.get(
-    "/projects/{project_id}/requirements",
-    response_model=Page[RequirementRead],
-    summary="List the requirements extracted from a project's documents",
-    responses={404: {"model": ErrorResponse}},
-)
-def list_project_requirements(
-    project_id: uuid.UUID,
-    ctx: Annotated[AccessContext, requires("view")],
-    db: DbSession,
-    q: Annotated[
-        str | None,
-        Query(max_length=200, description="Case-insensitive search in ID and text"),
-    ] = None,
-    document_id: Annotated[uuid.UUID | None, Query(description="Filter by document")] = None,
-    state: Annotated[str | None, Query(description="Filter by state")] = None,
-    origin: Annotated[str | None, Query(description="Filter by origin")] = None,
-    owner: Annotated[uuid.UUID | None, Query(description="Filter by owner user id")] = None,
-    limit: Annotated[int, Query(ge=1, le=200)] = 50,
-    offset: Annotated[int, Query(ge=0)] = 0,
-) -> Page[RequirementRead]:
-    result = document_service.list_requirements(
-        db,
-        project_id,
-        query=q,
-        document_id=document_id,
-        state=state,
-        origin=origin,
-        owner=owner,
-        limit=limit,
-        offset=offset,
-    )
-    if result is None:
-        raise NotFoundError("Project not found")
-    requirements, total = result
-    return Page[RequirementRead](
-        items=[RequirementRead.from_model(item) for item in requirements],
-        total=total,
-        limit=limit,
-        offset=offset,
-    )
