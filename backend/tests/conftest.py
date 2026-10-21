@@ -62,7 +62,18 @@ os.environ["DATABASE_URL"] = _resolve_test_database_url()
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 
 from app.core import security  # noqa: E402
-from app.models import Document, DocumentFormat, Requirement, Role, User, Workspace  # noqa: E402
+from app.core.permissions import DefaultRole  # noqa: E402
+from app.models import (  # noqa: E402
+    Document,
+    DocumentFormat,
+    PlatformRole,
+    Project,
+    ProjectStatus,
+    Requirement,
+    User,
+    Workspace,
+)
+from app.services.membership import add_member, get_default_role  # noqa: E402
 from app.services.users import create_user  # noqa: E402
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -213,22 +224,75 @@ def workspace(db_session: Session) -> Workspace:
 
 
 @pytest.fixture
-def make_user(db_session: Session, workspace: Workspace) -> Callable[..., User]:
+def make_workspace(db_session: Session) -> Callable[..., Workspace]:
+    """Another tenant: a workspace that the default test users are *not* members of."""
+
+    def factory(name: str | None = None) -> Workspace:
+        ws = Workspace(name=name or f"Workspace {uuid.uuid4().hex[:8]}")
+        db_session.add(ws)
+        db_session.commit()
+        return ws
+
+    return factory
+
+
+@pytest.fixture
+def make_project(db_session: Session, workspace: Workspace) -> Callable[..., Project]:
     def factory(
         *,
-        role: Role = Role.ANALYST,
+        workspace: Workspace = workspace,
+        name: str | None = None,
+        status: ProjectStatus = ProjectStatus.ACTIVE,
+    ) -> Project:
+        project = Project(
+            workspace_id=workspace.id,
+            name=name or f"Project {uuid.uuid4().hex[:8]}",
+            status=status,
+        )
+        db_session.add(project)
+        db_session.commit()
+        return project
+
+    return factory
+
+
+@pytest.fixture
+def project(make_project: Callable[..., Project]) -> Project:
+    """An *active* project in the default test workspace (most tests are not about Setup)."""
+    return make_project()
+
+
+@pytest.fixture
+def make_user(db_session: Session, workspace: Workspace) -> Callable[..., User]:
+    """Create a user and, unless ``role=None``, an active membership with a default role.
+
+    ``role`` is a default role *name* used only to pick the role row to assign — the code under
+    test checks permissions, never role names.
+    """
+
+    def factory(
+        *,
+        role: DefaultRole | None = DefaultRole.BUSINESS_ANALYST,
+        workspace: Workspace = workspace,
         email: str | None = None,
         password: str = TEST_PASSWORD,
         is_active: bool = True,
+        platform_role: PlatformRole | None = None,
     ) -> User:
         user = create_user(
             db_session,
             email=email or f"user-{uuid.uuid4().hex[:8]}@example.com",
             password=password,
             full_name="Test User",
-            role=role,
-            workspace=workspace,
+            platform_role=platform_role,
         )
+        if role is not None:
+            add_member(
+                db_session,
+                workspace_id=workspace.id,
+                user_id=user.id,
+                role_id=get_default_role(db_session, role).id,
+            )
         if not is_active:
             user.is_active = False
             db_session.commit()
@@ -244,10 +308,11 @@ def user(make_user: Callable[..., User]) -> User:
 
 @pytest.fixture
 def make_requirement(
-    db_session: Session, workspace: Workspace, user: User
+    db_session: Session, project: Project, user: User
 ) -> Callable[..., Requirement]:
     document = Document(
-        workspace_id=workspace.id,
+        workspace_id=project.workspace_id,
+        project_id=project.id,
         uploaded_by=user.id,
         filename="srs.docx",
         format=DocumentFormat.DOCX,
@@ -261,7 +326,9 @@ def make_requirement(
     def factory(
         body: str = "The system shall log every login attempt.", **kwargs: object
     ) -> Requirement:
-        requirement = Requirement(document_id=document.id, body=body, **kwargs)
+        requirement = Requirement(
+            document_id=document.id, project_id=project.id, body=body, **kwargs
+        )
         db_session.add(requirement)
         db_session.commit()
         return requirement
@@ -273,3 +340,17 @@ def make_requirement(
 def auth_headers(user: User) -> dict[str, str]:
     token, _ = security.create_access_token(user.id)
     return {"Authorization": f"Bearer {token}"}
+
+
+# ── Sample data ──────────────────────────────────────────────────────────────
+@pytest.fixture(scope="session")
+def sample_srs_path() -> Path:
+    """Path to the labeled benchmark SRS used by ingestion/classification tests.
+
+    ``sample_docs/`` is the canonical folder for sample documents.
+    """
+    path = BACKEND_DIR.parent / "sample_docs" / "planted_conflicts" / "srs_v1.md"
+    if not path.exists():
+        # Inside the backend container only backend/ is mounted, so the repo root is absent.
+        pytest.skip(f"Sample SRS not found at {path}")
+    return path

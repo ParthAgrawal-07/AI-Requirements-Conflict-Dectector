@@ -20,7 +20,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, enum_column
-from app.models.enums import DocumentFormat, DocumentStatus
+from app.models.enums import DocumentFormat, DocumentStatus, ImportMode
 
 if TYPE_CHECKING:
     from app.models.requirement import Requirement
@@ -35,16 +35,30 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         CheckConstraint("size_bytes >= 0", name="size_non_negative"),
         Index("ix_documents_workspace_id_uploaded_at", "workspace_id", "uploaded_at"),
         Index("ix_documents_status", "status"),
+        # Re-upload detection (US-01): "has this workspace already uploaded identical content?"
+        Index("ix_documents_workspace_id_sha256", "workspace_id", "sha256"),
+        Index("ix_documents_project_id_uploaded_at", "project_id", "uploaded_at"),
     )
 
     workspace_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("workspaces.id", ondelete="RESTRICT")
     )
+    # Every document belongs to a project (ADR-14); workspace_id stays for tenant scoping and
+    # storage keys, and always equals the project's workspace.
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id", ondelete="RESTRICT"))
     uploaded_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
 
     filename: Mapped[str] = mapped_column(String(255))
     format: Mapped[DocumentFormat] = mapped_column(enum_column(DocumentFormat, "document_format"))
     size_bytes: Mapped[int] = mapped_column(BigInteger)
+    # How the requirements enter the project (FR-01, SX-08): Approved baseline or Proposed.
+    import_mode: Mapped[ImportMode] = mapped_column(
+        enum_column(ImportMode, "document_import_mode"),
+        default=ImportMode.PROPOSALS,
+        server_default=ImportMode.PROPOSALS.value,
+    )
+    # Optional provenance supplied at upload and copied onto its requirements (FR-05, DR-11).
+    stakeholder_group: Mapped[str | None] = mapped_column(String(120))
     # SHA-256 hex digest of the file — detects re-uploads of the same document.
     sha256: Mapped[str] = mapped_column(String(64))
     # Where the API stored the file for the worker to read (shared volume / object store key).

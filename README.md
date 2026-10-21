@@ -226,14 +226,16 @@ docker compose up --build
 - Backend API docs (Swagger): `http://localhost:8000/docs`
 - Backend health check: `http://localhost:8000/health/ready`
 
-There's no public sign-up endpoint by design (accounts are provisioned, not
-self-registered — an IT/DevOps stakeholder requirement). Create your first user:
+There is no *open* sign-up by design: an account is created only together with a valid
+**join code** (`POST /api/v1/auth/signup`), so people can only join a workspace they were invited to.
+The very first account is a **platform administrator**, who creates a workspace (and becomes its
+Owner), then issues join codes. Create it, or seed a demo workspace:
 
 ```bash
-make seed-demo        # one demo user per role (analyst/admin/compliance_reviewer/
-                       # read_only/service), dev-only, prints the shared password
-# or
-make create-user email=you@example.com name="Your Name" role=admin
+make create-admin email=you@example.com name="Your Name"   # prompts for the password
+# or, development only:
+make seed-demo        # "Demo Workspace" with one member per default role (owner@demo.local,
+                       # admin@demo.local, project.manager@demo.local, ...), prints the password
 ```
 
 Then log in at `POST /api/v1/auth/login` (Swagger's "Authorize" button works directly,

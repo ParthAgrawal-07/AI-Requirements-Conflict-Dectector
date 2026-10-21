@@ -1,24 +1,25 @@
-"""Auth API behaviour: login, /me, error format, RBAC, request IDs, CORS."""
+"""Auth API behaviour: login, /me, error format, request IDs, CORS.
+
+Permission-based access is tested in ``test_permissions.py``; sign-up in ``test_signup.py``.
+"""
 
 import uuid
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from typing import Annotated
 
 import jwt
 import pytest
 from argon2 import PasswordHasher
-from fastapi import Depends, FastAPI
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.core import security
-from app.core.auth import require_roles
 from app.core.config import get_settings
-from app.core.database import get_db
 from app.core.errors import install_exception_handlers
+from app.core.permissions import DefaultRole
 from app.core.security import JWT_ALGORITHM, create_access_token
-from app.models import Role, User
+from app.models import User, Workspace
 from tests.conftest import TEST_PASSWORD
 
 LOGIN = "/api/v1/auth/login"
@@ -118,10 +119,42 @@ class TestCurrentUser:
         body = response.json()
         assert body["id"] == str(user.id)
         assert body["email"] == user.email
-        assert body["role"] == "analyst"
-        assert body["workspace_id"] == str(user.workspace_id)
+        assert body["platform_role"] is None
+        assert "role" not in body and "workspace_id" not in body  # roles are per workspace now
         assert "hashed_password" not in body
         assert "password" not in response.text
+
+    def test_lists_every_workspace_the_user_belongs_to_with_the_role_in_each(
+        self,
+        client: TestClient,
+        make_user: Callable[..., User],
+        workspace: Workspace,
+        make_workspace: Callable[..., Workspace],
+        db_session: Session,
+    ) -> None:
+        from app.services.membership import add_member, get_default_role
+
+        member = make_user(role=DefaultRole.DEVELOPER)
+        other = make_workspace("Second workspace")
+        add_member(
+            db_session,
+            workspace_id=other.id,
+            user_id=member.id,
+            role_id=get_default_role(db_session, DefaultRole.VIEWER).id,
+        )
+        token, _ = create_access_token(member.id)
+
+        body = client.get(ME, headers=bearer(token)).json()
+
+        roles = {m["workspace_id"]: m["role"]["name"] for m in body["memberships"]}
+        assert roles == {str(workspace.id): "Developer", str(other.id): "Viewer"}
+
+    def test_a_user_with_no_workspace_gets_an_empty_list(
+        self, client: TestClient, make_user: Callable[..., User]
+    ) -> None:
+        loner = make_user(role=None)
+        token, _ = create_access_token(loner.id)
+        assert client.get(ME, headers=bearer(token)).json()["memberships"] == []
 
     def test_missing_token_is_401_with_standard_error_body(self, plain_client: TestClient) -> None:
         response = plain_client.get(ME)
@@ -173,7 +206,12 @@ class TestCurrentUser:
         assert client.get(ME, headers=auth_headers).status_code == 401
 
 
-def test_every_api_route_except_login_requires_authentication(plain_client: TestClient) -> None:
+PUBLIC_PATHS = {LOGIN, "/api/v1/auth/signup"}
+
+
+def test_every_api_route_except_login_and_signup_requires_authentication(
+    plain_client: TestClient,
+) -> None:
     """Security invariant (FR-37): a route added by any teammate must be authenticated by default.
 
     Checked through the OpenAPI schema, which is version-independent: an operation that depends
@@ -185,66 +223,10 @@ def test_every_api_route_except_login_requires_authentication(plain_client: Test
     assert LOGIN in api_paths and ME in api_paths, "auth routes should be registered"
     for path, operations in api_paths.items():
         for method, operation in operations.items():
-            if path == LOGIN:
-                assert "security" not in operation, "login must stay public"
+            if path in PUBLIC_PATHS:
+                assert "security" not in operation, f"{path} is meant to be public"
             else:
                 assert operation.get("security"), f"{method.upper()} {path} is not protected"
-
-
-@pytest.fixture
-def rbac_client(db_session: Session) -> Iterator[TestClient]:
-    app = FastAPI()
-    install_exception_handlers(app)
-    app.dependency_overrides[get_db] = lambda: db_session
-
-    @app.get("/admin-only")
-    def admin_only(who: Annotated[User, Depends(require_roles(Role.ADMIN))]) -> dict[str, str]:
-        return {"user": who.email}
-
-    @app.get("/reviewers")
-    def reviewers(
-        who: Annotated[User, Depends(require_roles(Role.COMPLIANCE_REVIEWER, Role.ADMIN))],
-    ) -> dict[str, str]:
-        return {"user": who.email}
-
-    with TestClient(app) as test_client:
-        yield test_client
-
-
-class TestRoleBasedAccess:
-    @pytest.mark.parametrize(
-        ("role", "path", "expected"),
-        [
-            (Role.ADMIN, "/admin-only", 200),
-            (Role.ANALYST, "/admin-only", 403),
-            (Role.READ_ONLY, "/admin-only", 403),
-            (Role.COMPLIANCE_REVIEWER, "/admin-only", 403),
-            (Role.COMPLIANCE_REVIEWER, "/reviewers", 200),
-            (Role.ADMIN, "/reviewers", 200),
-            (Role.ANALYST, "/reviewers", 403),
-        ],
-    )
-    def test_role_matrix(
-        self,
-        rbac_client: TestClient,
-        make_user: Callable[..., User],
-        role: Role,
-        path: str,
-        expected: int,
-    ) -> None:
-        member = make_user(role=role)
-        token, _ = create_access_token(member.id)
-        response = rbac_client.get(path, headers=bearer(token))
-        assert response.status_code == expected
-        if expected == 403:
-            assert response.json()["error"]["code"] == "forbidden"
-
-    def test_unauthenticated_is_401_not_403(self, rbac_client: TestClient) -> None:
-        assert rbac_client.get("/admin-only").status_code == 401
-
-    def test_require_roles_needs_at_least_one_role(self) -> None:
-        with pytest.raises(ValueError):
-            require_roles()
 
 
 class TestErrorsAndMiddleware:

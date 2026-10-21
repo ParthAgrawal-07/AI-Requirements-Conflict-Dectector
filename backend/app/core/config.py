@@ -53,6 +53,15 @@ class Settings(BaseSettings):
     # ── Auth (FR-37, NFR-11, NFR-12) ──────────────────────
     jwt_secret: SecretStr
     access_token_expire_minutes: int = Field(default=60, ge=1, le=24 * 60)
+    # FR-43: who may create workspaces. False = platform admins only (the CLI creates the first
+    # one); True = any signed-in user. Sign-up itself always needs a join code (SX-02).
+    allow_user_workspace_creation: bool = False
+    # NFR-35: join-code attempts are limited per IP and per e-mail address on sign-up.
+    signup_attempts_per_minute: int = Field(default=5, ge=1, le=1000)
+    # How many reverse proxies sit in front of the API (Render, nginx...). Needed so rate limits
+    # key on the real client address: with 0 the socket peer is used and X-Forwarded-For is
+    # ignored (it can be forged); with N, the N-th entry from the right is trusted.
+    trusted_proxy_hops: int = Field(default=0, ge=0, le=5)
 
     # ── HTTP ──────────────────────────────────────────────
     cors_allowed_origins: Annotated[list[str], NoDecode] = ["http://localhost:5173"]

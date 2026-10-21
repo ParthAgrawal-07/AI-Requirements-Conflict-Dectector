@@ -4,12 +4,14 @@ import logging
 import re
 import time
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
+from dataclasses import dataclass
 
-from fastapi import Request, Response
+from fastapi import HTTPException, Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.types import ASGIApp
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from app.core.errors import error_response
 from app.core.logging import request_id_var
 
 logger = logging.getLogger("app.access")
@@ -48,3 +50,94 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 extra={"request_id": request_id},
             )
         return response
+
+
+@dataclass(frozen=True)
+class BodyLimit:
+    max_bytes: int
+    message: str
+
+
+class MaxBodySizeMiddleware:
+    """Reject oversized request bodies with 413 *before* they are read (pure ASGI).
+
+    Why this exists: FastAPI parses a multipart body — spooling an uploaded file to disk —
+    before the route function runs, so a size check inside the endpoint alone lets a client
+    make the server write gigabytes first. This middleware stops that in two ways:
+
+    * a ``Content-Length`` above the limit is refused immediately, reading nothing;
+    * a body without ``Content-Length`` (chunked transfer) is counted as it streams in and
+      aborted the moment it crosses the limit.
+
+    Only the (method, path) pairs listed in ``limits`` are guarded, so it never surprises other
+    endpoints. A path is either an exact string or a compiled regular expression that must match
+    the whole path (needed for ``/projects/{id}/documents``). The limit should be the file limit
+    plus multipart framing overhead; the endpoint still enforces the exact file size.
+    """
+
+    def __init__(
+        self, app: ASGIApp, *, limits: Mapping[tuple[str, str | re.Pattern[str]], BodyLimit]
+    ) -> None:
+        self.app = app
+        self.limits: dict[tuple[str, str], BodyLimit] = {}
+        self.pattern_limits: list[tuple[str, re.Pattern[str], BodyLimit]] = []
+        for (method, path), body_limit in limits.items():
+            if isinstance(path, re.Pattern):
+                self.pattern_limits.append((method, path, body_limit))
+            else:
+                self.limits[(method, path)] = body_limit
+
+    def _limit_for(self, scope: Scope) -> BodyLimit | None:
+        if scope["type"] != "http":
+            return None
+        method, path = scope["method"], scope["path"]
+        exact = self.limits.get((method, path))
+        if exact is not None:
+            return exact
+        for pattern_method, pattern, body_limit in self.pattern_limits:
+            if pattern_method == method and pattern.fullmatch(path):
+                return body_limit
+        return None
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        limit = self._limit_for(scope)
+        if limit is None:
+            await self.app(scope, receive, send)
+            return
+
+        declared = _declared_length(scope)
+        if declared is not None and declared > limit.max_bytes:
+            response = error_response(
+                Request(scope),
+                status_code=413,
+                code="payload_too_large",
+                message=limit.message,
+                headers={"Connection": "close"},
+            )
+            await response(scope, receive, send)
+            return
+
+        received = 0
+
+        async def counting_receive() -> Message:
+            nonlocal received
+            message = await receive()
+            if message["type"] == "http.request":
+                received += len(message.get("body", b""))
+                if received > limit.max_bytes:
+                    # FastAPI's HTTPException specifically: FastAPI re-raises it from body
+                    # parsing as-is, whereas any other exception becomes a generic 400.
+                    raise HTTPException(status_code=413, detail=limit.message)
+            return message
+
+        await self.app(scope, counting_receive, send)
+
+
+def _declared_length(scope: Scope) -> int | None:
+    for name, value in scope["headers"]:
+        if name == b"content-length":
+            try:
+                return int(value)
+            except ValueError:
+                return None
+    return None
