@@ -113,3 +113,7 @@ class AuditAction(StrEnum):
     MEMBER_ADDED = "member_added"
     DOCUMENT_UPLOADED = "document_uploaded"
     PROJECT_MEMBER_SET = "project_member_set"  # added to a project team / its role changed
+    # Project context (US-60). Version numbers and field names only — never brief text.
+    CONTEXT_DRAFTED = "context_drafted"
+    CONTEXT_UPDATED = "context_updated"
+    PROJECT_ACTIVATED = "project_activated"

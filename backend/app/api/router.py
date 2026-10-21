@@ -13,7 +13,18 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 
-from app.api import auth, documents, findings, me, projects, reports, requirements, workspaces
+from app.api import (
+    auth,
+    context,
+    documents,
+    findings,
+    intake,
+    me,
+    projects,
+    reports,
+    requirements,
+    workspaces,
+)
 from app.core.auth import get_current_user
 from app.schemas.common import ErrorResponse
 
@@ -28,8 +39,10 @@ for _router in (
     me.router,
     workspaces.router,
     projects.router,
+    context.router,
     documents.router,
     requirements.router,
+    intake.router,
 ):
     api_router.include_router(_router, dependencies=_authenticated, responses=_unauthorized)
 

@@ -14,8 +14,12 @@ from sqlalchemy.orm import Session
 from app.ingestion import Requirement as Extracted
 from app.models import (
     Document,
+    DocumentSection,
     DocumentStatus,
     ImportMode,
+    Project,
+    ProjectContext,
+    ProjectStatus,
     Requirement,
     RequirementOrigin,
     RequirementState,
@@ -387,3 +391,111 @@ class TestTextHygiene:
         item = Extracted(id="REQ-1", raw_text="x", source_document="s", location="")
         document, _ = self.run_with(db_session, storage, make_stored_document, [item])
         assert requirements_of(db_session, document)[0].location is None
+
+
+INITIAL_SRS = make_docx(
+    "1.1 Purpose",
+    "PayLite is a mobile app for retail banking customers.",
+    "2.3 User Classes",
+    "- Customer: holds a retail account",
+    "3 Functional Requirements",
+    "REQ-001: The app shall allow login.",
+    "Sessions should expire quickly.",
+)
+
+
+class TestSectionsAndProjectContext:
+    """US-02 review flags and sections; US-60 brief drafted from the initial SRS."""
+
+    def test_sections_and_review_flags_are_stored(
+        self, db_session: Session, storage: LocalFileStorage, make_stored_document: MakeDoc
+    ) -> None:
+        document = make_stored_document(INITIAL_SRS)
+        assert process_document(db_session, document.id, storage=storage) is ProcessingOutcome.DONE
+
+        sections = db_session.scalars(
+            select(DocumentSection)
+            .where(DocumentSection.document_id == document.id)
+            .order_by(DocumentSection.order_index)
+        ).all()
+        assert [s.heading for s in sections] == [
+            "1.1 Purpose",
+            "2.3 User Classes",
+            "3 Functional Requirements",
+        ]
+        assert sections[0].body == "PayLite is a mobile app for retail banking customers."
+        assert all(s.project_id == document.project_id for s in sections)
+
+        rows = requirements_of(db_session, document)
+        # The actor line is kept and flagged, not dropped: overview sections are only filtered
+        # out in Sprint 2 (docs/ingestion-design.md §12, step 4).
+        assert [(r.source_req_id, r.section_heading, r.needs_review) for r in rows] == [
+            (None, "2.3 User Classes", True),
+            ("REQ-001", "3 Functional Requirements", False),
+            (None, "3 Functional Requirements", True),
+        ]
+        assert rows[1].review_reasons == []
+        assert "weaker modal verb" in rows[2].review_reasons[0]
+
+    def test_a_rerun_replaces_the_sections(
+        self, db_session: Session, storage: LocalFileStorage, make_stored_document: MakeDoc
+    ) -> None:
+        document = make_stored_document(INITIAL_SRS, status=DocumentStatus.PROCESSING)
+        process_document(db_session, document.id, storage=storage)
+        document.status = DocumentStatus.PROCESSING  # as if a crashed worker left it
+        db_session.commit()
+        process_document(db_session, document.id, storage=storage)
+        count = db_session.scalar(
+            select(func.count(DocumentSection.id)).where(DocumentSection.document_id == document.id)
+        )
+        assert count == 3
+
+    def test_the_brief_is_drafted_while_the_project_is_in_setup(
+        self,
+        db_session: Session,
+        storage: LocalFileStorage,
+        make_stored_document: MakeDoc,
+        project: Project,
+    ) -> None:
+        project.status = ProjectStatus.SETUP
+        db_session.commit()
+        document = make_stored_document(INITIAL_SRS)
+        process_document(db_session, document.id, storage=storage)
+
+        context = db_session.scalar(
+            select(ProjectContext).where(ProjectContext.project_id == project.id)
+        )
+        assert context is not None and context.version == 1
+        assert context.purpose == "PayLite is a mobile app for retail banking customers."
+        assert context.actors == ["Customer"]
+        assert context.field_status == {"purpose": "ai_drafted", "actors": "ai_drafted"}
+        assert context.source_document_id == document.id
+        db_session.refresh(project)
+        assert project.status is ProjectStatus.SETUP  # a draft never activates
+
+    def test_an_active_project_gets_no_automatic_draft(
+        self, db_session: Session, storage: LocalFileStorage, make_stored_document: MakeDoc
+    ) -> None:
+        document = make_stored_document(INITIAL_SRS)
+        process_document(db_session, document.id, storage=storage)
+        assert db_session.scalar(select(func.count(ProjectContext.id))) == 0
+
+    def test_a_drafting_failure_does_not_fail_the_document(
+        self,
+        db_session: Session,
+        storage: LocalFileStorage,
+        make_stored_document: MakeDoc,
+        project: Project,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        project.status = ProjectStatus.SETUP
+        db_session.commit()
+
+        def broken_drafter() -> object:
+            raise RuntimeError("LLM down")
+
+        monkeypatch.setattr("app.services.processing.get_brief_drafter", broken_drafter)
+        document = make_stored_document(INITIAL_SRS)
+        assert process_document(db_session, document.id, storage=storage) is ProcessingOutcome.DONE
+        assert refreshed(db_session, document).status is DocumentStatus.DONE
+        assert len(requirements_of(db_session, document)) == 3

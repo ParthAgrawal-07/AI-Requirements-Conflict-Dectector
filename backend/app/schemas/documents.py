@@ -82,6 +82,10 @@ class RequirementRead(BaseModel):
     origin: RequirementOrigin
     owner_id: uuid.UUID | None
     owner_name: str | None
+    # Extraction review (US-02): the heading it sits under, and why segmentation was unsure.
+    section_heading: str | None
+    needs_review: bool
+    review_reasons: list[str]
 
     @classmethod
     def from_model(cls, requirement: Requirement) -> "RequirementRead":
@@ -101,4 +105,7 @@ class RequirementRead(BaseModel):
             origin=requirement.origin,
             owner_id=requirement.owner_id,
             owner_name=None if owner is None else owner.full_name,
+            section_heading=requirement.section_heading,
+            needs_review=requirement.needs_review,
+            review_reasons=list(requirement.review_reasons or []),
         )

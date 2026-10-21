@@ -81,6 +81,25 @@ While a project is in `setup`, `analysis_enabled` is `false`: analysis, the comp
 refused with **`409 project_in_setup`** (the message names the missing context fields). Uploading the initial
 SRS and extracting its requirements is allowed in setup.
 
+### Project context  *(US-60)*
+
+Brief schema, field states and drafting rules: [`docs/contracts/composer-and-context.md`](../contracts/composer-and-context.md).
+
+| Method & path | Permission | Purpose |
+|---|---|---|
+| `GET /projects/{p}/context` | `view` | Newest version, per-field `{filled, status}`, `missing_fields` labels, `required_confirmed` / `required_total` |
+| `PUT /projects/{p}/context` | `project.context` | `{fields: {...changed columns}, confirm: [field...], reason}` → new version; `activated: true` when the last required field is confirmed; `open_findings_to_rerun` after an edit of an active project |
+| `GET /projects/{p}/context/versions` | `view` | Version history, newest first (paginated) |
+| `POST /projects/{p}/context/draft` | `project.context` | `{document_id}` → draft the unconfirmed fields from a processed document (`409` if it is not `done`) |
+| `GET /composer/templates` | signed in | The EARS templates, slots and examples for the composer |
+
+`PUT` errors (`400`): `context_field_empty` (confirming an empty field), `context_empty`, `context_required_field_empty`
+(emptying a required field of an active project), `context_reason_required` (editing an active project without a
+reason). `409` if the project is archived.
+
+`GET /projects/{p}/requirements` items also carry `section_heading`, `needs_review` and `review_reasons` (US-02: items
+segmentation was unsure about are surfaced, never dropped).
+
 ## 1. Endpoint Summary (10 planned)
 
 | # | Method & Path | Purpose | FR trace |

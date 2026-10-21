@@ -17,6 +17,7 @@ from sqlalchemy import (
     func,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, enum_column
@@ -70,6 +71,13 @@ class Requirement(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     location: Mapped[str | None] = mapped_column(String(64))  # e.g. "page 3", "paragraph 12"
     order_index: Mapped[int] = mapped_column(default=0, server_default=text("0"))
     stakeholder_group: Mapped[str | None] = mapped_column(String(120))  # FR-05, DR-11
+    # Extraction review (US-02, migration 0011): the heading the item sits under, and whether
+    # segmentation was unsure about it — such items are surfaced for review, never dropped.
+    section_heading: Mapped[str | None] = mapped_column(Text)
+    needs_review: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
+    review_reasons: Mapped[list[str]] = mapped_column(
+        JSONB, default=list, server_default=text("'[]'::jsonb")
+    )
     # Compliance-critical: never auto-resolved, all access audited (FR-21, DR-05, NFR-13).
     is_protected: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
     current_version: Mapped[int] = mapped_column(default=1, server_default=text("1"))
