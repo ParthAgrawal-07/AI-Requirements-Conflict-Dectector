@@ -5,6 +5,7 @@
 * :mod:`app.context.service` — ``ProjectContextService``: versions, confirmation, activation
   and the missing-fields message of the ContextGate (FR-103).
 
-The context pack sent with every LLM call (FR-105) is built from the confirmed version by
-Keval's ``ContextPackBuilder`` (``app/classification/context_pack.py``).
+The context pack sent with every LLM call (FR-105) is built by Keval's ``ContextPackBuilder``
+(``app/classification/context_pack.py``) from ``service.confirmed_values(confirmed_context(...))``,
+so AI-drafted fields never reach the LLM unconfirmed.
 """

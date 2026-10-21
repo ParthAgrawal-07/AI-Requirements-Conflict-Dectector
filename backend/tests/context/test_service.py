@@ -200,3 +200,79 @@ class TestActive:
         service.ensure_analysis_allowed(db_session, active)
         confirmed = service.confirmed_context(db_session, active)
         assert confirmed is not None and confirmed.version == 1
+
+
+class TestRegressions:
+    """Bugs found in review of the first US-60 version."""
+
+    def test_a_stale_status_in_the_session_does_not_skip_the_active_rules(
+        self, db_session: Session, setup_project: Project, user: User
+    ) -> None:
+        """The lock re-reads the row; a save that waited for it sees the project is active."""
+        from sqlalchemy.orm.attributes import set_committed_value
+
+        _save(db_session, setup_project, user, fields=FULL)  # activates
+        # Simulate a request that loaded the project before another request activated it.
+        set_committed_value(setup_project, "status", ProjectStatus.SETUP)
+        with pytest.raises(BadRequestError) as raised:
+            _save(db_session, setup_project, user, fields={"environment": "Web too."})
+        assert raised.value.code == "context_reason_required"
+        db_session.refresh(setup_project)
+        assert setup_project.context_version == 1
+
+    def test_a_refused_save_releases_the_lock(
+        self, db_session: Session, setup_project: Project, user: User
+    ) -> None:
+        with pytest.raises(BadRequestError):
+            _save(db_session, setup_project, user, confirm=[BriefField.ACTORS])
+        assert not db_session.in_transaction()
+
+    def test_confirmed_findings_count_as_open(
+        self,
+        db_session: Session,
+        setup_project: Project,
+        user: User,
+        make_requirement: Callable[..., object],
+    ) -> None:
+        from app.models import Finding, FindingCategory, FindingStatus, Requirement
+
+        _save(db_session, setup_project, user, fields=FULL)
+        requirement = make_requirement()
+        assert isinstance(requirement, Requirement)
+        for status in (FindingStatus.FLAGGED, FindingStatus.CONFIRMED, FindingStatus.DISMISSED):
+            db_session.add(
+                Finding(
+                    document_id=requirement.document_id,
+                    requirement_id=requirement.id,
+                    category=FindingCategory.AMBIGUOUS,
+                    confidence=0.9,
+                    rationale="r",
+                    status=status,
+                    original_ai_output={},
+                )
+            )
+        db_session.commit()
+        assert service.count_open_findings(db_session, requirement.project_id) == 2
+
+    def test_the_context_pack_never_sees_ai_drafted_fields(
+        self, db_session: Session, setup_project: Project, user: User
+    ) -> None:
+        _save(db_session, setup_project, user, fields=FULL)
+        glossary = [
+            DocumentSection(
+                heading="1.3 Definitions",
+                body="OTP: One-time password",
+                location="p 1",
+                order_index=0,
+            )
+        ]
+        service.draft_from_sections(
+            db_session, project_id=setup_project.id, sections=glossary, drafter=BriefDrafter()
+        )
+        _save(db_session, setup_project, user, fields={"environment": "Web too."}, reason="r")
+        db_session.refresh(setup_project)
+        in_force = service.confirmed_context(db_session, setup_project)
+        assert in_force is not None and in_force.glossary  # stored, but only as a draft
+        assert in_force.field_status["glossary"] == "ai_drafted"
+        assert service.confirmed_values(in_force).glossary is None
+        assert service.confirmed_values(in_force).environment == "Web too."

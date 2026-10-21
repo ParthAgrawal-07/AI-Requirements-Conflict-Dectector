@@ -150,3 +150,24 @@ def test_overlong_llm_fields_are_cut() -> None:
     values = parse_reply(reply)
     assert values.purpose is not None and len(values.purpose) == 2000
     assert values.actors is not None and len(values.actors) == 15
+
+
+def test_later_chapters_are_not_brief_material() -> None:
+    chosen = select_sections(
+        _sections(
+            ("2.5 Design and Implementation Constraints", "Must use SSO."),
+            ("3.5 Design Constraints", "The system shall use Oracle."),
+            ("10 Glossary", "OTP: One-time password"),
+        )
+    )
+    assert [s.heading for s in chosen] == [
+        "2.5 Design and Implementation Constraints",
+        "10 Glossary",
+    ]
+
+
+def test_an_overlong_llm_field_is_cut_not_rejected() -> None:
+    llm = FakeLLM(json.dumps({"purpose": "p" * 6000, "actors": ["Customer"]}))
+    values = BriefDrafter(llm=llm).draft(IEEE_SRS)
+    assert values.purpose == "p" * 2000 and values.actors == ["Customer"]
+    assert len(llm.calls) == 1  # accepted first time, no retry

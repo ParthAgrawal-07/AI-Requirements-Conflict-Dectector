@@ -67,8 +67,13 @@ _HEADING_RULES: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
         ("purpose", r"\b(?:purpose|problem|introduction|overview|product\s+perspective)\b"),
     )
 )
-# IEEE 830 / ISO 29148 put the brief material in chapters 1 and 2; chapter 3+ are requirements.
+# IEEE 830 / ISO 29148 put the brief material in chapters 1 and 2; chapter 3+ are requirements
+# ("3.5 Design Constraints" is full of "shall" statements, not context).
 _DESCRIPTIVE_CHAPTER = re.compile(r"^\s*[12](?:\.\d+)*\.?\s")
+_LATER_CHAPTER = re.compile(r"^\s*(?:[3-9]|\d{2,})(?:\.\d+)*\.?\s")
+_BACK_MATTER = re.compile(
+    r"\b(?:glossary|definitions?|acronyms|abbreviations|terminology|references?)\b", re.IGNORECASE
+)
 _REQUIREMENTS_HEADING = re.compile(r"\brequirements?\b", re.IGNORECASE)
 _OVERALL = re.compile(r"\b(?:overall|general)\s+description\b", re.IGNORECASE)
 
@@ -98,6 +103,8 @@ def select_sections(sections: Iterable[SectionLike]) -> list[SectionLike]:
             continue
         if _REQUIREMENTS_HEADING.search(heading) and not _OVERALL.search(heading):
             continue  # "3 Specific Requirements", "Functional Requirements"
+        if _LATER_CHAPTER.match(heading) and not _BACK_MATTER.search(heading):
+            continue  # a glossary or reference list at the end still counts
         if (
             _DESCRIPTIVE_CHAPTER.match(heading)
             or _OVERALL.search(heading)
@@ -168,8 +175,16 @@ def parse_reply(reply: str) -> BriefValues:
     data = json.loads(_FENCE.sub("", reply.strip()))
     if not isinstance(data, dict):
         raise ValueError("expected a JSON object")
-    known = {key: value for key, value in data.items() if key in BriefValues.model_fields}
-    return _truncated(BriefValues.model_validate(known))
+    # Cut long text before validating: an over-long purpose should be shortened, not cost the
+    # whole draft (the schema's 4,000-character limit would reject it).
+    known = {
+        key: value[:_MAX_FIELD_CHARS] if isinstance(value, str) else value
+        for key, value in data.items()
+        if key in BriefValues.model_fields
+    }
+    if isinstance(known.get("actors"), list):
+        known["actors"] = known["actors"][:_MAX_ACTORS]
+    return BriefValues.model_validate(known)
 
 
 def _short_error(exc: Exception) -> str:
@@ -177,17 +192,6 @@ def _short_error(exc: Exception) -> str:
         first = exc.errors()[0]
         return f"{'.'.join(str(p) for p in first['loc'])}: {first['msg']}"
     return str(exc)[:200]
-
-
-def _truncated(values: BriefValues) -> BriefValues:
-    changes: dict[str, object] = {
-        name: value[:_MAX_FIELD_CHARS]
-        for name, value in values.model_dump().items()
-        if isinstance(value, str) and len(value) > _MAX_FIELD_CHARS
-    }
-    if values.actors and len(values.actors) > _MAX_ACTORS:
-        changes["actors"] = values.actors[:_MAX_ACTORS]
-    return values.model_copy(update=changes) if changes else values
 
 
 # ── Rules fallback ─────────────────────────────────────────────────────────────

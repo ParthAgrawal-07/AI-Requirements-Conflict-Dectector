@@ -84,8 +84,9 @@ activation an edit needs a `reason`, cannot empty a required field, and the resp
 re-run would cover.
 
 **Summary.** On confirmation the service stores `summary` (≤ 300 words) built from the *confirmed* fields only.
-Keval's `ContextPackBuilder` reads `summary`, `actors`, `glossary` and the confirmed version number from
-`confirmed_context(db, project)`.
+Keval's `ContextPackBuilder` takes the version in force from `confirmed_context(db, project)` and its fields from
+`confirmed_values(context)`, never from the raw columns: after activation a re-draft can add AI-drafted optional
+fields (a glossary, say) to that version, and they must not reach the LLM until someone confirms them.
 
 ## 5. Brief drafting from the initial SRS (FR-104)
 

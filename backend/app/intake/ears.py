@@ -120,6 +120,8 @@ class MissingSlotsError(ValueError):
 
 
 def _clean_slot(key: str, value: str) -> str:
+    if key == "statement":
+        return value.strip()  # free text is stored as the member wrote it (FR-04)
     text = _SPACES.sub(" ", value).strip()
     if key == "system":
         # "the {system}" is in the pattern; accept "The mobile app" or "the mobile app" too.
@@ -127,9 +129,7 @@ def _clean_slot(key: str, value: str) -> str:
     if key == "response":
         # "shall" is in the pattern; "shall log out" must not become "shall shall log out".
         text = re.sub(r"^shall\s+", "", text, flags=re.IGNORECASE)
-    if key != "statement":
-        text = text.rstrip(" .,;")  # the pattern adds its own punctuation
-    return text
+    return text.rstrip(" .,;")  # the pattern adds its own punctuation
 
 
 def missing_slots(template: EarsTemplate, slots: Mapping[str, str]) -> list[str]:

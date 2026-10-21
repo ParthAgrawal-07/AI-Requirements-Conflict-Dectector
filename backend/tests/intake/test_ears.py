@@ -141,3 +141,8 @@ def test_a_draft_accepts_partial_fields_and_previews_when_it_can() -> None:
         ).preview
         == "The mobile app shall log the user out."
     )
+
+
+def test_free_text_line_breaks_are_kept() -> None:
+    statement = "The system shall:\n- export PDF\n- export CSV"
+    assert render_statement(EarsTemplate.FREE_TEXT, {"statement": statement}) == statement

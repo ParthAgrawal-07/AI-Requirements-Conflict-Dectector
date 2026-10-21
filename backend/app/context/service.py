@@ -136,7 +136,11 @@ def count_open_findings(db: Session, project_id: uuid.UUID) -> int:
         db.scalar(
             select(func.count(Finding.id))
             .join(Document, Document.id == Finding.document_id)
-            .where(Document.project_id == project_id, Finding.status == FindingStatus.FLAGGED)
+            .where(
+                Document.project_id == project_id,
+                # Flagged or confirmed: still open. Dismissed, merged or reclassified are settled.
+                Finding.status.in_((FindingStatus.FLAGGED, FindingStatus.CONFIRMED)),
+            )
         )
         or 0
     )
@@ -172,8 +176,18 @@ def build_summary(values: BriefValues) -> str:
 
 
 def _lock_project(db: Session, project_id: uuid.UUID) -> Project:
-    """Serialise writers of one project's context, so two saves can't take the same version."""
-    project = db.scalar(select(Project).where(Project.id == project_id).with_for_update())
+    """Serialise writers of one project's context, so two saves can't take the same version.
+
+    ``populate_existing`` re-reads the row once the lock is held: the session may already hold
+    the project (the permission check loads it), and a stale ``status`` would let a save that
+    waited for the lock activate the project a second time or skip the reason check.
+    """
+    project = db.scalar(
+        select(Project)
+        .where(Project.id == project_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
     if project is None:
         raise NotFoundError("Project not found")
     if project.status is ProjectStatus.ARCHIVED:
@@ -198,7 +212,26 @@ def save_context(
 
     ``changes`` carries only the columns the caller sent (``model_fields_set``); sending a column
     as null clears it. Fields in ``confirm`` keep their value and become ``confirmed``.
+    On any error the transaction is rolled back, which also releases the project lock.
     """
+    try:
+        return _save_context(
+            db, project_id=project_id, actor=actor, changes=changes, confirm=confirm, reason=reason
+        )
+    except Exception:
+        db.rollback()
+        raise
+
+
+def _save_context(
+    db: Session,
+    *,
+    project_id: uuid.UUID,
+    actor: User,
+    changes: BriefValues,
+    confirm: Sequence[BriefField],
+    reason: str | None,
+) -> SaveResult:
     project = _lock_project(db, project_id)
     previous = latest_context(db, project.id)
     before = values_of(previous)
@@ -285,7 +318,24 @@ def draft_from_sections(
     Returns the new version, or None if the draft added nothing. The project's status and
     ``context_version`` are untouched: a draft must be confirmed before it is used.
     """
-    drafted = drafter.draft(sections)
+    drafted = drafter.draft(sections)  # outside the lock: this may call the LLM
+    try:
+        return _store_draft(
+            db, project_id=project_id, drafted=drafted, document=document, actor=actor
+        )
+    except Exception:
+        db.rollback()
+        raise
+
+
+def _store_draft(
+    db: Session,
+    *,
+    project_id: uuid.UUID,
+    drafted: BriefValues,
+    document: Document | None,
+    actor: User | None,
+) -> ProjectContext | None:
     project = _lock_project(db, project_id)
     previous = latest_context(db, project.id)
     before = values_of(previous)
@@ -330,6 +380,16 @@ def draft_from_sections(
         )
     db.commit()
     return context
+
+
+def confirmed_values(context: ProjectContext | None) -> BriefValues:
+    """The fields a person has confirmed; AI-drafted ones are left out.
+
+    What the context pack may use (FR-105): after activation a re-draft can add AI-drafted
+    optional fields (say a glossary) to the version in force, and those must not reach the LLM
+    as if the Project Manager had approved them.
+    """
+    return _confirmed_only(values_of(context), status_of(context))
 
 
 def _confirmed_only(values: BriefValues, status: dict[str, str]) -> BriefValues:
