@@ -87,7 +87,7 @@ Implemented in `segmentation/segmenter.py`; patterns in `segmentation/rules.py`.
 - **Headers/footers:** a block in the top/bottom 10% of the page is dropped if it is a bare page number (`3`, `Page 3 of 10`, `- 3 -`) or if the same text (digits ignored) is in the margin of at least half the pages. Blocks containing a requirement ID or `shall`/`must` are never dropped.
 
 ### 9.2 Grouping lines into units
-- A line starting with a requirement ID starts a new unit. An ID is an upper-case prefix, optionally in several parts, then `-` or `_`, then a number with optional sub-numbers: `REQ-001`, `FR-1.2.3`, `NFR-01`, `UC-07`, `SEC-3`, `PERF_01`, `FR-AUTH-01`, `REQ-SEC-001`. Standard and encoding names that look the same (`ISO-27001`, `UTF-8`, `TLS-1.2`, `IEEE-830`, …) are not IDs, and neither is a number with a word glued to it (`UC-1a`). IDs mid-sentence are cross-references, not the line's own ID.
+- A line starting with a requirement ID starts a new unit. An ID is an upper-case prefix, optionally in several parts, then `-` or `_`, then a number with optional sub-numbers and an optional one-letter suffix: `REQ-001`, `FR-1.2.3`, `NFR-01`, `UC-07`, `SEC-3`, `PERF_01`, `FR-AUTH-01`, `REQ-SEC-001`, `REQ-001-A`, `UC-1a`. Standard and encoding names that look the same (`ISO-27001`, `UTF-8`, `TLS-1.2`, `IEEE-830`, …) are not IDs, and neither is a number with a longer word glued to it (`SEC-1st`). IDs mid-sentence are cross-references, not the line's own ID.
 - Wrapped lines are re-joined (`real-` + `time` → `real-time`).
 - A new paragraph starts a new unit unless the current one is still open:
   - it ends with `:` (a list follows);

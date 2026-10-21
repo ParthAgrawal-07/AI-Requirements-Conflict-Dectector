@@ -447,9 +447,21 @@ class TestPrintedIds:
         assert [r.source_req_id for r in reqs] == [None, None, None]
         assert all(r.id.startswith("UNKNOWN-") for r in reqs)
 
+    def test_one_letter_suffixes_are_part_of_the_id(self):
+        reqs = Segmenter().segment(
+            _pages(
+                "REQ-001-A: The app shall log in.\n"
+                "UC-1a: The customer shall pay.\n"
+                "FR-2.1b: Reports shall export."
+            )
+        )
+        assert [r.source_req_id for r in reqs] == ["REQ-001-A", "UC-1a", "FR-2.1b"]
+
     def test_a_word_glued_to_the_number_is_not_an_id(self):
-        reqs = Segmenter().segment(_paragraphs("UC-1a covers the happy path and shall pass."))
-        assert reqs[0].source_req_id is None
+        reqs = Segmenter().segment(
+            _paragraphs("SEC-1st release shall ship in May.", "A-4.Paper reports shall print.")
+        )
+        assert [r.source_req_id for r in reqs] == [None, None]
 
     def test_items_without_a_printed_id_are_stored_without_one(self):
         reqs = Segmenter().segment(_paragraphs("The system shall export reports as PDF."))
