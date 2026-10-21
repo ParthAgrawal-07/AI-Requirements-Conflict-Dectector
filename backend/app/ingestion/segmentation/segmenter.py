@@ -26,6 +26,10 @@ Turns parser output (RawSegments) into individual Requirement objects in two pas
 
 Requirements without a source ID get a deterministic fallback ID:
 UNKNOWN-{page_or_paragraph}-{n}, n counting from 0 within that page/paragraph.
+
+Alongside the requirements, every heading and the verbatim text under it is
+returned as a DocumentSection (SegmentationResult.sections), for the project
+context: the brief drafter and the context pack read them (FR-104, FR-105).
 """
 
 import logging
@@ -37,7 +41,13 @@ from functools import lru_cache
 import spacy
 from spacy.language import Language
 
-from app.ingestion.models import ExcludedText, RawSegment, Requirement, SegmentationResult
+from app.ingestion.models import (
+    DocumentSection,
+    ExcludedText,
+    RawSegment,
+    Requirement,
+    SegmentationResult,
+)
 from app.ingestion.segmentation.rules import (
     BULLET_PATTERN,
     NON_REQUIREMENT_SECTION_PATTERN,
@@ -167,6 +177,26 @@ class _Unit:
         )
 
 
+@dataclass
+class _Section:
+    """A heading and the paragraphs under it, collected while grouping."""
+
+    heading: str | None
+    location: str
+    paragraphs: list[list[str]] = field(default_factory=list)
+
+    def add(self, line: str, *, new_paragraph: bool) -> None:
+        if new_paragraph or not self.paragraphs:
+            self.paragraphs.append([])
+        self.paragraphs[-1].append(line)
+
+    def build(self, order_index: int) -> DocumentSection:
+        body = "\n\n".join("\n".join(lines) for lines in self.paragraphs)
+        return DocumentSection(
+            heading=self.heading, body=body, location=self.location, order_index=order_index
+        )
+
+
 class Segmenter:
     """Split RawSegments into individual Requirement objects."""
 
@@ -176,7 +206,8 @@ class Segmenter:
 
     def run(self, raw_segments: list[RawSegment]) -> SegmentationResult:
         excluded: list[ExcludedText] = []
-        units = self._group(raw_segments, excluded)
+        sections: list[_Section] = []
+        units = self._group(raw_segments, excluded, sections)
         requirements = self._flag_duplicate_ids(self._classify(units, excluded))
         logger.info(
             "Segmented %d units into %d requirements (%d need review, %d excluded)",
@@ -185,10 +216,21 @@ class Segmenter:
             sum(r.needs_review for r in requirements),
             len(excluded),
         )
-        return SegmentationResult(requirements=requirements, excluded=excluded)
+        built = [section for section in sections if section.paragraphs]
+        return SegmentationResult(
+            requirements=requirements,
+            excluded=excluded,
+            sections=[section.build(index) for index, section in enumerate(built)],
+        )
 
     # ── Pass 1: grouping ─────────────────────────────────────────────────────
-    def _group(self, raw_segments: list[RawSegment], excluded: list[ExcludedText]) -> list[_Unit]:
+    def _group(
+        self,
+        raw_segments: list[RawSegment],
+        excluded: list[ExcludedText],
+        sections: list[_Section],
+    ) -> list[_Unit]:
+        """Group lines into units; also fill ``sections`` with every heading's text."""
         units: list[_Unit] = []
         current: _Unit | None = None
         heading: str | None = None
@@ -201,12 +243,18 @@ class Segmenter:
                 units.append(current)
                 current = None
 
+        def open_section(title: str | None, location: str) -> None:
+            sections.append(_Section(title, location))
+
         for seg in raw_segments:
+            location = f"{seg.location_type} {seg.page_or_paragraph}"
             # A new styled (DOCX) heading wins; otherwise keep any heading we detected
             # from the text since then.
             if seg.section_heading != parser_heading:
                 heading = parser_heading = seg.section_heading
-            location = f"{seg.location_type} {seg.page_or_paragraph}"
+                open_section(heading, location)
+            elif not sections:
+                open_section(heading, location)
             for para_idx, para in enumerate(_PARAGRAPH_BREAK.split(seg.text)):
                 lines = [line.strip() for line in para.split("\n") if line.strip()]
                 for line_idx, line in enumerate(lines):
@@ -227,6 +275,7 @@ class Segmenter:
 
                     id_match = REQUIREMENT_ID_PATTERN.match(line)
                     if id_match:
+                        sections[-1].add(line, new_paragraph=line_idx == 0)
                         close()
                         current = _Unit(seg, heading, id_match.group("id"))
                         current.add(line)
@@ -250,7 +299,12 @@ class Segmenter:
                     ):
                         close()
                         heading = line
+                        open_section(heading, location)
                         continue
+
+                    # The section keeps the text verbatim, requirements and prose alike.
+                    # A DOCX segment is one paragraph; in a PDF a blank line separates them.
+                    sections[-1].add(line, new_paragraph=line_idx == 0)
 
                     is_list = seg.is_list_item or _is_list_item(line)
                     if current is not None:

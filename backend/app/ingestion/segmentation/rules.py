@@ -1,14 +1,17 @@
 """
 Regex patterns used by the PDF parser and the segmenter.
 
-Supported requirement ID formats:
+Supported requirement ID formats (FR-04: the printed ID is kept exactly as written):
     REQ-01, REQ-001, REQ_0001
     FR-1, FR-1.2, FR-1.2.3
     NFR-01, NFR-1.2
     DR-01  (data requirements, as used in our own requirements-spec.md)
     SR-, UR-, BR-, SYS-  (system / user / business requirements)
+    Any other upper-case prefix: UC-01, US-12, SEC-3, PERF-01, QR-2
+    Multi-part prefixes: FR-AUTH-01, REQ-SEC-001
 
-A hyphen or underscore between the prefix and number is REQUIRED.
+A hyphen or underscore between the prefix and number is REQUIRED. Standard and
+encoding names that look like IDs (ISO-9001, UTF-8, TLS-1.2, ...) are not IDs.
 
 The ID must START the line (optionally after whitespace, a bullet or an
 opening bracket). An ID mentioned mid-sentence is a cross-reference
@@ -17,10 +20,19 @@ opening bracket). An ID mentioned mid-sentence is a cross-reference
 
 import re
 
-# Match a leading requirement ID: prefix + hyphen + digits + any sub-numbers.
-# Use .match() and read group("id"). Examples: REQ-001, FR-1.2.3, "• NFR-01", "[DR-03]"
+# Prefixes that start a line like an ID but name a standard, protocol or encoding.
+NOT_ID_PREFIXES = (
+    "AES|CVE|COVID|EN|HTTP|HTTPS|IEC|IEEE|IPV|ISBN|ISO|MD|PCI|RFC|SHA|SSL|TLS|UTF|WCAG"
+)
+
+# Match a leading requirement ID: upper-case prefix (optionally multi-part) + hyphen or
+# underscore + digits + any sub-numbers. Use .match() and read group("id").
+# Examples: REQ-001, FR-1.2.3, UC-07, FR-AUTH-01, "• NFR-01", "[DR-03]"
 REQUIREMENT_ID_PATTERN = re.compile(
-    r"^[\s•*\-(\[]*(?P<id>(?:REQ|FR|NFR|DR|SR|UR|BR|SYS)[-_]\d+(?:\.\d+)*)\b"
+    r"^[\s•*\-(\[]*"
+    rf"(?!(?:{NOT_ID_PREFIXES})[-_])"
+    r"(?P<id>[A-Z][A-Z0-9]{0,9}(?:[-_][A-Z][A-Z0-9]{0,9}){0,2}[-_]\d+(?:\.\d+)*)\b"
+    r"(?![-_.]?[A-Za-z])"  # "UC-1a", "SEC-1st" and "A-4.Paper" are not IDs
 )
 
 # Match numbered list items: "1.", "2.1.", "3.2.1." etc.

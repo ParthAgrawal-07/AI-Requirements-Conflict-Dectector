@@ -70,7 +70,7 @@ class TestHappyPath:
             "FR-1.2: The system shall lock accounts after 5 failed attempts.",
         ]
         assert [r.order_index for r in rows] == [0, 1, 2]
-        assert [r.location for r in rows] == ["page/para 1", "page/para 2", "page/para 3"]
+        assert [r.location for r in rows] == ["paragraph 1", "paragraph 2", "paragraph 3"]
         assert all(r.current_version == 1 for r in rows)
 
         versions = db_session.scalars(select(RequirementVersion)).all()
@@ -84,7 +84,12 @@ class TestHappyPath:
     ) -> None:
         """The segmenter labels id-less lines 'UNKNOWN-<page>-<line>'; that must never look real (FR-04)."""
         document = make_stored_document(
-            make_docx("REQ-001: first", "no identifier here", "NFR-02: third", "FR-1.2: fourth")
+            make_docx(
+                "REQ-001: first",
+                "The system shall export reports.",
+                "NFR-02: third",
+                "FR-1.2: fourth",
+            )
         )
         process_document(db_session, document.id, storage=storage)
 
@@ -339,9 +344,21 @@ class TestTextHygiene:
         self, db_session: Session, storage: LocalFileStorage, make_stored_document: MakeDoc
     ) -> None:
         items = [
-            Extracted(id="REQ-1", raw_text="first", source_document="s", location="p 1"),
+            Extracted(
+                id="REQ-1",
+                source_req_id="REQ-1",
+                raw_text="first",
+                source_document="s",
+                location="p 1",
+            ),
             Extracted(id="UNKNOWN-2-0", raw_text="   \x00 ", source_document="s", location="p 2"),
-            Extracted(id="REQ-3", raw_text="third", source_document="s", location="p 3"),
+            Extracted(
+                id="REQ-3",
+                source_req_id="REQ-3",
+                raw_text="third",
+                source_document="s",
+                location="p 3",
+            ),
         ]
         document, _ = self.run_with(db_session, storage, make_stored_document, items)
         rows = requirements_of(db_session, document)

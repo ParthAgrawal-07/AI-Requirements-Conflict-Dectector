@@ -94,6 +94,28 @@ class ExcludedText(BaseModel):
     reason: str
 
 
+class DocumentSection(BaseModel):
+    """One heading of the document and the text under it, verbatim (design update §12.1).
+
+    Sections hold *all* text, requirements and prose alike. They feed ``document_sections``:
+    the brief drafter reads the introduction and overall description from them (FR-104), and
+    the context pack picks the most relevant ones for each LLM call (FR-105).
+
+    Attributes:
+        heading: The heading text, or None for text before the first heading.
+        body: Paragraphs under the heading, separated by blank lines.
+        location: Where the section starts (e.g. "page 2" or "paragraph 14").
+        order_index: 0-based position of the section within the document.
+    """
+
+    model_config = {"frozen": True}
+
+    heading: str | None
+    body: str
+    location: str
+    order_index: int
+
+
 class SegmentationResult(BaseModel):
     """Everything the segmenter produced for one document."""
 
@@ -101,3 +123,4 @@ class SegmentationResult(BaseModel):
 
     requirements: list[Requirement]
     excluded: list[ExcludedText] = Field(default_factory=list)
+    sections: list[DocumentSection] = Field(default_factory=list)

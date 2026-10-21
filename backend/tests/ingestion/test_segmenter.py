@@ -415,3 +415,113 @@ class TestReviewRegressions:
             "FR-2: Reports shall be exported as:\nPDF",
             "The system shall log every export.",
         ]
+
+
+class TestPrintedIds:
+    """FR-04: whatever ID the document prints is kept exactly as written."""
+
+    def test_project_specific_prefixes_are_kept(self):
+        reqs = Segmenter().segment(
+            _pages(
+                "UC-07: The customer shall reset a password.\n"
+                "SEC-3: Sessions shall expire after 15 minutes.\n"
+                "PERF_01: Search shall answer within 2 seconds."
+            )
+        )
+        assert [r.source_req_id for r in reqs] == ["UC-07", "SEC-3", "PERF_01"]
+
+    def test_multi_part_prefixes_are_kept_whole(self):
+        reqs = Segmenter().segment(
+            _pages("FR-AUTH-01: Users shall log in.\nREQ-SEC-001: Data shall be encrypted.")
+        )
+        assert [r.source_req_id for r in reqs] == ["FR-AUTH-01", "REQ-SEC-001"]
+
+    def test_standard_and_encoding_names_are_not_ids(self):
+        reqs = Segmenter().segment(
+            _paragraphs(
+                "ISO-27001 controls shall apply to all data stores.",
+                "UTF-8 shall be used for every export.",
+                "TLS-1.2 or later must protect all traffic.",
+            )
+        )
+        assert [r.source_req_id for r in reqs] == [None, None, None]
+        assert all(r.id.startswith("UNKNOWN-") for r in reqs)
+
+    def test_a_word_glued_to_the_number_is_not_an_id(self):
+        reqs = Segmenter().segment(_paragraphs("UC-1a covers the happy path and shall pass."))
+        assert reqs[0].source_req_id is None
+
+    def test_items_without_a_printed_id_are_stored_without_one(self):
+        reqs = Segmenter().segment(_paragraphs("The system shall export reports as PDF."))
+        assert reqs[0].source_req_id is None
+
+
+class TestSections:
+    """Headings and the verbatim text under them, for the project context (FR-104, FR-105)."""
+
+    def test_each_heading_collects_the_text_under_it(self):
+        result = Segmenter().run(
+            _pages(
+                "1.1 Purpose\n\nThis document describes the\nmobile banking app.\n\n"
+                "It covers transfers.\n\n"
+                "3 Functional Requirements\n\nREQ-001: The app shall allow login."
+            )
+        )
+        assert [(s.heading, s.body) for s in result.sections] == [
+            (
+                "1.1 Purpose",
+                "This document describes the\nmobile banking app.\n\nIt covers transfers.",
+            ),
+            ("3 Functional Requirements", "REQ-001: The app shall allow login."),
+        ]
+        assert [s.order_index for s in result.sections] == [0, 1]
+        assert result.sections[0].location == "page 1"
+
+    def test_prose_excluded_from_requirements_is_still_in_its_section(self):
+        result = Segmenter().run(
+            _paragraphs("Introduction", "The app helps retail customers bank on the move.")
+        )
+        assert result.requirements == []
+        assert result.sections[0].heading == "Introduction"
+        assert result.sections[0].body == "The app helps retail customers bank on the move."
+
+    def test_styled_docx_headings_open_sections(self):
+        segments = [
+            RawSegment(
+                text=text,
+                source_document="srs.docx",
+                page_or_paragraph=i + 1,
+                location_type="paragraph",
+                section_heading=heading,
+                order_index=i,
+            )
+            for i, (heading, text) in enumerate(
+                [
+                    ("2.3 User Classes", "Customers and support agents."),
+                    ("2.3 User Classes", "Fraud analysts review alerts."),
+                    ("3 Requirements", "REQ-1: The app shall log in."),
+                ]
+            )
+        ]
+        sections = Segmenter().run(segments).sections
+        assert [(s.heading, s.body) for s in sections] == [
+            ("2.3 User Classes", "Customers and support agents.\n\nFraud analysts review alerts."),
+            ("3 Requirements", "REQ-1: The app shall log in."),
+        ]
+        assert sections[1].location == "paragraph 3"
+
+    def test_text_before_the_first_heading_has_no_heading(self):
+        sections = Segmenter().run(_pages("REQ-1: The app shall log in.")).sections
+        assert [(s.heading, s.body) for s in sections] == [(None, "REQ-1: The app shall log in.")]
+
+    def test_toc_lines_and_empty_headings_are_not_sections(self):
+        sections = (
+            Segmenter()
+            .run(
+                _pages(
+                    "Contents\n\n1 Introduction 2\n\n1 Introduction\n\n1.1 Scope\n\nBanking only."
+                )
+            )
+            .sections
+        )
+        assert [(s.heading, s.body) for s in sections] == [("1.1 Scope", "Banking only.")]

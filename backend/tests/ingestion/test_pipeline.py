@@ -78,3 +78,10 @@ class TestPipeline:
         assert [r.id for r in reqs] == ["REQ-001", "REQ-010", "REQ-011"]
         assert reqs[1].section_heading == "3. Functional Requirements"
         assert reqs[1].location.startswith("paragraph ")
+
+    def test_docx_sections_come_back_with_the_requirements(self, sample_docx_structured):
+        from app.ingestion import ingest_document
+
+        result = ingest_document(sample_docx_structured)
+        assert [s.heading for s in result.sections] == ["3. Functional Requirements"]
+        assert "REQ-010 | The system shall encrypt data at rest." in result.sections[0].body

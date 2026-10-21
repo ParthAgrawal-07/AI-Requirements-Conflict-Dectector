@@ -27,7 +27,6 @@ from sqlalchemy.orm import Session
 
 from app.ingestion import Requirement as ExtractedRequirement
 from app.ingestion import ingest
-from app.ingestion.segmentation.rules import REQUIREMENT_ID_PATTERN
 from app.models import (
     Document,
     DocumentStatus,
@@ -185,9 +184,9 @@ def _to_row(document: Document, order_index: int, item: ExtractedRequirement) ->
         ),
         origin=RequirementOrigin.DOCUMENT,
         stakeholder_group=document.stakeholder_group,
-        # The segmenter invents "UNKNOWN-<page>-<line>" IDs for lines without one. Those are
-        # not identifiers from the document, so they are not stored as such (FR-04).
-        source_req_id=item.id if REQUIREMENT_ID_PATTERN.fullmatch(item.id) else None,
+        # The ID printed in the document, or None. The segmenter's fallback "UNKNOWN-…" ``id``
+        # is not an identifier from the document, so it is never stored as one (FR-04).
+        source_req_id=item.source_req_id,
         body=body,
         location=(item.location or None) and item.location[:MAX_LOCATION_LENGTH],
         order_index=order_index,
