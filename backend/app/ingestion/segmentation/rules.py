@@ -9,6 +9,7 @@ Supported requirement ID formats (FR-04: the printed ID is kept exactly as writt
     SR-, UR-, BR-, SYS-  (system / user / business requirements)
     Any other upper-case prefix: UC-01, US-12, SEC-3, PERF-01, QR-2
     Multi-part prefixes: FR-AUTH-01, REQ-SEC-001
+    One-letter suffixes: REQ-001a, REQ-001-A, UC-1a, FR-2.1b
 
 A hyphen or underscore between the prefix and number is REQUIRED. Standard and
 encoding names that look like IDs (ISO-9001, UTF-8, TLS-1.2, ...) are not IDs.
@@ -26,13 +27,15 @@ NOT_ID_PREFIXES = (
 )
 
 # Match a leading requirement ID: upper-case prefix (optionally multi-part) + hyphen or
-# underscore + digits + any sub-numbers. Use .match() and read group("id").
-# Examples: REQ-001, FR-1.2.3, UC-07, FR-AUTH-01, "• NFR-01", "[DR-03]"
+# underscore + digits + any sub-numbers + an optional one-letter suffix.
+# Use .match() and read group("id").
+# Examples: REQ-001, FR-1.2.3, UC-07, FR-AUTH-01, REQ-001-A, UC-1a, "• NFR-01", "[DR-03]"
 REQUIREMENT_ID_PATTERN = re.compile(
     r"^[\s•*\-(\[]*"
     rf"(?!(?:{NOT_ID_PREFIXES})[-_])"
-    r"(?P<id>[A-Z][A-Z0-9]{0,9}(?:[-_][A-Z][A-Z0-9]{0,9}){0,2}[-_]\d+(?:\.\d+)*)\b"
-    r"(?![-_.]?[A-Za-z])"  # "UC-1a", "SEC-1st" and "A-4.Paper" are not IDs
+    r"(?P<id>[A-Z][A-Z0-9]{0,9}(?:[-_][A-Z][A-Z0-9]{0,9}){0,2}[-_]\d+(?:\.\d+)*"
+    r"(?:[-_.]?[A-Za-z](?![A-Za-z0-9]))?)"
+    r"(?![-_.]?[A-Za-z0-9])"  # a longer word glued on ("SEC-1st", "A-4.Paper") is not an ID
 )
 
 # Match numbered list items: "1.", "2.1.", "3.2.1." etc.
