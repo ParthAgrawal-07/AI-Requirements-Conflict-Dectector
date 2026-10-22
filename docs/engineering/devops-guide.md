@@ -111,32 +111,34 @@ shared volume or S3-compatible object storage; `app/services/storage.py` is the 
 
 ## 6. Repo Structure Reference
 
+Owners follow [`IT314_RCD_Sprint_Plan_v5.md` §2](../planning/v5/IT314_RCD_Sprint_Plan_v5.md#2-team-and-areas-of-ownership); `.github/CODEOWNERS` enforces review.
+
 ```
 backend/
-  app/ingestion/       # Role 1
-  app/embeddings/      # Role 2
-  app/classification/  # Role 3
-  app/clarification/   # Role 4
-  app/core/            # Role 5 — settings, db, security, auth, celery, errors, middleware
-  app/api/             # Role 5 — routes (auth implemented; documents/requirements/
-                       #   findings/reports are Sprint 1+ stubs owned by their roles)
-  app/models/          # Role 5 — SQLAlchemy models for every table
-  app/schemas/         # Role 5 — Pydantic request/response schemas
-  app/services/        # Role 5 — business logic (routes stay thin)
-  alembic/             # migrations — implemented (0001_initial_schema)
-  tests/               # Role 5's own tests; each role adds tests alongside its own package
+  app/ingestion/       # Bansil — parsing and segmentation (implemented)
+  app/context/         # Bansil — project context, brief drafter, context gate (implemented)
+  app/intake/          # Bansil — EARS templates, composer schemas; posts and drafts later
+  app/embeddings/      # Heet
+  app/classification/  # Keval
+  app/clarification/   # Madhav
+  app/core/            # Parth — settings, db, security, auth, permissions, celery, errors, middleware
+  app/api/             # Parth — routes; each area's routes are reviewed by its owner
+  app/models/          # Parth — SQLAlchemy models for every table
+  app/schemas/         # Parth — Pydantic request/response schemas
+  app/services/        # Parth — business logic (routes stay thin)
+  alembic/             # Parth — migrations 0001–0004a, 0011 implemented
+  tests/               # Every owner adds tests for their package; Abhyudit owns integration tests
 frontend/
-  src/components/      # Role 6 (core), Role 7 (graph/)
+  src/                 # Pranshu (shell, composer, requirements, …), Abhijeet (members, setup, findings, map, …)
 docs/
   engineering/         # this document set
+  planning/v5/         # revision 5 planning documents (source of truth)
+  contracts/           # Sprint 0 interface contracts
+  wireframes/          # screen wireframes
+sample_docs/           # planted-conflict benchmark SRS and labels
 .env.example           # implemented
 docker-compose.yml     # implemented — db, redis, migrate, backend, worker, frontend
 Makefile               # implemented — `make help` for day-to-day commands
 ```
 
-> **Note on role numbering:** this file and `task-breakdown.md` use the original 7-role
-> split (T02 "DB schema" → Role 2, T03 "Docker Compose" → Role 7). The team's later
-> `Sprint_Work_Assignment` reassigns Sprint 0 infra (DB schema, Docker Compose, CI, auth
-> skeleton) to Parth under Role 5, which is what was actually built here. This is the same
-> kind of numbering drift already tracked for FR/NFR/DR in `requirements-spec.md` — not yet
-> reconciled into one canonical assignment, flagged here rather than silently overwritten.
+Planned directories (`app/realtime/`, `app/graph/`, `app/lint/`, `app/consequences/`, `app/suggestions/`, `app/notifications/`, `app/export/`, `app/search/`, `eval/`, `e2e/`, `load/`) are created by their owners when their sprint starts; see `architecture.md` §2.

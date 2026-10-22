@@ -8,6 +8,7 @@
 | **Companion** | `object-design.md` (classes, patterns, state machines, object-level interactions) |
 | **Builds on** | `architecture.md` (module ownership), `diagrams.md` (initial UML), `data-model.md`, `decision-log.md` |
 | **Status legend** | ✅ implemented and tested · 🟡 stub file exists, design is a proposal for its owner to confirm · ⬜ planned, nothing in the repo yet |
+| **Revision 5** | This document was written before the Step 7 scope extension. [`IT314_RCD_Design_Update_v5.md`](../planning/v5/IT314_RCD_Design_Update_v5.md) extends or replaces the sections marked below; anything it does not mention is unchanged. Since this was written, tenancy and permissions (migration `0004`) and project context (`0011`) have been implemented — see `data-model.md`, `roles-and-access.md` and `api-reference.md` for those |
 
 ---
 
@@ -45,6 +46,8 @@ Why not microservices: seven people, fourteen weeks, one release train. The modu
 
 ## 3. System Context
 
+> **Replaced in revision 5** by [Design Update v5 §1](../planning/v5/IT314_RCD_Design_Update_v5.md#1-updated-system-context-replaces-sd-3) (workspaces, members joining with codes, real-time clients).
+
 ```mermaid
 flowchart LR
   analyst(["Business Analyst / QA"])
@@ -72,6 +75,8 @@ The LLM provider is the only external runtime dependency. Requirement text leave
 ---
 
 ## 4. Container View
+
+> **Extended in revision 5** by [Design Update v5 §2](../planning/v5/IT314_RCD_Design_Update_v5.md#2-updated-container-view-extends-sd-4) (WebSocket gateway, Redis pub/sub, graph service).
 
 ```mermaid
 flowchart TB
@@ -291,6 +296,8 @@ The token holds only the user id. **Role, workspace and active flag are read fro
 
 ### 6.4 Review and change-impact ⬜ (Sprint 3)
 
+> **Replaced in revision 5** by [Design Update v5 §3.2](../planning/v5/IT314_RCD_Design_Update_v5.md#32-change-request-consequence-report-and-approval-new-replaces-sd-64): edits to Approved requirements go through PR-style change requests with consequence checks (SX-03). New runtime flows — live analysis of a post, member removal, live map update, auto conflict issue, joining with a code, AI suggestions, written change log, trust layer, project setup and updated SRS — are in Design Update §3.1, §3.3–§3.8, §11 and §12.
+
 ```mermaid
 sequenceDiagram
   actor A as Analyst
@@ -313,6 +320,8 @@ Edits never overwrite history: every change adds a `requirement_versions` row (F
 ---
 
 ## 7. Data Design
+
+> **Extended in revision 5** by [Design Update v5 §4](../planning/v5/IT314_RCD_Design_Update_v5.md#4-data-design-changes-extends-sd-7-and-od-2). The ER diagram below is the original Sprint 0 design; the implemented schema (projects, memberships, roles, project contexts) is in `data-model.md`.
 
 ```mermaid
 erDiagram
@@ -491,6 +500,8 @@ flowchart LR
 
 ## 9. Cross-Cutting Design
 
+> **Extended in revision 5** by [Design Update v5 §9](../planning/v5/IT314_RCD_Design_Update_v5.md#9-cross-cutting-additions-extends-sd-9) (socket re-checks, join-code security, prompt-injection containment, delta batching).
+
 ### 9.1 Security
 
 | Threat | Mitigation | Status |
@@ -566,6 +577,8 @@ Real PostgreSQL + pgvector and Redis in tests and CI — not sqlite or mocks —
 ---
 
 ## 11. Key Decisions
+
+> ADR-14 to ADR-29 (Step 7, revisions 1–5) are listed in `decision-log.md`.
 
 Existing ADR-01 to ADR-07 are in `decision-log.md`. These decisions were made during implementation and are **proposed as ADR-08 to ADR-13**:
 

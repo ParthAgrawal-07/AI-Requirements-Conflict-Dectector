@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Engine** | PostgreSQL + pgvector extension |
-| **Status** | Implemented through migration `0004` (Sprint 0, rev. 5 plan). Later migrations add the rest — see the design update §4.3 |
+| **Status** | Implemented through migrations `0004`/`0004a` (Sprint 0) and `0011` (Sprint 1, project context). Later migrations add the rest — see [`IT314_RCD_Design_Update_v5.md` §4.3](../planning/v5/IT314_RCD_Design_Update_v5.md#43-migration-plan) |
 
 ---
 
@@ -20,6 +20,8 @@ erDiagram
   ROLE ||--o{ ROLE_PERMISSION : grants
   PROJECT ||--o{ PROJECT_MEMBER : team
   PROJECT ||--o{ DOCUMENT : holds
+  PROJECT ||--o{ PROJECT_CONTEXT : "versioned brief"
+  DOCUMENT ||--o{ DOCUMENT_SECTION : "split into"
   DOCUMENT ||--o{ REQUIREMENT : contains
   REQUIREMENT ||--|| EMBEDDING : has
   REQUIREMENT ||--o{ CANDIDATE_PAIR : "appears in (as A or B)"
@@ -85,6 +87,41 @@ another tenant's workspace exists. Workspaces are identified by id.
 Existing data is backfilled by 0004: one `active` project per workspace, one membership per user (the first
 admin — else the earliest user — becomes Owner), existing documents count as baseline imports and their
 requirements as `Approved`.
+
+## 2.0e Project context (Sprint 1 — migration 0011)
+
+US-60 and US-02 (FR-103 to FR-105, ADR-28). `projects.status` and `projects.context_version` already exist (created in `0004`, §2.0a).
+
+**`project_contexts`** — one row per version of the project brief; unique `(project_id, version)`, `version ≥ 1`.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | UUID (PK) | |
+| project_id | UUID (FK) | |
+| version | int ≥ 1 | Increments on every edit; never rewritten |
+| purpose, scope_in, scope_out, environment | text | Required fields (FR-103) |
+| actors, glossary, references | jsonb | Lists; glossary entries are `{term, meaning}` |
+| constraints, quality_goals, regulations | text | Optional fields |
+| source_document_id | UUID (FK, nullable) | The initial SRS the brief was drafted from |
+| field_status | jsonb, default `{}` | Per field: `ai_drafted` or `confirmed` |
+| summary | text | Generated on confirmation; always in the context pack |
+| created_by, reason, created_at | UUID / text / timestamptz | Author and reason of each version |
+
+**`document_sections`** — each heading of an uploaded document and the verbatim text under it, used by the brief drafter and the context pack.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | UUID (PK) | |
+| document_id, project_id | UUID (FK) | Indexed `(document_id, order_index)` and `project_id` |
+| heading | text, nullable | |
+| body | text | Verbatim |
+| location | text, nullable | |
+| order_index | int ≥ 0 | |
+| embedding | vector(384), nullable | NULL until the embedding stage fills it |
+
+**Columns added:** `findings.context_version` (which context the classifier was given); `requirements.section_heading`, `needs_review` (default false), `review_reasons` (jsonb, default `[]`) — the segmenter's review flags (US-02).
+
+No context is backfilled: projects that `0004` created as `active` keep `context_version = 0` until their manager drafts a brief (`POST /projects/{p}/context/draft`).
 
 ## 2.1 Original tables (7)
 

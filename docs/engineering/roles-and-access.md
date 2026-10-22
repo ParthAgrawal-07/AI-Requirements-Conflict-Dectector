@@ -152,16 +152,19 @@ These are the people the requirements were elicited from — the intended users 
 | End Customers (indirect) | Never interact with the tool directly — outcome-tracked only | None |
 | Third-Party API Consumers | Deferred (US-20) — REST API access | System / Service Account (future) |
 
-## 4. Project Team Roles (7 members)
+## 4. Project Team Roles (10 members)
 
-Distinct from the two role sets above — this is how the 7-person team divides implementation ownership. See `architecture.md` for how these map to repo modules.
+Distinct from the two role sets above — this is how the 10-person team divides implementation ownership ([`IT314_RCD_Sprint_Plan_v5.md` §2](../planning/v5/IT314_RCD_Sprint_Plan_v5.md#2-team-and-areas-of-ownership)). See `architecture.md` for how these map to repo modules.
 
-| # | Role | Owns |
-|---|---|---|
-| 1 | Document Ingestion | PDF/Word parsing, sentence segmentation |
-| 2 | Embedding & Similarity Search | Sentence-Transformers, pgvector, candidate-pair filtering, threshold tuning |
-| 3 | LLM Classification Pipeline | Prompt design, classification, structured output validation |
-| 4 | Clarification & Impact Analysis | Clarification question generation, change-impact analysis |
-| 5 | Backend API & Orchestration | FastAPI, Celery/Redis, auth, end-to-end wiring |
-| 6 | Frontend — Core UI | Upload flow, requirements list, findings UI |
-| 7 | Frontend — Visualization + DevOps | React Flow graph, Docker, CI/CD, deployment |
+| Member | Primary area |
+|---|---|
+| Parth | Backend lead: auth, memberships, permissions and roles, review state, lifecycle, approvals and merge, versions, baselines, audit |
+| Dhavni didi | DevOps and real-time: Docker, CI/CD, Celery, WebSocket gateway, event bus, graph API and deltas, issues backend, deployment |
+| Bansil | Ingestion and authoring: extraction, project context, requirement posts and drafts, ownership, change-request intake, votes, watches and links, updated SRS generator and export |
+| Pranshu | Frontend lead: shell, login, channels, composer, requirements table, issues UI, dashboard, baselines, map preview and time slider, analytics |
+| Heet | Embeddings and retrieval: vector store, candidates, incremental retrieval, similar-requirement hints, relationship queries, search |
+| Keval | Classification and LLM: clients, prompts, context pack, classifier, severity, budget, lint catalogue, pre-flight and AI wording, SRS section prompts |
+| Madhav | Clarification and consequences: questions, impact engine, consequence checks, risk, notifications, join codes backend, AI resolution suggestions |
+| Abhijeet | Frontend: members, roles and join codes UI, project setup wizard, findings and review, live map UI, change editor and change-request page, inbox, compliance UI |
+| Abhyudit | QA — accuracy and backend: benchmark, evaluation harness, API and database tests |
+| Affan | QA — E2E, performance, security: Playwright, permission tests, join-code abuse tests, WebSocket and load tests, accessibility |
