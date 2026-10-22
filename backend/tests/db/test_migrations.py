@@ -29,6 +29,9 @@ EXPECTED_TABLES = {
     "role_permissions",
     "memberships",
     "project_members",
+    # Sprint 1 (0011_project_context)
+    "project_contexts",
+    "document_sections",
 }
 
 

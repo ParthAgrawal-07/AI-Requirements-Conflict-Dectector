@@ -7,6 +7,7 @@ relies on that, so a new model file must be imported here.
 from app.models.analysis import CandidatePair, Clarification, Finding
 from app.models.audit import AuditLog
 from app.models.base import Base
+from app.models.context import DocumentSection, ProjectContext
 from app.models.document import Document
 from app.models.embedding import EMBEDDING_DIM, Embedding
 from app.models.enums import (
@@ -37,6 +38,7 @@ __all__ = [
     "CandidatePair",
     "Clarification",
     "Document",
+    "DocumentSection",
     "DocumentFormat",
     "DocumentStatus",
     "Embedding",
@@ -47,6 +49,7 @@ __all__ = [
     "Membership",
     "PlatformRole",
     "Project",
+    "ProjectContext",
     "ProjectMember",
     "ProjectStatus",
     "Requirement",

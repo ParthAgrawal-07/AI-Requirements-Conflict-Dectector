@@ -100,6 +100,8 @@ class Finding(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("users.id", ondelete="SET NULL")
     )
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The project context version the classifier was given (FR-105, migration 0011).
+    context_version: Mapped[int | None]
 
     candidate_pair: Mapped[CandidatePair | None] = relationship()
     requirement: Mapped[Requirement | None] = relationship()

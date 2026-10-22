@@ -30,6 +30,7 @@ AUTHENTICATED_ONLY = {
     ("GET", "/api/v1/me/permissions"),
     ("GET", "/api/v1/workspaces"),
     ("POST", "/api/v1/workspaces"),
+    ("GET", "/api/v1/composer/templates"),  # static EARS catalogue, no tenant data (FR-81)
 }
 
 

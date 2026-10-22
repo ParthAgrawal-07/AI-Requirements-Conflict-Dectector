@@ -6,7 +6,8 @@ its context is confirmed (FR-103, US-60); no analysis may run before that (Conte
 ``app.services.projects.ensure_project_active``).
 
 Columns added by later migrations: ``graph_revision`` (0006), ``baseline_revision`` (0007),
-``use_feedback_examples`` (0010b), the context tables (0011, Bansil).
+``use_feedback_examples`` (0010b). The context itself lives in ``project_contexts`` (0011,
+Bansil, ``app.models.context``).
 """
 
 from __future__ import annotations

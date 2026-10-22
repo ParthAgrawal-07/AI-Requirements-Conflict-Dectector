@@ -1,8 +1,10 @@
 """
 Ingestion pipeline entry point.
 
-Provides the `ingest()` function which is the single public interface
-for converting a document file into a list of Requirement objects.
+Provides the public interface for converting a document file into Requirements:
+
+    ingest(path)          -> list[Requirement]
+    ingest_document(path) -> SegmentationResult (requirements + excluded text)
 
 Usage:
     from app.ingestion.pipeline import ingest
@@ -12,7 +14,7 @@ Usage:
 import logging
 from pathlib import Path
 
-from app.ingestion.models import Requirement
+from app.ingestion.models import Requirement, SegmentationResult
 from app.ingestion.parsers.base import Parser
 from app.ingestion.parsers.docx_parser import DOCXParser
 from app.ingestion.parsers.pdf_parser import PDFParser
@@ -36,6 +38,11 @@ _UNSUPPORTED_HINTS: dict[str, str] = {
 
 
 def ingest(file_path: str) -> list[Requirement]:
+    """Parse a document and return its requirements. See ingest_document()."""
+    return ingest_document(file_path).requirements
+
+
+def ingest_document(file_path: str) -> SegmentationResult:
     """
     Parse a document and extract requirements from it.
 
@@ -49,11 +56,16 @@ def ingest(file_path: str) -> list[Requirement]:
         file_path: Path to a .pdf or .docx file.
 
     Returns:
-        List of Requirement objects extracted from the document.
+        SegmentationResult with the requirements and the text that was excluded
+        as non-requirement content (TOC, fragments, narrative).
 
     Raises:
         FileNotFoundError: If the file does not exist.
         ValueError: If the file format is not supported.
+        DocumentParseError: (a ValueError) if the file is corrupted or encrypted.
+
+    A file with no extractable text (e.g. a scanned PDF) is not an error: it yields an
+    empty result, which callers report as "no requirements found".
     """
     path = Path(file_path)
     if not path.is_file():
@@ -76,9 +88,14 @@ def ingest(file_path: str) -> list[Requirement]:
 
     logger.info("Extracted %d raw segments from %s", len(raw_segments), path.name)
 
-    segmenter = Segmenter()
-    requirements = segmenter.segment(raw_segments)
+    if not raw_segments:
+        # An empty result is the "nothing found" signal callers act on
+        # (app.services.processing reports it to the user); scanned PDFs land here.
+        logger.warning("No extractable text in %s (scanned/image-only PDF?)", path.name)
+        return SegmentationResult(requirements=[])
 
-    logger.info("Produced %d requirements from %s", len(requirements), path.name)
+    result = Segmenter().run(raw_segments)
 
-    return requirements
+    logger.info("Produced %d requirements from %s", len(result.requirements), path.name)
+
+    return result
