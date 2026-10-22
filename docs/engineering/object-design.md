@@ -8,6 +8,7 @@
 | **Companion** | `system-design.md` (architecture, runtime, deployment, cross-cutting) |
 | **Supersedes** | The class diagram in `diagrams.md`, which predates the implementation (differences in §2.3) |
 | **Status legend** | ✅ implemented and tested · 🟡 stub file exists, the design here is a **proposal for its owner to confirm** · ⬜ planned |
+| **Revision 5** | Written before the Step 7 scope extension. [`IT314_RCD_Design_Update_v5.md`](../planning/v5/IT314_RCD_Design_Update_v5.md) extends §2–§5 and replaces §10 (done below); anything it does not mention is unchanged |
 
 **Notation.** The backend is Python, and much of it is modules of functions rather than classes. A module that plays a class-like role in a diagram is drawn as `<<module>>`. `<<DTO>>` marks Pydantic data-transfer objects, `<<entity>>` marks SQLAlchemy ORM classes, `<<interface>>` marks a Protocol/ABC.
 
@@ -24,6 +25,8 @@
 ---
 
 ## 2. Domain Model ✅
+
+> **Extended in revision 5** by [Design Update v5 §4 and §4.2](../planning/v5/IT314_RCD_Design_Update_v5.md#4-data-design-changes-extends-sd-7-and-od-2) (new tables and invariants), §11.1 and §12.1. The implemented tenancy and context entities are documented in `data-model.md` §2.0.
 
 ### 2.1 Class diagram — entities and enumerations
 
@@ -207,6 +210,8 @@ Each rule says where it is enforced. "DB" rules hold even if the application has
 ---
 
 ## 3. Object Design of the Implemented Subsystems
+
+> **Extended in revision 5** by [Design Update v5 §5](../planning/v5/IT314_RCD_Design_Update_v5.md#5-object-design-additions-extends-od-3-and-4), §11.8 and §12.6 (`ProjectContextService`, `BriefDrafter`, `ContextPackBuilder`, `SrsDraftGenerator`, `FidelityChecker` and others).
 
 ### 3.1 Error model ✅
 
@@ -428,7 +433,7 @@ classDiagram
 
 `extract` is a **parameter** with `ingest` as its default. Tests inject fakes (a failing extractor, a slow one), and a different pipeline could be swapped in without editing the service.
 
-### 3.5 Ingestion ✅ (Role 1)
+### 3.5 Ingestion ✅ (Bansil)
 
 ```mermaid
 classDiagram
@@ -564,6 +569,8 @@ Contract notes:
 ---
 
 ## 5. State Machines
+
+> **Extended in revision 5** by [Design Update v5 §7](../planning/v5/IT314_RCD_Design_Update_v5.md#7-new-state-machines-extends-od-5): requirement lifecycle, PR-style change request, join code and join request, issue. The first two are also drawn in `diagrams.md` §5–§6.
 
 ### 5.1 Document status ✅
 
@@ -788,18 +795,33 @@ sequenceDiagram
 
 ## 10. Module-to-Code Map
 
+*Replaced in revision 5 by [Design Update v5 §10](../planning/v5/IT314_RCD_Design_Update_v5.md#10-updated-module-to-code-map-replaces-od-10); the Status column reflects `main` on 22 Oct 2026.*
+
 | Design element | Path | Owner | Status |
 |---|---|---|---|
-| Entities and enums | `backend/app/models/` | Parth | ✅ |
+| Entities, enums, migrations | `backend/app/models/`, `backend/alembic/` | Parth | ✅ (`0001`–`0004a`, `0011`) |
+| Auth, membership, permissions and roles | `backend/app/core/auth.py`, `app/core/permissions.py`, `app/services/{access,membership}.py`; `roles.py` (custom roles) | Parth | ✅ · custom roles ⬜ |
+| Join codes and join requests | `app/services/join_codes.py` | Madhav | ⬜ (sign-up redeems a code in `app/services/signup.py` ✅) |
+| Channels, messages | `app/services/channels.py`, `app/api/channels.py` | Madhav | ⬜ |
+| Requirement posts, drafts, ownership, votes, watches, links | `app/intake/` | Bansil | 🟡 EARS templates and composer schemas |
+| Real-time gateway, event bus, queues, beat | `app/realtime/`, `app/core/celery_app.py` | Dhavni didi | 🟡 Celery ✅ · real-time ⬜ |
+| Graph service, deltas and change narrator | `app/graph/` | Dhavni didi | ⬜ |
+| Issues and auto conflict issues | `app/services/issues.py` | Dhavni didi | ⬜ |
+| Ingestion, chat detection, SRS export | `app/ingestion/`, `app/intake/`, `app/export/` | Bansil | ✅ ingestion · ⬜ export |
+| Project context, brief drafting, context gate | `app/context/` | Bansil | ✅ |
+| Context pack | `app/classification/context_pack.py` | Keval | ⬜ |
+| Updated SRS: readiness, generator, fidelity, exporter | `app/export/srs/` | Bansil (Keval: prompts) | ⬜ |
+| Embeddings, candidates, incremental retrieval, similar hints, search | `app/embeddings/`, `app/search/` | Heet | 🟡 |
+| Classification, LLM clients, budget guard, lint catalogue, pre-flight, AI wording | `app/classification/`, `app/lint/` | Keval | 🟡 |
+| Clarification, impact, consequence checks, risk scoring, notifications, AI suggestions and feedback | `app/clarification/`, `app/consequences/`, `app/suggestions/`, `app/notifications/` | Madhav (Keval: prompts) | 🟡 clarification, impact · ⬜ rest |
+| Change requests, review policy, merge, review state, baselines, audit | `app/services/{change_requests,reviews,baselines}.py` | Parth | ⬜ |
 | DTOs and `Page[T]` | `backend/app/schemas/` | Parth | ✅ |
-| Error model, middleware, security, auth, config, Celery | `backend/app/core/` | Parth | ✅ |
-| Routes | `backend/app/api/` | Parth (auth, documents; findings review and version history in Sprint 3); Madhav (clarification and impact endpoints) | ✅ auth, documents · 🟡 findings, reports, requirements |
-| Upload, validation, storage, processing, users | `backend/app/services/` | Parth | ✅ |
-| Parsing and segmentation | `backend/app/ingestion/` | Bansil | ✅ |
-| Embeddings, vector store, candidate filter | `backend/app/embeddings/` | Heet | 🟡 |
-| Classifier, schemas, LLM clients | `backend/app/classification/` | Keval | 🟡 |
-| Clarification, impact analysis | `backend/app/clarification/` | Madhav | 🟡 |
-| Migrations | `backend/alembic/versions/` | Parth | ✅ (0001, 0002) |
+| Error model, middleware, security, config | `backend/app/core/` | Parth | ✅ |
+| Frontend shell, channels, composer, requirements, issues, dashboard, baselines, analytics, map preview | `frontend/src/features/{channels,composer,requirements,issues,dashboard,baselines,analytics}` | Pranshu | ⬜ |
+| Frontend members and roles, findings, review, map, change requests, inbox, compliance, project setup wizard | `frontend/src/features/{members,findings,review,map,changes,notifications,compliance,setup}` | Abhijeet | ⬜ |
+| Frontend updated SRS screen | `frontend/src/features/srs` | Pranshu | ⬜ |
+| Accuracy benchmark and API tests | `backend/tests/`, `eval/` | Abhyudit | 🟡 backend tests ✅ · `eval/` ⬜ |
+| E2E, load and security tests | `e2e/`, `load/` | Affan | ⬜ |
 
 ## 11. Hand-offs and Open Design Items
 
