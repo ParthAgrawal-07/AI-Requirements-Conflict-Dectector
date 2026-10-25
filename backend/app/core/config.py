@@ -23,6 +23,9 @@ MIN_PRODUCTION_SECRET_LENGTH = 32
 DEV_SECRET_PREFIX = "dev-only"  # noqa: S105 — a placeholder marker, not a credential
 
 
+Effort = Literal["low", "medium", "high", "xhigh", "max"]  # LLM effort levels (Keval)
+
+
 class Environment(StrEnum):
     DEVELOPMENT = "development"
     TEST = "test"
@@ -62,6 +65,17 @@ class Settings(BaseSettings):
     # key on the real client address: with 0 the socket peer is used and X-Forwarded-For is
     # ignored (it can be forged); with N, the N-th entry from the right is trusted.
     trusted_proxy_hops: int = Field(default=0, ge=0, le=5)
+    # US-25, NFR-35: the key of the join-code HMAC. Never stored in the database, so a leaked dump
+    # cannot be brute-forced offline (a code has only 40 bits). Rotating it invalidates every code.
+    join_code_pepper: SecretStr = SecretStr("dev-only-join-code-pepper-change-me-0123456789")
+    # NFR-35: `POST /join` attempts per client address and per user, per fixed window.
+    join_attempts_per_window: int = Field(default=10, ge=1, le=1000)
+    join_attempt_window_seconds: int = Field(default=600, ge=1, le=24 * 60 * 60)
+
+    # ── Real time (US-03, US-29) ──────────────────────────
+    # "redis": events fan out between API processes over Redis pub/sub (every deployment).
+    # "memory": in-process only — tests and a single `uvicorn` without Redis.
+    realtime_bus: Literal["redis", "memory"] = "redis"
 
     # ── HTTP ──────────────────────────────────────────────
     cors_allowed_origins: Annotated[list[str], NoDecode] = ["http://localhost:5173"]
@@ -80,6 +94,13 @@ class Settings(BaseSettings):
     )
     llm_provider: Literal["anthropic", "openai"] = "anthropic"
     llm_api_key: SecretStr | None = None
+    # Keval (LLM client): the model and how hard it thinks. Effort trades depth for tokens;
+    # classification is short and frequent, so "low" is the starting point — tune it with the
+    # benchmark (CP1), never by guessing.
+    llm_model: str = "claude-opus-5-5"
+    llm_effort: Effort = "low"
+    llm_timeout_seconds: float = Field(default=60.0, gt=0, le=600)
+    llm_max_retries: int = Field(default=2, ge=0, le=6)  # transport retries (429, 5xx, network)
 
     # ── Validators ────────────────────────────────────────
     @field_validator("database_url")
@@ -112,6 +133,12 @@ class Settings(BaseSettings):
                     "JWT_SECRET is too weak for staging/production: use at least "
                     f"{MIN_PRODUCTION_SECRET_LENGTH} random characters — generate one with "
                     '`python -c "import secrets; print(secrets.token_urlsafe(48))"`'
+                )
+            pepper = self.join_code_pepper.get_secret_value()
+            if len(pepper) < MIN_PRODUCTION_SECRET_LENGTH or pepper.startswith(DEV_SECRET_PREFIX):
+                raise ValueError(
+                    "JOIN_CODE_PEPPER is too weak for staging/production: use at least "
+                    f"{MIN_PRODUCTION_SECRET_LENGTH} random characters"
                 )
             if "*" in self.cors_allowed_origins:
                 raise ValueError("CORS_ALLOWED_ORIGINS must list explicit origins, not '*'")
