@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "description": "Requirement lint catalogue v1 (Keval, Sprint 0; US-51 uses it from Sprint 3). Patterns are case-insensitive regular expressions written in the common subset of Python `re` and JavaScript RegExp, so the composer can run them in the browser with no AI call.",
+  "entries": [
+    {
+      "id": "vague.speed",
+      "category": "vague",
+      "pattern": "\\b(fast|quick|quickly|rapid|rapidly|responsive|promptly|in a timely manner|without delay)\\b",
+      "message": "Speed word without a number.",
+      "hint": "Say how fast, e.g. \"within 2 seconds for 95% of requests\".",
+      "severity": "warning"
+    },
+    {
+      "id": "vague.usability",
+      "category": "vague",
+      "pattern": "\\b(user[- ]friendly|easy to use|easy|simple|intuitive|seamless|seamlessly|clean)\\b",
+      "message": "Usability word that cannot be tested.",
+      "hint": "Name a measurable target, e.g. \"a new user completes sign-up in under 3 minutes\".",
+      "severity": "warning"
+    },
+    {
+      "id": "vague.quality",
+      "category": "vague",
+      "pattern": "\\b(robust|reliable|scalable|efficient|efficiently|secure|securely|flexible|modern|high[- ]quality|optimal|optimi[sz]ed)\\b",
+      "message": "Quality word without a measure.",
+      "hint": "State the measure, e.g. availability, throughput, or the standard to meet.",
+      "severity": "warning"
+    },
+    {
+      "id": "vague.quantity",
+      "category": "vague",
+      "pattern": "\\b(some|several|many|few|a lot of|large|small|most|minimal|sufficient|adequate|appropriate|reasonable)\\b",
+      "message": "Quantity word without a number.",
+      "hint": "Replace it with a number or a range.",
+      "severity": "warning"
+    },
+    {
+      "id": "vague.hedge",
+      "category": "vague",
+      "pattern": "\\b(if possible|as appropriate|as needed|where applicable|as far as possible|ideally|preferably|normally|usually|typically)\\b",
+      "message": "Escape clause: when does this not apply?",
+      "hint": "State the condition explicitly, or remove the hedge.",
+      "severity": "warning"
+    },
+    {
+      "id": "unbounded.etc",
+      "category": "unbounded",
+      "pattern": "\\b(etc\\.?|and so on|and\\/or|such as|including but not limited to|any other)\\b",
+      "message": "Open-ended list.",
+      "hint": "List every item, or point to where the full list is defined.",
+      "severity": "warning"
+    },
+    {
+      "id": "unbounded.universal",
+      "category": "unbounded",
+      "pattern": "\\b(all|every|always|never|any|none|unlimited|infinite)\\b",
+      "message": "Absolute word: is there really no exception?",
+      "hint": "Keep it only if no exception exists; otherwise name the scope.",
+      "severity": "info"
+    },
+    {
+      "id": "tbd.placeholder",
+      "category": "tbd",
+      "pattern": "\\b(TBD|TBC|TODO|to be (?:decided|determined|defined|confirmed)|XXX)\\b|\\?\\?",
+      "message": "Placeholder left in the requirement.",
+      "hint": "Fill it in, or open an issue for the missing information.",
+      "severity": "error"
+    },
+    {
+      "id": "passive.shall_be",
+      "category": "passive",
+      "pattern": "\\b(shall|must|will|should) be \\w+(?:ed|en)\\b(?! by\\b)",
+      "message": "Passive voice hides who does it.",
+      "hint": "Name the actor: \"The system shall …\" or \"The administrator shall …\".",
+      "severity": "info"
+    },
+    {
+      "id": "actor.missing",
+      "category": "actor",
+      "pattern": "^\\s*(?:it|there)\\s+(?:shall|must|will|should)\\b",
+      "message": "No actor: who or what shall do this?",
+      "hint": "Start with the system, a component or a user class.",
+      "severity": "warning"
+    },
+    {
+      "id": "weak.modal",
+      "category": "weak",
+      "pattern": "\\b(should|may|might|could|can)\\b",
+      "message": "Weak modal: is this mandatory?",
+      "hint": "Use \"shall\" for mandatory behaviour; record optional behaviour with the Where… template.",
+      "severity": "info"
+    }
+  ]
+}
