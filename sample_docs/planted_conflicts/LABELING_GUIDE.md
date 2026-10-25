@@ -87,15 +87,18 @@ losing information.
 
 **Examples:**
 - `REQ-201: The system shall support multi-factor authentication.` vs.
-  `REQ-202: MFA shall be available to all users.`
+  `REQ-202: A second authentication factor shall be available at sign-in.`
 - `REQ-203: The system shall record all failed login attempts.` vs.
   `REQ-204: Failed authentication events must be logged by the system.`
 
 **Edge cases:**
-- Partial overlap is not Duplicate — it is **Dependent**.
+- Apply the **coverage test** (end of §3): Duplicate only when each
+  requirement covers everything the other requires.
+- Partial overlap is not Duplicate. If one requirement adds detail the other
+  lacks ("shall log failed logins" vs. "shall log failed logins with source
+  IP"), it is **None** (subsumption), unless a functional dependency exists
+  (§3).
 - Same wording in different scope (admin vs. user) is not Duplicate.
-- Near-duplicate with a meaningful difference ("shall log failed logins" vs.
-  "shall log failed logins with source IP") is **Dependent**, not Duplicate.
 
 ## 3. Dependent (pairwise)
 
@@ -112,10 +115,19 @@ dependent one impossible to satisfy.
 **Edge cases:**
 - A cross-reference like "as specified in REQ-###" is not Dependent by
   itself; there must be a functional dependency, not just a citation.
-- Refinement vs. Duplicate: if R_A is fully contained in R_B (same
-  behavior, same subject, one is just wordier), label Duplicate. If R_A
-  narrows or specializes R_B in a way that adds new constraints, label
-  Dependent.
+- A specialization (R_A restates R_B and adds detail) is not Dependent: it
+  does not rely on R_B without restating it. Label it **None** (§7), unless
+  R_A also needs behavior that only R_B provides.
+
+### The coverage test (Duplicate vs. Dependent vs. None)
+
+For a pair of requirements, ask in order:
+
+1. **Does each one cover everything the other requires?** → **Duplicate**.
+2. **Otherwise, does one need behavior that only the other provides (and not
+   merely restate it)?** → **Dependent**.
+3. **Otherwise** (one subsumes the other, or they are only related) →
+   **None**.
 
 ## 4. Ambiguous (single)
 
@@ -179,6 +191,11 @@ Worked example: `REQ-502: The system shall maintain 99.9% uptime.`
 No vague word — "uptime," "99.9%," and "maintain" are all clear. What is
 missing is the measurement window. → **Incomplete**.
 
+**Quantity words.** "Multiple," "several," and "various" used without a list
+leave out a fact (which ones?) → **Incomplete**. Subjective adjectives and
+adverbs with no threshold ("fast," "promptly," "user-friendly," "modern") →
+**Ambiguous**.
+
 ## 7. None (pairwise)
 
 **Definition:** A pair that superficially resembles an issue but is not one.
@@ -188,10 +205,10 @@ Used to give the classifier hard negatives and to make precision measurable.
 - **Different scope, same rule.** `REQ-701: Admin sessions shall expire
   after 5 minutes.` vs. `REQ-702: Guest sessions shall expire after 5
   minutes.` Same policy, different subjects → `None`.
-- **Refinement.** `REQ-703: The system shall support OAuth2.` vs.
-  `REQ-704: The system shall support Google OAuth.` One is a subset of
-  the other — but here it is not a dependency because OAuth2 stands on its
-  own; the second simply narrows a supported provider → `None`.
+- **Refinement (subsumption).** `REQ-703: The system shall support OAuth2.`
+  vs. `REQ-704: The system shall support Google OAuth.` Neither covers the
+  other, and neither needs the other to be satisfiable → `None` (coverage
+  test, §3).
 - **Complementary.** `REQ-705: The system shall log failed logins.` vs.
   `REQ-706: The system shall alert after five consecutive failed logins.`
   One triggers the other; neither contradicts, duplicates, nor depends on
@@ -263,9 +280,19 @@ entry has a `note` explaining the rationale in one sentence.
 per category, plus at least 4 `None` hard negatives. Per-category
 precision/recall is only meaningful at that scale (test-plan §3).
 
+**Unlabeled items.** Pairs and requirements that are not in the labels file
+are *not labeled*, which is different from `None`. When scoring, a finding on
+an unlabeled item is adjudicated: if the team agrees it is a real issue, add
+the label (and fix the guide if it exposed a gap); otherwise it counts as a
+false positive. Report precision both "strict" (every unlabeled finding is a
+false positive) and "adjudicated".
+
 ## 11. Versioning
 
 - `srs_v1.md` — the SRS text.
 - `srs_v1_labels.json` — the labels for that SRS.
 - Subsequent SRS revisions get new suffixes (`srs_v2.md`, `srs_v2_labels.json`).
   Do not edit `v1` after it has been used for a benchmark run.
+- `srs_v1.md` and its labels were revised once, after review and before the
+  first benchmark run (see git history). v2 labels use CSV with the same field
+  names; see `eval/benchmark_v2/PLAN.md`.
