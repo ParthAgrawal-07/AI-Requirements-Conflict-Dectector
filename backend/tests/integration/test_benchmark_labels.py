@@ -97,3 +97,60 @@ def test_v1_meets_coverage_target(v1_labels: dict) -> None:
     for category in ALL_CATEGORIES - {"None"}:
         assert counts[category] >= 3, f"{category}: {counts[category]}"
     assert counts["None"] >= 4, f"None: {counts['None']}"
+
+
+# ── v2: labels.csv for srs_planted.docx (Sprint 1) ─────────────────────────────────────────────
+V2_TARGETS = {  # PLAN.md §2, planted issues in A
+    "Conflicting": 8,
+    "Duplicate": 6,
+    "Ambiguous": 8,
+    "Incomplete": 6,
+    "Dependent": 6,
+}
+
+
+def _row_to_label(row: dict[str, str]) -> dict:
+    label: dict = {key: value for key, value in row.items() if value != ""}
+    if "reworded" in label:
+        label["reworded"] = label["reworded"] == "true"
+    if "annotators" in label:
+        label["annotators"] = label["annotators"].split(";")
+    return label
+
+
+@pytest.fixture(scope="module")
+def v2_labels() -> list[dict]:
+    import csv
+
+    path = _first_existing(_eval_dirs(), "labels.csv")
+    if path is None:
+        pytest.skip("eval/benchmark_v2/labels.csv not reachable from this environment")
+    with path.open(encoding="utf-8") as handle:
+        return [_row_to_label(row) for row in csv.DictReader(handle)]
+
+
+def test_v2_labels_match_schema(schema: dict, v2_labels: list[dict]) -> None:
+    jsonschema.Draft202012Validator(schema).validate({"labels": v2_labels})
+
+
+def test_v2_meets_the_planned_coverage(v2_labels: list[dict]) -> None:
+    counts = Counter(label["category"] for label in v2_labels)
+    for category, target in V2_TARGETS.items():
+        assert counts[category] >= target, f"{category}: {counts[category]} < {target}"
+    assert counts["None"] >= 20, f"None: {counts['None']}"
+    assert any(label.get("reworded") for label in v2_labels if label["category"] == "Conflicting")
+
+
+def test_v2_pairs_are_labelled_once(v2_labels: list[dict]) -> None:
+    pairs = [frozenset((l["r1"], l["r2"])) for l in v2_labels if "r2" in l]  # noqa: E741
+    assert len(pairs) == len(set(pairs))
+
+
+def test_v2_split_never_cuts_an_issue_cluster(v2_labels: list[dict]) -> None:
+    """A requirement and its look-alikes are all dev or all held-out (PLAN.md §4)."""
+    split_of: dict[str, str] = {}
+    for label in v2_labels:
+        for req in (label["r1"], label.get("r2")):
+            if req is None:
+                continue
+            assert split_of.setdefault(req, label["split"]) == label["split"], req
