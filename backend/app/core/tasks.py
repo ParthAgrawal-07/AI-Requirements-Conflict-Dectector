@@ -40,4 +40,3 @@ def dispatch_embedding(document_id: str) -> None:
         celery_app.send_task("embeddings.embed_document", args=[document_id], retry=False)
     except Exception:
         logger.warning("Could not queue embedding of document %s", document_id, exc_info=True)
-
