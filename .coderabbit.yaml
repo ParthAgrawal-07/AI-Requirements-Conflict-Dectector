@@ -1,0 +1,91 @@
+# CodeRabbit review config. Docs: https://docs.coderabbit.ai/reference/configuration
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: en-US
+tone_instructions: "Be concise. Cite the rule, ADR or requirement ID behind a comment when one applies."
+early_access: false
+
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: true
+  sequence_diagrams: false
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - main
+  path_filters:
+    - "!**/package-lock.json"
+    - "!docs/wireframes/**/*.pdf"
+    - "!sample_docs/**/*.pdf"
+    - "!sample_docs/**/*.docx"
+  path_instructions:
+    - path: "**"
+      instructions: |
+        Follow AGENTS.md at the repo root. Flag scope creep (unrelated refactors or reformatting) and
+        changes that should, per the change-impact matrix in docs/engineering/INDEX.md, come with a doc update.
+    - path: "backend/app/api/**/*.py"
+      instructions: |
+        Every /api/v1 route must declare exactly one of requires(...), requires_any(...), Authenticated or
+        PublicRoute (docs/contracts/permissions.md). Flag role-name comparisons; only permission names from
+        app/core/permissions.py are allowed. Non-members get 404, members without permission 403.
+        Tenant path params must be workspace_id / project_id / document_id / requirement_id.
+        Routes stay thin: business logic belongs in app/services/. Errors must be AppError subclasses.
+    - path: "backend/app/services/**/*.py"
+      instructions: |
+        Every query must be scoped to the caller's workspace/project; flag possible cross-tenant reads.
+        Requirement changes, finding decisions and sign-offs must write an audit record (FR-19, NFR-13).
+        Nothing may delete, merge or rewrite a requirement without an explicit human action (ADR-06, DR-04/05).
+    - path: "backend/app/models/**/*.py"
+      instructions: |
+        A model change must ship with a new Alembic migration in the same PR. Flag a model change without one.
+    - path: "backend/alembic/versions/**/*.py"
+      instructions: |
+        Check the migration matches the model change, has a working downgrade, keeps a single head, and does
+        not edit a migration already on main. Check pgvector indexes and server defaults explicitly.
+    - path: "backend/app/classification/**"
+      instructions: |
+        LLM providers are Gemini (primary) and Groq (backup) only (ADR-31). Flag Anthropic/OpenAI code or
+        dependencies, and any provider SDK call outside the LLMClient transports. Failover only on
+        unavailability (rate limit, 5xx, timeout), never on refusal or invalid output. Replies must be
+        validated against a Pydantic schema; provider and model must be recorded on stored results.
+        Prompt text, requirement text and keys must never be logged.
+    - path: "backend/app/embeddings/**"
+      instructions: |
+        Similarity is a retrieval signal, never proof of conflict (DR-10, ADR-30). Embedding model is
+        BAAI/bge-small-en-v1.5 (384 dims); a model change requires re-embedding by model_version.
+    - path: "backend/app/**/prompts/**"
+      instructions: |
+        Prompts are versioned files. A changed prompt should be a new version, and the PR should say how
+        accuracy was checked against the benchmark (NFR-21/22).
+    - path: "backend/tests/**/*.py"
+      instructions: |
+        Tests must not call a real LLM unless marked @pytest.mark.llm. DB-backed tests are marked integration.
+        New routes need a happy path, a 403 and a 404-for-non-member test.
+    - path: "frontend/src/**/*.{ts,tsx}"
+      instructions: |
+        TypeScript strict, no `any`. Server state via TanStack Query and src/lib/api-client.ts.
+        AI-generated content must be visually distinguishable from human-approved content (NFR-17).
+        Check accessibility: semantic elements, labels, keyboard navigation. No auth tokens in localStorage.
+  tools:
+    ruff:
+      enabled: true
+    eslint:
+      enabled: true
+    gitleaks:
+      enabled: true
+    markdownlint:
+      enabled: false
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "AGENTS.md"
+      - "docs/contracts/**/*.md"
