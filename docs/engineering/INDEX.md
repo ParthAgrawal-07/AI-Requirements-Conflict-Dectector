@@ -31,7 +31,9 @@
 | `test-plan.md` | Test strategy, testing plan by sprint, test cases, accuracy validation |
 | `devops-guide.md` | Local setup, env config, Docker Compose, CI/CD |
 | `migration-runbook.md` | Running and writing Alembic migrations |
-| `decision-log.md` | ADR-01–ADR-29 |
+| `conflict-detection-strategy.md` | How conflicts are found without losing them to the similarity filter: hybrid candidates, attribute extraction, pre-check notes, recall gates (ADR-30, Sprint 2 and 5) |
+| `ai-providers.md` | Gemini (primary) and Groq (backup) LLM providers, failover rules, the bge-small-en-v1.5 embedding model, configuration and open questions (ADR-31) |
+| `decision-log.md` | ADR-01–ADR-31 |
 | `history.md` | Planning revisions and merged pull requests, with attribution |
 | `INDEX.md` (this file) | Master index and change-impact matrix |
 

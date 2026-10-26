@@ -166,7 +166,7 @@ No context is backfilled: projects that `0004` created as `active` keep `context
 |---|---|---|
 | id | UUID (PK) | |
 | requirement_id | UUID (FK, unique) | |
-| vector | vector(384) | all-MiniLM-L6-v2 output — FR-07, FR-08 |
+| vector | vector(384) | BAAI/bge-small-en-v1.5 output (ADR-31; same size as the earlier all-MiniLM-L6-v2, so no migration) — FR-07, FR-08 |
 | model_version | varchar | For re-embedding on model upgrade |
 
 ### candidate_pairs

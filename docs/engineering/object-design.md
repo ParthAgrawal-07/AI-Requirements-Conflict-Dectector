@@ -516,8 +516,11 @@ classDiagram
     <<interface>>
     +complete(prompt, schema) LLMResponse
   }
-  class AnthropicClient
-  class OpenAIClient
+  class GeminiTransport
+  class GroqTransport
+  class FallbackTransport {
+    +send(system, user) str
+  }
   class ClassificationResult {
     <<DTO>>
     +FindingCategory category
@@ -540,8 +543,9 @@ classDiagram
     +analyse(requirement_id, proposed_body) ImpactReport
   }
 
-  LLMClient <|.. AnthropicClient
-  LLMClient <|.. OpenAIClient
+  LLMClient ..> FallbackTransport
+  FallbackTransport ..> GeminiTransport : primary
+  FallbackTransport ..> GroqTransport : backup when unavailable
   AnalysisPipeline ..> Embedder
   AnalysisPipeline ..> CandidateFilter
   AnalysisPipeline ..> Classifier
@@ -563,7 +567,7 @@ Contract notes:
 - `CandidateFilter.generate` builds pairs with `CandidatePair.ordered()` and **does not decide protection**: it marks pairs that touch a protected requirement so the orchestrator can route them to manual review (DR-05).
 - `Classifier.classify` accepts a *pair* or a *single requirement* because Ambiguous/Incomplete concern one requirement. Its output is a **validated** `ClassificationResult`; schema failure triggers a retry, never a partial finding (FR-15).
 - `FindingService.record` stores the model's raw answer in `original_ai_output` before anything else is derived from it.
-- `LLMClient` is the Adapter boundary: Anthropic and OpenAI have different SDKs and error types; `Classifier` sees one interface and one error vocabulary. The provider comes from `Settings.llm_provider`.
+- `LLMClient` is the Adapter boundary: Gemini and Groq have different SDKs and error types; `Classifier` sees one interface and one error vocabulary. `FallbackTransport` switches to Groq only when Gemini is unavailable (rate limit, 5xx, timeout), never on a refusal or an invalid reply (ADR-31, [`ai-providers.md`](ai-providers.md) §3).
 - `ImpactAnalyzer.analyse` is **read-only**: it embeds the proposed text and reports affected requirements without saving, which is how US-11 shows impact *before* the edit is committed.
 
 ---
@@ -753,7 +757,7 @@ sequenceDiagram
 | **Value object** | `StagedFile`, `BodyLimit`, `TokenPayload` (frozen dataclasses) | Immutable, comparable, safe to share | ✅ |
 | **Singleton (via caching)** | `get_settings()`, `get_engine()`, `get_sessionmaker()` use `lru_cache` | One configuration and one connection pool per process | ✅ |
 | **Unit of Work** | A SQLAlchemy `Session`; `session_scope()` for non-request code | One transaction boundary per operation | ✅ |
-| **Adapter** | `LLMClient` → Anthropic / OpenAI; a future S3 storage behind the same methods as `LocalFileStorage` | Isolates third-party SDKs and error types | 🟡 / ⬜ |
+| **Adapter** | `LLMClient` → Gemini / Groq transports behind a fallback; a future S3 storage behind the same methods as `LocalFileStorage` | Isolates third-party SDKs and error types | 🟡 / ⬜ |
 | **Template Method / retry policy** | Classifier retry with backoff | One reliability policy for every LLM call | ⬜ |
 | **Idempotent receiver** | `process_document` claim and skip rules | Duplicate delivery is harmless | ✅ |
 
