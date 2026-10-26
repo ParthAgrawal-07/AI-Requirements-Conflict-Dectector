@@ -66,11 +66,52 @@ def test_the_drafter_callable_returns_text() -> None:
     assert llm("system", "user") == '{"purpose": "x"}'
 
 
+def test_the_drafter_callable_charges_the_project_budget() -> None:
+    project = uuid.uuid4()
+    budget = CountingBudget(allowance=1)
+    llm = LLMClient(FakeTransport(['{"purpose": "x"}', '{"purpose": "y"}']), budget).as_draft_llm(
+        project_id=project
+    )
+    llm("system", "user")
+    assert budget.remaining(project) == 0
+    with pytest.raises(BudgetExceededError):
+        llm("system", "user")
+
+
+def test_fallback_transport_switches_to_backup_on_unavailable() -> None:
+    from app.classification.llm_client import FallbackTransport, LLMUnavailableError
+
+    class FailingTransport:
+        def send(self, system: str, user: str) -> str:
+            raise LLMUnavailableError("primary down")
+
+    backup = FakeTransport(["backup answer"])
+    transport = FallbackTransport(primary=FailingTransport(), backup=backup)
+    assert transport.send("sys", "user") == "backup answer"
+    assert len(backup.calls) == 1
+
+
+def test_fallback_transport_does_not_switch_on_refusal() -> None:
+    from app.classification.llm_client import FallbackTransport, LLMRefusedError
+
+    class RefusingTransport:
+        def send(self, system: str, user: str) -> str:
+            raise LLMRefusedError("safety refusal")
+
+    backup = FakeTransport(["should not be called"])
+    transport = FallbackTransport(primary=RefusingTransport(), backup=backup)
+    with pytest.raises(LLMRefusedError):
+        transport.send("sys", "user")
+    assert len(backup.calls) == 0
+
+
 def test_without_an_api_key_there_is_no_client(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.classification import llm_client
     from app.core.config import get_settings
 
     monkeypatch.setenv("LLM_API_KEY", "")
+    monkeypatch.setenv("GEMINI_API_KEY", "")
+    monkeypatch.setenv("GROQ_API_KEY", "")
     get_settings.cache_clear()
     llm_client.get_llm_client.cache_clear()
     try:

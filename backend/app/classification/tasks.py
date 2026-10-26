@@ -14,6 +14,7 @@ import logging
 import uuid
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.classification.budget import BudgetExceededError
@@ -28,6 +29,7 @@ from app.classification.llm_client import (
 from app.context import service as context_service
 from app.core.celery_app import celery_app
 from app.core.database import session_scope
+from app.core.errors import AppError
 from app.models import CandidatePair, Finding, FindingCategory, Project, Requirement
 
 logger = logging.getLogger(__name__)
@@ -49,7 +51,10 @@ def classify_candidate_pair(db: Session, pair_id: uuid.UUID, llm: LLMClient) -> 
         return None
     context_service.ensure_analysis_allowed(db, project)  # 409 project_in_setup in Setup
 
-    pack = ContextPackBuilder(db).build(project, query_text=f"{a.body}\n{b.body}")
+    vector = a.embedding.vector if a.embedding else (b.embedding.vector if b.embedding else None)
+    pack = ContextPackBuilder(db).build(
+        project, query_text=f"{a.body}\n{b.body}", query_vector=vector
+    )
     output = Classifier(llm).classify_pair(
         as_input(a), as_input(b), pack=pack, project_id=project.id
     )
@@ -65,7 +70,12 @@ def classify_candidate_pair(db: Session, pair_id: uuid.UUID, llm: LLMClient) -> 
         context_version=pack.context_version,
     )
     db.add(finding)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        logger.info("Finding for pair %s already exists (concurrent insert)", pair.id)
+        return None
     return finding
 
 
@@ -88,7 +98,7 @@ def classify_pair_task(self: object, pair_id: str) -> str | None:
             finding = classify_candidate_pair(db, uuid.UUID(pair_id), llm)
         except LLMUnavailableError:
             raise
-        except (LLMError, BudgetExceededError) as exc:
+        except (LLMError, BudgetExceededError, AppError) as exc:
             logger.warning("Pair %s not classified: %s", pair_id, exc)
             return None
         return str(finding.id) if finding else None

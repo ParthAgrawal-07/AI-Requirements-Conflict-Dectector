@@ -102,11 +102,13 @@ class ContextPackBuilder:
             add("Actors: " + ", ".join(_esc(actor) for actor in values.actors))
         terms = matched_glossary(values.glossary or [], query_text)
         if terms:
-            lines = ["Glossary:"]
-            lines += [f"- {_esc(entry.term)}: {_esc(entry.meaning)}" for entry in terms]
-            if not add("\n".join(lines)):
+            lines = ["Glossary:"] + [
+                f"- {_esc(entry.term)}: {_esc(entry.meaning)}" for entry in terms
+            ]
+            if not add("\n".join(lines)) and add("Glossary:"):
                 for line in lines[1:]:  # keep as many terms as fit
-                    add(line)
+                    if not add(line):
+                        break
         for section in self._sections(project.id, query_vector):
             heading = _esc(section.heading or "")
             body = _esc(section.body[:MAX_SECTION_CHARS])

@@ -33,8 +33,10 @@ pymupdf>=1.24
 python-docx>=1.1,<2
 spacy>=3.7,<4
 
-# ── LLM (Role 3) ─────────────────────────────────────────
-anthropic>=0.70                    # official SDK; every call goes through app/classification/llm_client.py
+# ── LLM (Role 3, ADR-31) ─────────────────────────────────
+google-genai>=1.0.0                # primary provider (Gemini); every call goes through app/classification/llm_client.py
+groq>=0.11.0                       # backup provider
+anthropic>=0.70                    # optional alternative provider
 
 # ── Embeddings (Role 2) ──────────────────────────────────
 sentence-transformers>=3.0

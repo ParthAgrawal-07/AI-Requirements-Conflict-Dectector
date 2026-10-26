@@ -81,12 +81,14 @@ class Settings(BaseSettings):
         # .env.example historically used SIMILARITY_THRESHOLD; docs use *_DEFAULT. Accept both.
         validation_alias=AliasChoices("SIMILARITY_THRESHOLD_DEFAULT", "SIMILARITY_THRESHOLD"),
     )
-    llm_provider: Literal["anthropic", "openai"] = "anthropic"
+    llm_provider: Literal["gemini", "groq", "anthropic", "openai"] = "gemini"
+    llm_fallback_provider: Literal["groq", "none"] | None = "groq"
+    gemini_api_key: SecretStr | None = None
+    gemini_model: str = "gemini-2.5-flash"
+    groq_api_key: SecretStr | None = None
+    groq_model: str = "llama-3.3-70b-versatile"
     llm_api_key: SecretStr | None = None
-    # Keval (LLM client): the model and how hard it thinks. Effort trades depth for tokens;
-    # classification is short and frequent, so "low" is the starting point — tune it with the
-    # benchmark (CP1), never by guessing.
-    llm_model: str = "claude-opus-5-5"
+    llm_model: str = "gemini-2.5-flash"
     llm_effort: Effort = "low"
     llm_timeout_seconds: float = Field(default=60.0, gt=0, le=600)
     llm_max_retries: int = Field(default=2, ge=0, le=6)  # transport retries (429, 5xx, network)
