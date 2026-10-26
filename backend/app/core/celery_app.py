@@ -37,9 +37,6 @@ celery_app.conf.update(
     task_track_started=True,  # exposes the STARTED state for progress polling (US-03)
     broker_connection_retry_on_startup=True,
     worker_hijack_root_logger=False,
-    task_routes={
-        "embeddings.*": {"queue": "analysis"},
-    },
 )
 
 celery_app.autodiscover_tasks(

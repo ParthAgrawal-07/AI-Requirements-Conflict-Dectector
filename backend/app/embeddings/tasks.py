@@ -1,4 +1,4 @@
-"""Celery tasks of the embedding stage (Heet). Routed to the ``analysis`` queue."""
+"""Celery tasks of the embedding stage (Heet)."""
 
 import uuid
 
