@@ -32,3 +32,4 @@ coverage/
 
 # Uploaded documents (UPLOAD_DIR defaults to ./uploads when run outside Docker)
 uploads/
+context and guidelines/
