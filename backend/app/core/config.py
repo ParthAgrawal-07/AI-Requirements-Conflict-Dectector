@@ -23,6 +23,9 @@ MIN_PRODUCTION_SECRET_LENGTH = 32
 DEV_SECRET_PREFIX = "dev-only"  # noqa: S105 — a placeholder marker, not a credential
 
 
+Effort = Literal["low", "medium", "high", "xhigh", "max"]  # LLM effort levels (Keval)
+
+
 class Environment(StrEnum):
     DEVELOPMENT = "development"
     TEST = "test"
@@ -80,6 +83,13 @@ class Settings(BaseSettings):
     )
     llm_provider: Literal["anthropic", "openai"] = "anthropic"
     llm_api_key: SecretStr | None = None
+    # Keval (LLM client): the model and how hard it thinks. Effort trades depth for tokens;
+    # classification is short and frequent, so "low" is the starting point — tune it with the
+    # benchmark (CP1), never by guessing.
+    llm_model: str = "claude-opus-5-5"
+    llm_effort: Effort = "low"
+    llm_timeout_seconds: float = Field(default=60.0, gt=0, le=600)
+    llm_max_retries: int = Field(default=2, ge=0, le=6)  # transport retries (429, 5xx, network)
 
     # ── Validators ────────────────────────────────────────
     @field_validator("database_url")
