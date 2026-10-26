@@ -164,3 +164,40 @@ def test_nearest_sections_returns_embedded_sections_of_the_project(
     sections = nearest_sections(db_session, project.id, embedder.embed(["retail banking"])[0])
 
     assert [s.heading for s in sections] == ["1.2 Scope"]
+
+
+def test_nearest_requirements_with_multiple_projects_in_database(
+    db_session: Session,
+    project: Project,
+    make_project: Callable[..., Project],
+    make_workspace: Callable[..., Workspace],
+    make_document: MakeDocument,
+    embedder: HashingEmbedder,
+) -> None:
+    """When multiple projects share the database, post-filtered HNSW finds all k neighbours."""
+    # Seed foreign projects with similar requirements
+    for i in range(5):
+        foreign = make_project(workspace=make_workspace())
+        foreign_doc, _ = make_document(
+            foreign,
+            *[
+                f"Foreign project {i} user auth and sign-in requirement number {j}"
+                for j in range(10)
+            ],
+        )
+        embed_document(db_session, foreign_doc.id, embedder)
+
+    # Seed target project with 10 requirements
+    target_doc, target_reqs = make_document(
+        project,
+        *[f"Target project user auth and sign-in requirement number {j}" for j in range(10)],
+    )
+    embed_document(db_session, target_doc.id, embedder)
+
+    query = embedder.embed(["user authentication and sign-in system"])[0]
+    found = nearest_requirements(db_session, project.id, query, k=10)
+
+    # All returned requirements must belong to the target project and return k items
+    assert len(found) == 10
+    target_req_ids = {r.id for r in target_reqs}
+    assert all(n.requirement_id in target_req_ids for n in found)
