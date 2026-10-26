@@ -59,6 +59,9 @@
 | US-05 | Same wording in different sections | Duplicate, not Conflicting |
 | US-05 | A requirement using a vague term ("fast") | Ambiguous with the vague term identified, from the pattern catalogue (DR-07) |
 | US-58 | Conflicting numeric limits worded too differently for the similarity filter | Caught by a rule check, source **Rule**, not dropped if the LLM disagrees |
+| US-05 (ADR-30) | Reworded conflict below the similarity threshold (REQ-028/024 hashed vs plaintext; REQ-036/037 at most 3 vs any number; REQ-038/039 anonymised vs names) | Becomes a candidate through a rule signal (S4/S5) and reaches the classifier; its signals are recorded |
+| US-05 (ADR-30) | Same limit, different subject (REQ-004/020: admin vs guest, both 5 min) | May be a candidate; no quantity-clash note; classified None |
+| US-05 (ADR-30) | Printed IDs and standard names ("REQ-014", "AES-256") | Never read as quantities |
 | US-31 | Clean live-analysis result | Reads "No issues detected by analysis — analysis can miss conflicts" with **Raise a concern** (DR-21) |
 | US-14 | A requirement posted while two browsers show the map | Both show the new node and edge within 2 s without reload (NFR-32) |
 | US-35 | Proposer approves their own change request | Approval does not count (SX-13) |
@@ -73,6 +76,7 @@
 Accuracy is measured as precision, recall and F1 **per category** on a labelled benchmark, not an aggregate "agreement" figure (ADR-05).
 
 - **Benchmark v2:** the planted-conflict SRS, 40 post-style requirements and 10 scripted change requests with known affected sets and owners; document-style and post-style items reported separately.
+- **Candidate recall comes first (ADR-30):** from Sprint 2 the report gives candidate recall per category, for the reworded subset, per signal (ablation), embedding-only vs hybrid, and candidate volume; the Sprint 2 gate is 100 % on the 8 planted conflicts and ≥ 95 % on all pairwise labels at ≤ 10 % of all pairs ([`conflict-detection-strategy.md`](conflict-detection-strategy.md) §8).
 - **Recall is the headline number** (US-05), including planted conflicts worded differently enough to fall **below the similarity threshold**; the report shows how many each layer caught (similarity + AI, rule checks) and how many were missed (NFR-37).
 - **Context ablation:** each category with and without the context pack at CP1 and in the final report (NFR-39).
 - **Suggestions:** distribution of the six structured outcomes per category, plus an expert-rated correctness score on at least 30 suggestions, because acceptance is not correctness (NFR-36).

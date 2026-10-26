@@ -66,7 +66,10 @@ lint, typecheck, migrations).
 | `REDIS_URL` | Celery broker/result backend |
 | `JWT_SECRET` | Signing key for auth tokens (FR-37) — never committed (NFR-12) |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | JWT lifetime, default 60 |
-| `LLM_API_KEY` | Anthropic Claude API / OpenAI API key — never exposed client-side (NFR-12) |
+| `LLM_PROVIDER` / `LLM_FALLBACK_PROVIDER` | `gemini` / `groq` (ADR-31, [`ai-providers.md`](ai-providers.md) §5) |
+| `GEMINI_API_KEY`, `GEMINI_MODEL` | Google Gemini API key and model — never exposed client-side (NFR-12) |
+| `GROQ_API_KEY`, `GROQ_MODEL` | Groq API key and model, used only when Gemini is unavailable |
+| `EMBEDDING_MODEL` | `BAAI/bge-small-en-v1.5` (local; downloaded once per container) |
 | `SIMILARITY_THRESHOLD_DEFAULT` | Default embedding pre-filter threshold (FR-10), overridable per workspace |
 | `CORS_ALLOWED_ORIGINS` | Comma-separated frontend origin(s) allowed to call the API |
 | `MAX_UPLOAD_SIZE_MB` | Upload size cap enforced at the API (FR-02), default 25 |

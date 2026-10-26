@@ -22,7 +22,7 @@ Analysis runs as asynchronous jobs (Celery + Redis) so no HTTP request blocks on
 4. LLM drafts the brief from the introduction (AI-drafted)  [FR-104]
 5. PM confirms the 4 required fields → status = active      [FR-103]
 6. Generate embeddings, store in pgvector                   [FR-07, FR-08]
-7. Rank candidate pairs above the project threshold         [FR-09, FR-10]
+7. Hybrid candidate pairs: similarity OR rule signals      [FR-09, FR-10, ADR-30]  (see conflict-detection-strategy.md)
 8. Rule-based cross-checks on extracted attributes          [FR-101]  (regardless of similarity)
 9. LLM classification with the context pack                 [FR-11–FR-17, FR-105]
 10. Validate structured output; retry up to 3×              [FR-15, NFR-07]
@@ -94,7 +94,7 @@ Directories that exist on `main` today: `api`, `clarification`, `classification`
 - **Backend API** — FastAPI with Pydantic schemas and SQLAlchemy; every route declares the permission it needs; services own transactions (ADR-09).
 - **Real-time** — WebSocket in the API process, fan-out via Redis pub/sub; events are published after commit; REST is the only write path; clients re-sync by REST on reconnect (ADR-15).
 - **Async processing** — Celery workers run extraction, analysis runs, consequence reports, suggestions and SRS drafting; tasks are idempotent per run ID (ADR-13).
-- **AI/NLP** — Sentence-Transformers (all-MiniLM-L6-v2) for embeddings; an `LLMClient` adapter for classification, clarification, suggestions, brief drafting and SRS narrative; every project-scoped call carries the context pack (ADR-28); a `BudgetGuard` enforces the per-project LLM budget (NFR-28).
+- **AI/NLP** — Sentence-Transformers with **BAAI/bge-small-en-v1.5** (384 dimensions, run locally in the worker) for embeddings; **Google Gemini** as the LLM with **Groq** as the backup when Gemini is unavailable (ADR-31, [`ai-providers.md`](ai-providers.md)); an `LLMClient` adapter for classification, clarification, suggestions, brief drafting and SRS narrative; every project-scoped call carries the context pack (ADR-28); a `BudgetGuard` enforces the per-project LLM budget (NFR-28).
 - **Data** — PostgreSQL with pgvector for relational data and vector search (ADR-03); see `data-model.md`.
 - **Deployment** — Docker Compose for local dev and CI; Railway/Render for the backend, Vercel for the frontend, GitHub Actions for CI/CD (see `devops-guide.md`).
 
@@ -102,6 +102,7 @@ Directories that exist on `main` today: `api`, `clarification`, `classification`
 
 - **Embedding pre-filter (ADR-01)** — only pairs above a configurable similarity threshold go to the LLM (NFR-05); similarity is a filter, never proof (DR-10).
 - **Rule-based cross-checks outside the filter (ADR-27)** — deterministic checks on extracted attributes catch differently worded conflicts the filter misses; recall is measured below the threshold (NFR-37).
+- **Hybrid candidate generation (ADR-30)** — from Sprint 2 a pair is sent to the LLM when *any* signal fires (embedding neighbours, shared rare terms, quantity clash, opposed concepts, bounded vs unbounded, opposite modality), because a pair that never becomes a candidate can never become a finding. Plan: [`conflict-detection-strategy.md`](conflict-detection-strategy.md).
 - **Incremental analysis runs (ADR-16)** — each new or changed requirement is checked against its top-*k* neighbours, not the whole project.
 - **Changes only through change requests (ADR-17, ADR-22)** — approved requirements are never edited in place (DR-14).
 - **Permission-based RBAC (ADR-20)** — code checks permissions, never role names.

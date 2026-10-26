@@ -68,8 +68,8 @@ Full feature list: [`docs/requirements-baseline.md`](docs/requirements-baseline.
 - Celery + Redis — background job queue for async document processing
 
 **AI / NLP Core**
-- Anthropic Claude API / OpenAI API — classification, clarification generation
-- Sentence-Transformers (`all-MiniLM-L6-v2`) — requirement embeddings
+- Google Gemini API (primary) and Groq API (backup) — classification, clarification, suggestions, brief drafting
+- Sentence-Transformers (`BAAI/bge-small-en-v1.5`, run locally) — requirement embeddings
 - pgvector (PostgreSQL extension) — vector similarity search / candidate-pair pre-filtering
 
 **Document Ingestion**
@@ -201,7 +201,7 @@ ai-requirements-conflict-detector/
 - Docker & Docker Compose
 - Node.js 18+ (for local frontend dev outside Docker)
 - Python 3.11+ (for local backend dev outside Docker)
-- An Anthropic or OpenAI API key
+- A Google Gemini API key (and optionally a Groq API key for failover)
 
 ### Quick Start (Docker Compose)
 
@@ -269,8 +269,10 @@ See [`.env.example`](.env.example) for the full, commented list. Key variables:
 | `ENVIRONMENT` | `development` / `test` / `staging` / `production` — the latter two enforce a strong `JWT_SECRET` and an explicit CORS origin list at startup |
 | `DATABASE_URL` | PostgreSQL connection string (with pgvector extension enabled) |
 | `REDIS_URL` | Redis connection string for Celery job queue |
-| `LLM_API_KEY` | Anthropic or OpenAI API key |
-| `LLM_PROVIDER` | `anthropic` or `openai` |
+| `LLM_PROVIDER` / `LLM_FALLBACK_PROVIDER` | `gemini` / `groq` — see `docs/engineering/ai-providers.md` |
+| `GEMINI_API_KEY`, `GEMINI_MODEL` | Google Gemini API key and model |
+| `GROQ_API_KEY`, `GROQ_MODEL` | Groq API key and model (backup) |
+| `EMBEDDING_MODEL` | `BAAI/bge-small-en-v1.5` |
 | `JWT_SECRET` | Secret for signing auth tokens |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | JWT lifetime in minutes (default 60) |
 | `MAX_UPLOAD_SIZE_MB` | Upload size cap enforced by the API (default 25) |
