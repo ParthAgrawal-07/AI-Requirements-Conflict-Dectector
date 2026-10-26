@@ -164,7 +164,7 @@ def draft_context(
         db,
         project_id=project_id,
         sections=sections,
-        drafter=get_brief_drafter(),
+        drafter=get_brief_drafter(project_id=project_id),
         document=document,
         actor=ctx.user,
     )

@@ -50,25 +50,44 @@ def _as_data(value: str) -> str:
     return html.escape(value, quote=True)
 
 
+def _pack(context_pack: str) -> str:
+    # Already escaped by ContextPackBuilder; a blank line separates it from the task line.
+    return f"{context_pack}\n\n" if context_pack else ""
+
+
 def build_pair_messages(
-    a: RequirementInput, b: RequirementInput, version: str = PROMPT_VERSION
+    a: RequirementInput,
+    b: RequirementInput,
+    version: str = PROMPT_VERSION,
+    *,
+    context_pack: str = "",
 ) -> tuple[str, str]:
+    """``context_pack`` is the rendered ``<project_context>`` block (``ContextPack.text``), or ""."""
     system = load_prompt("pair_system", version).substitute(
         output_schema=_schema_json(PairClassificationOutput)
     )
     user = load_prompt("pair_user", version).substitute(
-        a_id=_as_data(a.id), a_text=_as_data(a.text), b_id=_as_data(b.id), b_text=_as_data(b.text)
+        context_pack=_pack(context_pack),
+        a_id=_as_data(a.id),
+        a_text=_as_data(a.text),
+        b_id=_as_data(b.id),
+        b_text=_as_data(b.text),
     )
     return system, user
 
 
 def build_single_messages(
-    requirement: RequirementInput, version: str = PROMPT_VERSION
+    requirement: RequirementInput,
+    version: str = PROMPT_VERSION,
+    *,
+    context_pack: str = "",
 ) -> tuple[str, str]:
     system = load_prompt("single_system", version).substitute(
         output_schema=_schema_json(SingleClassificationOutput)
     )
     user = load_prompt("single_user", version).substitute(
-        req_id=_as_data(requirement.id), req_text=_as_data(requirement.text)
+        context_pack=_pack(context_pack),
+        req_id=_as_data(requirement.id),
+        req_text=_as_data(requirement.text),
     )
     return system, user

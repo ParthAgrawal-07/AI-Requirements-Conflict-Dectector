@@ -22,6 +22,7 @@ retries, provider choice) plugs in without this module knowing the provider.
 import json
 import logging
 import re
+import uuid
 from collections.abc import Callable, Iterable, Sequence
 from functools import lru_cache
 from pathlib import Path
@@ -288,11 +289,13 @@ def draft_by_rules(sections: Sequence[SectionLike]) -> BriefValues:
         return BriefValues()
 
 
-def get_brief_drafter() -> BriefDrafter:
-    """The drafter the worker uses.
+def get_brief_drafter(project_id: uuid.UUID | None = None) -> BriefDrafter:
+    """The drafter the worker uses: the LLM when ``LLM_API_KEY`` is set, else the rules drafter.
 
-    No LLM is wired yet: Keval's ``LLMClient`` adapter (with the budget guard) is the one place
-    that calls the provider. Until it lands this returns the rules drafter; afterwards it passes
-    ``LLMClient(...).complete`` here. Tests replace this function.
+    Keval's ``LLMClient`` is the one place that calls the provider (budget guard included).
+    Tests replace this function.
     """
-    return BriefDrafter(llm=None)
+    from app.classification.llm_client import get_llm_client
+
+    client = get_llm_client()
+    return BriefDrafter(llm=client.as_draft_llm(project_id=project_id) if client else None)

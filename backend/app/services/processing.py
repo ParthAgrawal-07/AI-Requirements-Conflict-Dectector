@@ -241,7 +241,7 @@ def _draft_project_context(
             db,
             project_id=project.id,
             sections=sections,
-            drafter=get_brief_drafter(),
+            drafter=get_brief_drafter(project_id=project.id),
             document=document,
         )
     except Exception:
