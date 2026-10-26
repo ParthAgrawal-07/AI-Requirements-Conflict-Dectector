@@ -59,7 +59,7 @@ flowchart LR
     core["Web app + API + analysis worker"]
   end
 
-  llm["LLM provider<br/>Anthropic Claude or OpenAI"]
+  llm["LLM providers<br/>Google Gemini (primary), Groq (backup)"]
   future["Future: SSO, Jira, Confluence, public API"]
 
   analyst -->|"upload SRS, review findings"| core
@@ -70,7 +70,7 @@ flowchart LR
   core -.->|"deferred"| future
 ```
 
-The LLM provider is the only external runtime dependency. Requirement text leaves the system only in prompts to it, which matters for data residency (NFR-14, see §10).
+The LLM providers (Google Gemini, with Groq as the backup — ADR-31) are the only external runtime dependency; embeddings are computed locally. Requirement text leaves the system only in prompts to it, which matters for data residency (NFR-14, see §10).
 
 ---
 
@@ -440,7 +440,7 @@ erDiagram
 | **Constraint names are deterministic.** | `NAMING_CONVENTION` on `MetaData` | Migrations behave the same on every machine |
 | **Cascades follow ownership.** Deleting a document removes its requirements, versions, embeddings, findings. | `ON DELETE CASCADE` down the tree, `RESTRICT` toward audit/users | Cleanup is automatic; history that must survive cannot be cascaded away |
 
-**Vector search.** `embeddings.vector` is `vector(384)` (all-MiniLM-L6-v2) behind an **HNSW** index with cosine distance. HNSW needs no training data and works from the first row, unlike IVFFlat. Changing the embedding model means a new migration plus a re-embed job; `model_version` identifies stale rows.
+**Vector search.** `embeddings.vector` is `vector(384)` (BAAI/bge-small-en-v1.5, ADR-31) behind an **HNSW** index with cosine distance. HNSW needs no training data and works from the first row, unlike IVFFlat. Changing the embedding model means a new migration plus a re-embed job; `model_version` identifies stale rows.
 
 ---
 
@@ -615,7 +615,7 @@ Existing ADR-01 to ADR-07 are in `decision-log.md`. These decisions were made du
 | To add… | Touch |
 |---|---|
 | A new input format (`.txt`, ReqIF) | A `Parser` subclass registered in `ingest()`'s `_PARSERS` plus an entry in `upload_validation.SUPPORTED_FORMATS` (a test enforces they match) |
-| Another LLM provider | A client class implementing the LLM-client interface (object-design §6); selected by `LLM_PROVIDER` |
+| Another LLM provider | A transport implementing `send(system, user)` (object-design §6); selected by `LLM_PROVIDER` / `LLM_FALLBACK_PROVIDER` ([`ai-providers.md`](ai-providers.md)) |
 | Object storage | Another class with the same methods as `LocalFileStorage`; swap `get_storage()` |
 | SSO / LDAP | Replace the token-decoding step in `get_current_user`; roles and workspace still come from the database |
 | A public REST API | New routes under `/api/v1` using the `service` role; authentication-by-default already applies |

@@ -81,7 +81,7 @@ Scheduled stories by module (full list in `feature-catalog.md`):
 | Frontend | React (Vite) + TypeScript, Tailwind CSS + shadcn/ui, TanStack Query; map library chosen by the Sprint 0 spike (Cytoscape.js vs React Flow, NFR-33) — React Flow is installed from the original scaffold |
 | Backend | FastAPI (Python), Pydantic, SQLAlchemy, Alembic, Celery + Redis |
 | Real-time | WebSocket in the API process, fan-out via Redis pub/sub; REST is the only write path (ADR-15) |
-| AI / NLP | LLM via an `LLMClient` adapter (Anthropic Claude / OpenAI), Sentence-Transformers (all-MiniLM-L6-v2), pgvector |
+| AI / NLP | LLM via an `LLMClient` adapter (Google Gemini, Groq as backup), Sentence-Transformers (BAAI/bge-small-en-v1.5), pgvector |
 | Ingestion | PyMuPDF (PDF), python-docx (Word), spaCy (segmentation) |
 | Database / Infra | PostgreSQL + pgvector, Redis, Docker Compose, GitHub Actions; Railway/Render, Vercel |
 | Testing | Pytest (backend), Vitest + React Testing Library (frontend), Playwright (E2E), load tests |

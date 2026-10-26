@@ -60,6 +60,8 @@ Owners are listed primary first. Enablers are 0-point tasks inside the sprint. D
 | US-22 Low-fidelity validation sessions | 3 | Abhyudit, Affan, Abhijeet |
 
 **Milestones:** 5a by day 4 · 5b by day 7 · 5c by day 9. **Midpoint rule:** if 5a is not done by day 5, move US-07, US-49 and US-22 to Sprint 3.
+**AI providers (ADR-31, [`ai-providers.md`](ai-providers.md) §6):** Keval — Gemini and Groq transports with failover, config, tests; Heet — switch to `BAAI/bge-small-en-v1.5`, re-embed, re-tune the similarity threshold with Abhyudit.
+**Hybrid candidates (ADR-30, [`conflict-detection-strategy.md`](conflict-detection-strategy.md) §10):** Keval — minimal attribute extractor and concept lexicon (pulled forward from US-58); Heet — `find_candidates` with signals S1–S6, ranking and caps; Keval — pre-check notes in the pair prompt (switchable for the ablation); Parth — `candidate_pairs.signals` and `disputed` status in `0006`; Abhyudit — `eval/candidate_recall.py`. **Gate:** 100 % candidate recall on the 8 planted conflicts, ≥ 95 % on all pairwise labels, ≤ 10 % of all pairs.
 **Enablers:** Parth — per-pair classification status (G1), orchestration; Bansil — post backend and drafts, G3 cleanup; Dhavni didi — graph API v0 (`GET /graph`) from stored findings; Madhav — clarification prompt drafts.
 
 ### Sprint 3 · Weeks 6–7 · Composer, live analysis, live map (37 points) → CP1
@@ -97,7 +99,7 @@ Owners are listed primary first. Enablers are 0-point tasks inside the sprint. D
 | US-13 Quality dashboard | 5 | Pranshu, Parth |
 | US-40 Baseline snapshots and comparison | 5 | Parth, Pranshu |
 | US-57 Decision rules and decision owners | 3 | Parth, Pranshu |
-| US-58 Rule-based cross-checks | 5 | Heet, Keval, Abhyudit |
+| US-58 Rule-based cross-checks (extends the S2 extractor; strongest signals become `source = rule` findings — ADR-30) | 5 | Heet, Keval, Abhyudit |
 | US-51 Live lint, similar hints, pre-flight, AI wording | 5 | Keval, Bansil |
 | US-06 Tune thresholds per project | 5 | Keval, Heet, Abhijeet |
 
