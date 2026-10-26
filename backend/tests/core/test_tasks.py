@@ -76,6 +76,22 @@ def test_task_parses_the_id_runs_the_service_and_returns_the_outcome(
     assert calls == [(db_session, document_id)]
 
 
+def test_task_does_not_dispatch_embedding_when_outcome_is_failed(
+    worker_uses_test_session: None, monkeypatch: pytest.MonkeyPatch, db_session: Session
+) -> None:
+    dispatched: list[str] = []
+    monkeypatch.setattr(tasks, "dispatch_embedding", dispatched.append)
+
+    def fake_process(db: Session, document_id: uuid.UUID) -> ProcessingOutcome:
+        return ProcessingOutcome.FAILED
+
+    monkeypatch.setattr(processing, "process_document", fake_process)
+    document_id = uuid.uuid4()
+
+    assert process_document_task(str(document_id)) == "failed"
+    assert dispatched == []
+
+
 @pytest.fixture
 def eager_celery(monkeypatch: pytest.MonkeyPatch, storage: LocalFileStorage) -> None:
     """Run tasks synchronously in-process, with the worker reading the same temp storage."""
