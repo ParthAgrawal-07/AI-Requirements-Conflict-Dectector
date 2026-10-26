@@ -16,7 +16,7 @@ import logging
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.embeddings.model import Embedder
@@ -88,6 +88,26 @@ def _section_text(section: DocumentSection) -> str:
     return f"{section.heading}\n{section.body}" if section.heading else section.body
 
 
+def _configure_hnsw_scan(db: Session, ef_search: int = 100) -> None:
+    """Ensure filtered HNSW searches find enough candidates across multiple tenants.
+
+    pgvector 0.8+ supports iterative scans with ``relaxed_order`` to scan the index until
+    enough matching rows are found for the tenant filter. On older pgvector versions, we
+    fall back to raising ``hnsw.ef_search``.
+    """
+    bind = db.get_bind()
+    if bind.dialect.name != "postgresql":
+        return
+
+    try:
+        with db.begin_nested():
+            db.execute(text("SET LOCAL hnsw.iterative_scan = 'relaxed_order'"))
+    except Exception:
+        db.execute(text(f"SET LOCAL hnsw.ef_search = {ef_search}"))
+    else:
+        db.execute(text(f"SET LOCAL hnsw.ef_search = {ef_search}"))
+
+
 def nearest_requirements(
     db: Session,
     project_id: uuid.UUID,
@@ -98,6 +118,7 @@ def nearest_requirements(
     exclude: set[uuid.UUID] | None = None,
 ) -> list[Neighbour]:
     """The ``k`` most similar requirements of ``project_id``, most similar first."""
+    _configure_hnsw_scan(db, ef_search=max(40, (k + len(exclude or ())) * 5, 100))
     distance = Embedding.vector.cosine_distance(vector)
     query = (
         select(Embedding.requirement_id, distance.label("distance"))
@@ -120,6 +141,7 @@ def nearest_sections(
     db: Session, project_id: uuid.UUID, vector: list[float], *, k: int = 3
 ) -> list[DocumentSection]:
     """The ``k`` sections of the project's documents closest to ``vector`` (context pack)."""
+    _configure_hnsw_scan(db, ef_search=max(40, k * 5, 100))
     distance = DocumentSection.embedding.cosine_distance(vector)
     return list(
         db.scalars(
