@@ -161,4 +161,4 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     """Return the cached settings instance (call ``get_settings.cache_clear()`` in tests)."""
-    return Settings()  # type: ignore[call-arg]  # required fields come from the environment
+    return Settings()  # required fields come from the environment
