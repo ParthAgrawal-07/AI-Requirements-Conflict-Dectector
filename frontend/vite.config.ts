@@ -1,8 +1,17 @@
 import { defineConfig } from "vitest/config";
+import { resolve } from "node:path";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
+    build: {
+    rollupOptions: {
+      input: {
+        main: resolve(process.cwd(), "index.html"),
+        graphBenchmark: resolve(process.cwd(), "graph-benchmark.html"),
+      },
+    },
+  },
   server: {
     host: true, // needed so the dev server is reachable from outside the Docker container
     port: 5173,

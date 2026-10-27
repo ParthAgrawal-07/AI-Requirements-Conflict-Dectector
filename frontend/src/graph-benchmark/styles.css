@@ -1,0 +1,14 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: Inter, system-ui, sans-serif; color: #172033; background: #f5f7fb; }
+.benchmark-shell { max-width: 1400px; margin: 0 auto; padding: 24px; }
+header h1 { margin: 0 0 8px; }
+header p, .status { color: #4b5563; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0; }
+button { border: 1px solid #cbd5e1; border-radius: 8px; background: white; padding: 9px 13px; cursor: pointer; }
+button[aria-pressed="true"] { background: #1d4ed8; color: white; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.graph-area { height: 650px; border: 1px solid #cbd5e1; border-radius: 12px; overflow: hidden; background: white; }
+.cy-container { width: 100%; height: 100%; }
+table { border-collapse: collapse; width: 100%; background: white; }
+th, td { text-align: left; padding: 9px; border-bottom: 1px solid #e5e7eb; font-size: 13px; }
+@media (max-width: 700px) { .benchmark-shell { padding: 12px; } .graph-area { height: 500px; } }
