@@ -39,7 +39,7 @@ The classifier is an LLM, so "it works" needs evidence. The benchmark gives the 
 | Dependent | 6 | One requirement relies on another |
 | **None** (hard negatives) | at least 20 | Look-alike pairs that are NOT issues; needed to measure precision |
 
-Also include some **noise** in the document that extraction must not turn into requirements: headings, intro prose, tables, informational sentences without "shall". Record the exact expected requirement count in `schema.json`'s `expected_requirement_count` (Bansil's extraction check allows 5% tolerance).
+Also include some **noise** in the document that extraction must not turn into requirements: headings, intro prose, tables, informational sentences without "shall". The expected count is the number of REQ-nnn identifiers in srs_planted.md; the upload test derives it from there (5% tolerance, US-02).
 
 ### Component B (post-style)
 

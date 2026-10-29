@@ -27,7 +27,6 @@ from app.services.processing import ProcessingOutcome, process_document
 from app.services.storage import LocalFileStorage, get_storage
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-EXPECTED_REQUIREMENTS = 60  # REQ-001 … REQ-060 in srs_planted.md; US-02 allows 5% either way
 TOLERANCE = 0.05
 
 
@@ -97,25 +96,20 @@ def uploaded(
 
 
 def test_the_expected_number_of_requirements_is_extracted(
-    uploaded: list[dict[str, object]], benchmark: Path
+    uploaded: list[dict[str, object]], source_ids: set[str]
 ) -> None:
-    source_ids = set(re.findall(r"REQ-\d{3}", (benchmark / "srs_planted.md").read_text()))
-    assert len(source_ids) == EXPECTED_REQUIREMENTS
-
-    # Sprint 1 keeps unsure prose and flags it for review instead of dropping it (US-02); the
-    # count is over what extraction is confident about. Flagged items never carry a printed ID.
+    expected = len(source_ids)
+    # (keep your existing comment about flagged items here)
     confident = [item for item in uploaded if not item["needs_review"]]
-    assert abs(len(confident) - EXPECTED_REQUIREMENTS) <= EXPECTED_REQUIREMENTS * TOLERANCE, len(
-        confident
-    )
+    assert abs(len(confident) - expected) <= expected * TOLERANCE, len(confident)
     assert all(not item["source_req_id"] for item in uploaded if item["needs_review"])
 
 
-def test_every_printed_id_is_kept_verbatim(uploaded: list[dict[str, object]]) -> None:
+def test_every_printed_id_is_kept_verbatim(
+    uploaded: list[dict[str, object]], source_ids: set[str]
+) -> None:
     printed = {item["source_req_id"] for item in uploaded if item["source_req_id"]}
-    expected = {f"REQ-{n:03d}" for n in range(1, EXPECTED_REQUIREMENTS + 1)}
-    assert expected <= printed
-
+    assert source_ids <= printed
 
 def test_requirements_uploaded_as_proposals_are_proposed_documents(
     uploaded: list[dict[str, object]],
@@ -194,3 +188,9 @@ def test_another_workspaces_project_is_not_found(
     assert response.status_code == 404
     listed = api.get(f"/api/v1/projects/{foreign.id}/requirements", headers=developer)
     assert listed.status_code == 404
+
+@pytest.fixture(scope="module")
+def source_ids(benchmark: Path) -> set[str]:
+    """Printed IDs in srs_planted.md: the one source of truth for the expected count."""
+    text = (benchmark / "srs_planted.md").read_text(encoding="utf-8")
+    return set(re.findall(r"REQ-\d{3}", text))

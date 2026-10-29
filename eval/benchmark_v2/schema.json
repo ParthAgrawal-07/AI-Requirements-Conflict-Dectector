@@ -12,11 +12,6 @@
       "items": { "$ref": "#/$defs/category" },
       "uniqueItems": true
     },
-    "expected_requirement_count": {
-      "description": "Exact number of requirements in the SRS these labels belong to. Extraction is accepted within a 5% tolerance (US-02).",
-      "type": "integer",
-      "minimum": 1
-    },
     "labels": {
       "type": "array",
       "minItems": 1,
