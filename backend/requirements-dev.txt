@@ -12,3 +12,4 @@ mypy>=1.11
 
 # Supply-chain scanning (run in CI)
 pip-audit>=2.7
+jsonschema>=4
