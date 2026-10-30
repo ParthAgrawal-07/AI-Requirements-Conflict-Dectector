@@ -95,8 +95,8 @@ def test_task_does_not_dispatch_embedding_when_outcome_is_failed(
 @pytest.fixture
 def eager_celery(monkeypatch: pytest.MonkeyPatch, storage: LocalFileStorage) -> None:
     """Run tasks synchronously in-process, with the worker reading the same temp storage."""
-    monkeypatch.setattr(celery_app.conf, "task_always_eager", True)
-    monkeypatch.setattr(celery_app.conf, "task_eager_propagates", True)
+    monkeypatch.setitem(celery_app.conf, "task_always_eager", True)
+    monkeypatch.setitem(celery_app.conf, "task_eager_propagates", True)
     monkeypatch.setattr(processing, "get_storage", lambda: storage)
 
 
