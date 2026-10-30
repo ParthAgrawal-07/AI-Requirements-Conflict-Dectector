@@ -111,6 +111,7 @@ def test_every_printed_id_is_kept_verbatim(
     printed = {item["source_req_id"] for item in uploaded if item["source_req_id"]}
     assert source_ids <= printed
 
+
 def test_requirements_uploaded_as_proposals_are_proposed_documents(
     uploaded: list[dict[str, object]],
 ) -> None:
@@ -188,6 +189,7 @@ def test_another_workspaces_project_is_not_found(
     assert response.status_code == 404
     listed = api.get(f"/api/v1/projects/{foreign.id}/requirements", headers=developer)
     assert listed.status_code == 404
+
 
 @pytest.fixture(scope="module")
 def source_ids(benchmark: Path) -> set[str]:
