@@ -7,7 +7,11 @@ from app.graph.schemas import GraphDeltaEvent
 
 
 def test_graph_delta_defaults_to_empty_change_sets() -> None:
-    event = GraphDeltaEvent(project_id=uuid4(), revision=1)
+    event = GraphDeltaEvent(
+        workspace_id=uuid4(),
+        project_id=uuid4(),
+        revision=1,
+    )
     assert event.type == "graph.delta"
     assert event.added.nodes == []
     assert event.changed.edges == []
@@ -16,6 +20,7 @@ def test_graph_delta_defaults_to_empty_change_sets() -> None:
 
 def test_graph_delta_accepts_added_node_and_edge() -> None:
     event = GraphDeltaEvent(
+        workspace_id=uuid4(),
         project_id=uuid4(),
         revision=2,
         added={
