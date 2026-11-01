@@ -1,0 +1,56 @@
+r1,r2,category,note,source,reworded,split,annotators
+REQ-002,REQ-012,Conflicting,Encryption at rest for all user data contradicts plaintext storage of user preferences.,planted_srs,false,dev,v1-reviewed
+REQ-021,REQ-023,Conflicting,Same subject (API timeouts) with incompatible numeric constraints (2s vs 10s).,planted_srs,false,dev,v1-reviewed
+REQ-028,REQ-024,Conflicting,Irreversible bcrypt hashing contradicts administrators viewing stored passwords in plaintext.,planted_srs,true,dev,v1-reviewed
+REQ-004,REQ-032,Conflicting,"Admin sessions expire after 5 minutes of inactivity, but all sessions must stay active until logout.",planted_srs,false,dev,v1-reviewed
+REQ-020,REQ-032,Conflicting,"Guest sessions expire after 5 minutes of inactivity, but all sessions must stay active until logout.",planted_srs,false,dev,v1-reviewed
+REQ-034,REQ-035,Conflicting,Audit logs must be kept for seven years but are deleted after 12 months.,planted_srs,false,heldout,planted-by-design
+REQ-036,REQ-037,Conflicting,At most 3 concurrent sessions contradicts staying signed in on any number of devices at once.,reworded,true,dev,planted-by-design
+REQ-038,REQ-039,Conflicting,Exports must be anonymised but must also list every user's name and email address.,reworded,true,heldout,planted-by-design
+REQ-005,REQ-019,Duplicate,"Both require a second authentication factor at sign-in; each covers the other, wording differs only.",planted_srs,false,dev,v1-reviewed
+REQ-010,REQ-014,Duplicate,"Both require logging failed login attempts; each covers the other, wording differs only.",planted_srs,false,dev,v1-reviewed
+REQ-003,REQ-031,Duplicate,"Both require recording successful login attempts; each covers the other, wording differs only.",planted_srs,false,dev,v1-reviewed
+REQ-040,REQ-041,Duplicate,Both lock the account after five consecutive failed sign-in attempts.,planted_srs,false,dev,planted-by-design
+REQ-042,REQ-043,Duplicate,Both let a user obtain their own data in a machine-readable format.,planted_srs,false,heldout,planted-by-design
+REQ-044,REQ-045,Duplicate,Both show the user the time of their last successful sign-in after signing in.,planted_srs,false,heldout,planted-by-design
+REQ-006,REQ-008,Dependent,Emailing a confirmation requires a verified email address to exist.,planted_srs,false,dev,v1-reviewed
+REQ-017,REQ-013,Dependent,Retaining data for the configured period requires retention periods to be configurable per category.,planted_srs,false,dev,v1-reviewed
+REQ-027,REQ-008,Dependent,Password reset email depends on a stored verified email address for the user.,planted_srs,false,dev,v1-reviewed
+REQ-046,REQ-047,Dependent,Emailing the monthly report to administrators requires their email addresses to be stored.,planted_srs,false,heldout,planted-by-design
+REQ-048,REQ-049,Dependent,Restoring a deleted document within 30 days requires deleted documents to be kept for 30 days.,planted_srs,false,heldout,planted-by-design
+REQ-050,REQ-040,Dependent,Unlocking a locked account on password reset presupposes that accounts get locked.,planted_srs,false,dev,planted-by-design
+REQ-007,,Ambiguous,'Promptly' has no numeric bound; readers may assume wildly different timings.,planted_srs,false,dev,v1-reviewed
+REQ-015,,Ambiguous,'User-friendly' has no measurable criterion.,planted_srs,false,dev,v1-reviewed
+REQ-029,,Ambiguous,'Modern look and feel' is subjective and non-measurable.,planted_srs,false,dev,v1-reviewed
+REQ-051,,Ambiguous,'Quickly' gives no time limit for search results.,planted_srs,false,dev,planted-by-design
+REQ-052,,Ambiguous,'A large number' of simultaneous uploads is not quantified.,planted_srs,false,dev,planted-by-design
+REQ-053,,Ambiguous,'Clear' error messages cannot be tested.,planted_srs,false,dev,planted-by-design
+REQ-054,,Ambiguous,'Highly secure' names no control or standard.,planted_srs,false,heldout,planted-by-design
+REQ-055,,Ambiguous,'In a timely manner' has no time bound.,planted_srs,false,heldout,planted-by-design
+REQ-011,,Incomplete,'Multiple document formats' does not enumerate which formats are required.,planted_srs,false,dev,v1-reviewed
+REQ-018,,Incomplete,"99.9% uptime lacks a measurement window (monthly, quarterly, annual).",planted_srs,false,dev,v1-reviewed
+REQ-030,,Incomplete,'Account is modified' does not enumerate modification types or notification channel.,planted_srs,false,dev,v1-reviewed
+REQ-022,,Incomplete,'Alert' does not say who is alerted or through which channel.,planted_srs,false,dev,v1-reviewed
+REQ-056,,Incomplete,"Backing up all documents does not say how often, where to, or how long backups are kept.",planted_srs,false,heldout,planted-by-design
+REQ-057,,Incomplete,The password complexity policy is referenced but never defined.,planted_srs,false,dev,planted-by-design
+REQ-004,REQ-020,None,"Same expiry rule, different subjects (admin vs guest) - different scope, not a conflict.",planted_srs,false,dev,v1-reviewed
+REQ-009,REQ-016,None,Google OAuth narrows OAuth2 support; neither covers the other and neither needs the other.,planted_srs,false,dev,v1-reviewed
+REQ-010,REQ-022,None,Logging failed logins and alerting after repeated failures are complementary behaviors.,planted_srs,false,dev,v1-reviewed
+REQ-021,REQ-033,None,Same 2-second timeout rule applied to different subjects (API requests vs database queries).,planted_srs,false,dev,v1-reviewed
+REQ-011,REQ-026,None,Supported document formats and the file size limit are independent upload rules.,planted_srs,false,dev,v1-reviewed
+REQ-003,REQ-010,None,"Logging successful logins and recording failed logins are complementary, not duplicates.",planted_srs,false,dev,v1-reviewed
+REQ-034,REQ-058,None,"Same seven-year retention, different subjects (audit logs vs incident reports).",planted_srs,false,heldout,planted-by-design
+REQ-042,REQ-059,None,Users downloading their own data and guests downloading shared documents are different subjects.,planted_srs,false,heldout,planted-by-design
+REQ-023,REQ-060,None,A 10-second API timeout and a 10-minute upload timeout apply to different operations.,planted_srs,false,dev,planted-by-design
+REQ-022,REQ-040,None,Alerting after five failures and locking after five failures are complementary actions.,planted_srs,false,dev,planted-by-design
+REQ-036,REQ-004,None,A limit on concurrent sessions and an inactivity expiry for admin sessions are independent rules.,planted_srs,false,dev,planted-by-design
+REQ-051,REQ-007,None,Both are vague about speed but concern different subjects (search results vs input response).,planted_srs,false,dev,planted-by-design
+REQ-038,REQ-046,None,Anonymised exports and the emailed monthly usage report are different reports.,planted_srs,false,heldout,planted-by-design
+REQ-048,REQ-035,None,Restoring deleted documents and deleting old audit logs concern different data.,planted_srs,false,heldout,planted-by-design
+REQ-056,REQ-049,None,Backups and the recycle bin are separate mechanisms; neither needs the other.,planted_srs,false,heldout,planted-by-design
+REQ-041,REQ-010,None,Locking after failures and recording failures are complementary.,planted_srs,false,dev,planted-by-design
+REQ-057,REQ-001,None,Password sign-in and the password complexity policy are complementary.,planted_srs,false,dev,planted-by-design
+REQ-053,REQ-015,None,Both are vague but about different things (error messages vs the whole interface).,planted_srs,false,dev,planted-by-design
+REQ-052,REQ-026,None,Upload volume and the per-file size limit are independent dimensions.,planted_srs,false,dev,planted-by-design
+REQ-037,REQ-032,None,Multi-device sign-in and sessions lasting until logout are compatible.,planted_srs,false,dev,planted-by-design
+REQ-060,REQ-021,None,Upload timeout and API request timeout apply to different operations.,planted_srs,false,dev,planted-by-design

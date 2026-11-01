@@ -12,13 +12,7 @@
       "r1": "REQ-002",
       "r2": "REQ-012",
       "category": "Conflicting",
-      "note": "Encryption at rest contradicts plaintext storage of user preferences."
-    },
-    {
-      "r1": "REQ-002",
-      "r2": "REQ-024",
-      "category": "Conflicting",
-      "note": "Encryption at rest contradicts administrator recovery of plaintext credential data; dissimilar-sounding pair per ADR-01 DR-10."
+      "note": "Encryption at rest for all user data contradicts plaintext storage of user preferences."
     },
     {
       "r1": "REQ-021",
@@ -30,25 +24,37 @@
       "r1": "REQ-028",
       "r2": "REQ-024",
       "category": "Conflicting",
-      "note": "bcrypt hashing contradicts recoverable plaintext credentials; dissimilar-sounding pair per ADR-01 DR-10."
+      "note": "Irreversible bcrypt hashing contradicts administrators viewing stored passwords in plaintext; dissimilar-sounding pair per ADR-01 DR-10."
+    },
+    {
+      "r1": "REQ-004",
+      "r2": "REQ-032",
+      "category": "Conflicting",
+      "note": "Admin sessions expire after 5 minutes of inactivity, but all sessions must stay active until explicit logout; dissimilar wording."
+    },
+    {
+      "r1": "REQ-020",
+      "r2": "REQ-032",
+      "category": "Conflicting",
+      "note": "Guest sessions expire after 5 minutes of inactivity, but all sessions must stay active until explicit logout; dissimilar wording."
     },
     {
       "r1": "REQ-005",
       "r2": "REQ-019",
       "category": "Duplicate",
-      "note": "Both require support for multi-factor authentication; different wording only."
+      "note": "Both require a second authentication factor at sign-in; each covers the other, wording differs only."
     },
     {
       "r1": "REQ-010",
       "r2": "REQ-014",
       "category": "Duplicate",
-      "note": "Both require persisting failed login attempts; 'record' vs 'retain in an audit log' is wording only."
+      "note": "Both require logging failed login attempts; each covers the other, wording differs only."
     },
     {
       "r1": "REQ-003",
       "r2": "REQ-031",
       "category": "Duplicate",
-      "note": "Both require recording successful login attempts; different wording only."
+      "note": "Both require recording successful login attempts; each covers the other, wording differs only."
     },
     {
       "r1": "REQ-006",
@@ -60,7 +66,7 @@
       "r1": "REQ-017",
       "r2": "REQ-013",
       "category": "Dependent",
-      "note": "7-year retention is only satisfiable if retention periods are configurable per data category."
+      "note": "Retaining data for the configured period requires retention periods to be configurable per data category."
     },
     {
       "r1": "REQ-027",
@@ -81,7 +87,7 @@
     {
       "r1": "REQ-029",
       "category": "Ambiguous",
-      "note": "'Responsive user experience' is vague and non-measurable."
+      "note": "'Modern look and feel' is subjective and non-measurable."
     },
     {
       "r1": "REQ-011",
@@ -99,22 +105,21 @@
       "note": "'Account is modified' does not enumerate modification types or notification channel."
     },
     {
-      "r1": "REQ-021",
-      "r2": "REQ-022",
-      "category": "None",
-      "note": "API timeout configuration and failed-login alerting — same domain, different subjects; included as a control."
+      "r1": "REQ-022",
+      "category": "Incomplete",
+      "note": "'Alert' does not say who is alerted or through which channel."
     },
     {
       "r1": "REQ-004",
       "r2": "REQ-020",
       "category": "None",
-      "note": "Same expiry rule, different subjects (admin vs guest) — different scope, not a conflict."
+      "note": "Same expiry rule, different subjects (admin vs guest) - different scope, not a conflict."
     },
     {
       "r1": "REQ-009",
       "r2": "REQ-016",
       "category": "None",
-      "note": "Google OAuth is a refinement of OAuth2 support, not a conflict or dependency."
+      "note": "Google OAuth narrows OAuth2 support; neither covers the other and neither needs the other (coverage test)."
     },
     {
       "r1": "REQ-010",
@@ -123,10 +128,22 @@
       "note": "Logging failed logins and alerting after repeated failures are complementary behaviors."
     },
     {
-      "r1": "REQ-025",
+      "r1": "REQ-021",
+      "r2": "REQ-033",
+      "category": "None",
+      "note": "Same 2-second timeout rule applied to different subjects (API requests vs database queries)."
+    },
+    {
+      "r1": "REQ-011",
       "r2": "REQ-026",
       "category": "None",
-      "note": "Unrelated requirements (ID preservation vs file size limit); included as a control."
+      "note": "Supported document formats and the file size limit are independent upload rules."
+    },
+    {
+      "r1": "REQ-003",
+      "r2": "REQ-010",
+      "category": "None",
+      "note": "Logging successful logins and recording failed logins are complementary, not duplicates."
     }
   ]
 }
