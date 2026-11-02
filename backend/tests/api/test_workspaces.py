@@ -234,3 +234,33 @@ class TestRename:
             f"{WORKSPACES}/{workspace.id}", json={"name": "X"}, headers=headers_for(elsewhere)
         )
         assert response.status_code == 404
+
+
+class TestRoles:
+    def test_a_member_sees_the_nine_default_roles_with_their_permissions(
+        self, client: TestClient, user: User, workspace: Workspace
+    ) -> None:
+        response = client.get(f"{WORKSPACES}/{workspace.id}/roles", headers=headers_for(user))
+
+        assert response.status_code == 200
+        roles = {role["name"]: role for role in response.json()}
+        assert set(roles) == {role.value for role in DefaultRole}
+        developer = roles[DefaultRole.DEVELOPER.value]
+        assert set(developer["permissions"]) == DEFAULT_ROLE_PERMISSIONS[DefaultRole.DEVELOPER]
+
+    def test_owner_and_admin_are_never_grantable_by_a_join_code(
+        self, client: TestClient, user: User, workspace: Workspace
+    ) -> None:
+        roles = client.get(f"{WORKSPACES}/{workspace.id}/roles", headers=headers_for(user)).json()
+
+        not_grantable = {role["name"] for role in roles if not role["grantable_by_join_code"]}
+        assert not_grantable == {DefaultRole.OWNER.value, DefaultRole.ADMIN.value}
+
+    def test_another_workspace_is_not_found(
+        self, client: TestClient, user: User, make_workspace: Callable[..., Workspace]
+    ) -> None:
+        other = make_workspace()
+
+        response = client.get(f"{WORKSPACES}/{other.id}/roles", headers=headers_for(user))
+
+        assert response.status_code == 404
