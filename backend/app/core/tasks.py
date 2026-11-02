@@ -40,3 +40,12 @@ def dispatch_embedding(document_id: str) -> None:
         celery_app.send_task("embeddings.embed_document", args=[document_id], retry=False)
     except Exception:
         logger.warning("Could not queue embedding of document %s", document_id, exc_info=True)
+
+
+@celery_app.task(name="join_codes.expire")
+def expire_join_codes_task() -> list[int]:
+    """Mark expired join codes and 14-day-old join requests (US-25; scheduled by Celery beat)."""
+    from app.services.join_codes import expire_stale
+
+    with session_scope() as db:
+        return list(expire_stale(db))

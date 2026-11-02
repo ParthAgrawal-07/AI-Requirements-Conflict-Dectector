@@ -37,6 +37,11 @@ celery_app.conf.update(
     task_track_started=True,  # exposes the STARTED state for progress polling (US-03)
     broker_connection_retry_on_startup=True,
     worker_hijack_root_logger=False,
+    # Periodic jobs, run by `celery -A app.core.celery_app beat`. Tasks are named by string so this
+    # module never imports their code.
+    beat_schedule={
+        "expire-join-codes": {"task": "join_codes.expire", "schedule": 15 * 60},  # US-25
+    },
 )
 
 celery_app.autodiscover_tasks(

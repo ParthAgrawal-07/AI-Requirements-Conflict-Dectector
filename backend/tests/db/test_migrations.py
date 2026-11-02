@@ -32,6 +32,9 @@ EXPECTED_TABLES = {
     # Sprint 1 (0011_project_context)
     "project_contexts",
     "document_sections",
+    # Sprint 1 (0005_collaboration, join tables)
+    "join_codes",
+    "join_requests",
 }
 
 
