@@ -131,6 +131,18 @@ def test_impact_report_parses_empty_impacts() -> None:
     assert not report.is_blocking
 
 
+def test_impact_report_overrides_wrong_counts_from_items() -> None:
+    item = _sample_item(severity="high", depth=1)
+    report = ImpactReport.model_validate(
+        _sample_report(
+            impacted_requirements=[item], total_impacted_count=5, critical_impacts_count=3
+        )
+    )
+
+    assert report.total_impacted_count == 1
+    assert report.critical_impacts_count == 1
+
+
 def test_impact_report_reconciles_counts_from_items() -> None:
     item1 = _sample_item(severity="medium", depth=1)
     item2 = _sample_item(severity="high", depth=2)

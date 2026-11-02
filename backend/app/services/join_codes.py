@@ -39,6 +39,7 @@ from app.models import (
     JoinRequestStatus,
     Membership,
     Project,
+    ProjectMember,
     User,
 )
 from app.services.access import Scope, active_membership, register_scope_resolver
@@ -216,6 +217,14 @@ def redeem(db: Session, code: str, user: User) -> Membership | JoinRequest:
     existing = active_membership(db, user.id, join_code.workspace_id)
     if existing is not None and join_code.project_id is None:
         raise ConflictError("You are already a member of this workspace")
+    # Refused before ``uses += 1``: a redemption that changes nothing must not burn a use, or a
+    # member could exhaust a project code by redeeming it over and over.
+    if (
+        existing is not None
+        and join_code.project_id is not None
+        and db.get(ProjectMember, (join_code.project_id, user.id)) is not None
+    ):
+        raise ConflictError("You are already on this project's team")
     if _pending_request(db, user.id, join_code.workspace_id) is not None:
         raise ConflictError("Your request to join this workspace is waiting for approval")
 
@@ -231,8 +240,16 @@ def redeem(db: Session, code: str, user: User) -> Membership | JoinRequest:
             user_id=user.id,
             role_id=join_code.role_id,
         )
-        db.add(request)
-        db.flush()
+        # The row lock covers this code only: the same user redeeming another approval-gated code
+        # of this workspace at the same moment loses on the partial unique index instead.
+        try:
+            with db.begin_nested():
+                db.add(request)
+                db.flush()
+        except IntegrityError:
+            raise ConflictError(
+                "Your request to join this workspace is waiting for approval"
+            ) from None
         _audit(
             db,
             join_code.workspace_id,
@@ -330,15 +347,24 @@ def decide(
     approve: bool,
     role_id: uuid.UUID | None = None,
 ) -> JoinRequest:
-    """Approve (optionally with another role) or deny a pending request (US-25)."""
+    """Approve (optionally with another role) or deny a pending request (US-25).
+
+    The request row is locked and re-read first, so two managers deciding at once are serialised
+    and the second gets a 409. ``role_id`` is refused for someone who is already a workspace
+    member: approving never changes an existing membership's role.
+    """
+    db.refresh(request, with_for_update=True)
     if request.status is not JoinRequestStatus.PENDING:
         raise ConflictError(f"This request has already been {request.status.value}")
+    if request.created_at <= _now() - JOIN_REQUEST_TTL:  # before the beat task writes it down
+        raise ConflictError("This request has already been expired")
     if approve:
-        role = get_role(db, request.workspace_id, role_id or request.role_id)
         user = db.get(User, request.user_id)
         if user is None:  # FK makes this impossible; defensive
             raise NotFoundError("User not found")
-        if active_membership(db, user.id, request.workspace_id) is None:
+        existing = active_membership(db, user.id, request.workspace_id)
+        if existing is None:
+            role = get_role(db, request.workspace_id, role_id or request.role_id)
             add_member(
                 db,
                 workspace_id=request.workspace_id,
@@ -348,11 +374,20 @@ def decide(
                 via_join_code=True,  # an approved request is still a join by code
                 commit=False,
             )
+            request.role_id = role.id
+            granted_role_id = role.id
+        elif role_id is not None:
+            raise ConflictError(
+                "This person is already a member of the workspace; approving cannot change "
+                "their role"
+            )
+        else:
+            granted_role_id = existing.role_id  # the audit records the role they really hold
         _join_project(db, request.project_id, user, actor_id=actor.id)
-        request.role_id = role.id
         request.status = JoinRequestStatus.APPROVED
         action = AuditAction.JOIN_REQUEST_APPROVED
     else:
+        granted_role_id = request.role_id
         request.status = JoinRequestStatus.DENIED
         action = AuditAction.JOIN_REQUEST_DENIED
     request.decided_by = actor.id
@@ -364,7 +399,7 @@ def decide(
         action,
         request_id=request.id,
         user_id=request.user_id,
-        role_id=request.role_id,
+        role_id=granted_role_id,
     )
     db.commit()
     return request

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.errors import ConflictError, InvalidJoinCodeError
 from app.core.permissions import DefaultRole
 from app.models import (
+    AuditAction,
     AuditLog,
     JoinCode,
     JoinCodeStatus,
@@ -25,7 +26,7 @@ from app.models import (
 )
 from app.services import join_codes as service
 from app.services.access import active_membership
-from app.services.membership import get_default_role
+from app.services.membership import add_member, get_default_role
 from app.services.users import create_user
 
 
@@ -227,6 +228,39 @@ class TestRedeem:
 
         assert db_session.get(ProjectMember, (project.id, newcomer.id)) is not None
 
+    def test_a_team_member_cannot_burn_a_project_codes_uses(
+        self,
+        issue: Callable[..., service.CreatedCode],
+        db_session: Session,
+        make_user: Callable[..., User],
+        project: Project,
+    ) -> None:
+        created = issue(project_id=project.id, max_uses=2)
+        member = make_user(role=DefaultRole.DEVELOPER)
+        service.redeem(db_session, created.code, member)
+        assert db_session.get(ProjectMember, (project.id, member.id)) is not None
+
+        with pytest.raises(ConflictError):
+            service.redeem(db_session, created.code, member)
+
+        assert created.join_code.uses == 1
+        assert created.join_code.status is JoinCodeStatus.ACTIVE
+
+    def test_a_lost_race_for_the_pending_request_is_a_conflict_not_a_500(
+        self,
+        issue: Callable[..., service.CreatedCode],
+        db_session: Session,
+        newcomer: User,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        service.redeem(db_session, issue(requires_approval=True).code, newcomer)
+        second = issue(requires_approval=True).code
+        # Simulate the concurrent transaction: its pending request was not visible to the check.
+        monkeypatch.setattr(service, "_pending_request", lambda *_: None)
+
+        with pytest.raises(ConflictError):
+            service.redeem(db_session, second, newcomer)
+
     def test_a_code_needing_approval_creates_a_pending_request_and_no_membership(
         self,
         issue: Callable[..., service.CreatedCode],
@@ -297,6 +331,62 @@ class TestDecide:
 
         assert request.status is JoinRequestStatus.DENIED
         assert active_membership(db_session, newcomer.id, workspace.id) is None
+        with pytest.raises(ConflictError):
+            service.decide(db_session, request=request, actor=manager, approve=True)
+
+    def test_approving_an_existing_member_keeps_and_audits_their_real_role(
+        self,
+        issue: Callable[..., service.CreatedCode],
+        db_session: Session,
+        newcomer: User,
+        manager: User,
+        workspace: Workspace,
+        project: Project,
+    ) -> None:
+        request = service.redeem(
+            db_session, issue(project_id=project.id, requires_approval=True).code, newcomer
+        )
+        assert isinstance(request, JoinRequest)
+        stakeholder = get_default_role(db_session, DefaultRole.STAKEHOLDER)
+        add_member(
+            db_session,
+            workspace_id=workspace.id,
+            user_id=newcomer.id,
+            role_id=stakeholder.id,
+            commit=False,
+        )
+        developer = get_default_role(db_session, DefaultRole.DEVELOPER)
+
+        with pytest.raises(ConflictError):  # the override would silently not apply
+            service.decide(
+                db_session, request=request, actor=manager, approve=True, role_id=developer.id
+            )
+        service.decide(db_session, request=request, actor=manager, approve=True)
+
+        membership = active_membership(db_session, newcomer.id, workspace.id)
+        assert membership is not None
+        assert membership.role_id == stakeholder.id
+        assert db_session.get(ProjectMember, (project.id, newcomer.id)) is not None
+        audit = db_session.scalars(
+            select(AuditLog).where(
+                AuditLog.action == AuditAction.JOIN_REQUEST_APPROVED,
+                AuditLog.workspace_id == workspace.id,
+            )
+        ).one()
+        assert audit.details["role_id"] == str(stakeholder.id)
+
+    def test_a_request_past_its_ttl_cannot_be_approved_before_the_beat_runs(
+        self,
+        issue: Callable[..., service.CreatedCode],
+        db_session: Session,
+        newcomer: User,
+        manager: User,
+    ) -> None:
+        request = service.redeem(db_session, issue(requires_approval=True).code, newcomer)
+        assert isinstance(request, JoinRequest)
+        request.created_at = datetime.now(UTC) - service.JOIN_REQUEST_TTL - timedelta(minutes=1)
+        db_session.flush()
+
         with pytest.raises(ConflictError):
             service.decide(db_session, request=request, actor=manager, approve=True)
 

@@ -208,19 +208,15 @@ class ImpactReport(BaseModel):
     @model_validator(mode="after")
     def _validate_consistency(self) -> Self:
         """Enforce internal consistency between items, counts, and safety flags."""
-        # Reconcile total impacted count
-        if self.impacted_requirements and self.total_impacted_count == 0:
-            self.total_impacted_count = len(self.impacted_requirements)
-
-        # Reconcile critical impacts count. Revision 5 has no "critical" severity (migration
-        # 0003): an impact is critical when it is High or touches a protected requirement.
-        critical_items = [
-            item
+        # The counts are always derived from the list, so a report can never contradict itself.
+        self.total_impacted_count = len(self.impacted_requirements)
+        # Revision 5 has no "critical" severity (migration 0003): an impact counts here when it
+        # is High or touches a protected requirement.
+        self.critical_impacts_count = sum(
+            1
             for item in self.impacted_requirements
             if item.severity is Severity.HIGH or item.is_protected
-        ]
-        if critical_items and self.critical_impacts_count == 0:
-            self.critical_impacts_count = len(critical_items)
+        )
 
         # DR-05: If any affected requirement is protected, flag manual approval
         any_protected = any(item.is_protected for item in self.impacted_requirements)

@@ -37,7 +37,8 @@ An active code past `expires_at` is reported and enforced as `expired` immediate
 1. Canonicalise and hash; `SELECT … FOR UPDATE` the code row (concurrent redemptions serialise on it).
 2. Unknown, malformed, expired, used-up or revoked → **`InvalidJoinCodeError`**, one message for all.
 3. Already a member and the code is workspace-wide → `ConflictError` (409). A project code for an existing member adds
-   them to the project team. A pending request for the same workspace → 409.
+   them to the project team; if they are already on that team → 409 (no use is spent). A pending request for the same
+   workspace → 409, also when two redemptions race for it.
 4. `uses += 1` (and `exhausted` if it was the last).
 5. With approval: insert a `join_request` (pending, the code's role). Without: `membership.add_member(...,
    via_join_code=True, commit=False)` and, for a project code, `add_project_member(..., via_join_code=True,
@@ -57,6 +58,6 @@ whole transaction back on any refusal, so a bad code never leaves an account beh
 | `POST /join` | any signed-in user | body `{code}`; 200 `joined` or 202 `pending_approval`; 400 `invalid_join_code`; 429 after 10 attempts per 10 minutes per address and per user |
 | `GET /workspaces/{w}/join-requests?status=` | `members.manage` | pending by default; includes the person's name and e-mail |
 | `GET /workspaces/{w}/join-requests/{id}/decision` | `members.manage` | the request and its decision |
-| `POST /workspaces/{w}/join-requests/{id}/decision` | `members.manage` | `{approve, role_id?}`; approving may pick another role (still never Owner/Admin); 409 if already decided |
+| `POST /workspaces/{w}/join-requests/{id}/decision` | `members.manage` | `{approve, role_id?}`; approving may pick another role (still never Owner/Admin); 409 if already decided, past its 14 days, or `role_id` is given for someone already in the workspace (their role is never changed). Concurrent decisions are serialised on the request row |
 
 A code or request of another workspace is a 404, like every other resource (ADR-12).

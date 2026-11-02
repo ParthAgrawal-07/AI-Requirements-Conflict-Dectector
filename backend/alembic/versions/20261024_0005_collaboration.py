@@ -12,11 +12,11 @@ Sprint 1, US-25 (Madhav; design update §7.3, §12.1). Only the join tables: ``c
 There is deliberately no CHECK on the role: "never Owner or Admin" is a rule about permissions,
 enforced by ``app.services.membership`` so that custom roles are covered too (ADR-20).
 
-Numbered ``0005`` as in the design-update plan but placed after ``0011``, which merged first
+Numbered ``0005`` as in the design-update plan but placed after ``0012``, the head when it merged
 (see the note in ``0011``).
 
 Revision ID: 0005
-Revises: 0011
+Revises: 0012
 Create Date: 2026-10-24
 """
 
