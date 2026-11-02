@@ -15,11 +15,13 @@ from app.core.errors import ForbiddenError, NotFoundError
 from app.schemas.auth import RoleRef
 from app.schemas.common import ErrorResponse
 from app.schemas.workspaces import (
+    RoleRead,
     WorkspaceCreate,
     WorkspaceMembershipRead,
     WorkspaceRead,
     WorkspaceUpdate,
 )
+from app.services import roles as role_service
 from app.services import workspaces as workspace_service
 from app.services.access import AccessContext
 from app.services.membership import list_active_memberships
@@ -100,3 +102,27 @@ def update_workspace(
         db, workspace=workspace, actor=ctx.user, name=body.name
     )
     return WorkspaceRead.model_validate(workspace)
+
+
+@router.get(
+    "/{workspace_id}/roles",
+    response_model=list[RoleRead],
+    summary="The roles this workspace can assign: the nine defaults and its custom roles",
+    responses={404: {"model": ErrorResponse}},
+)
+def list_roles(
+    workspace_id: uuid.UUID,
+    ctx: Annotated[AccessContext, requires("view")],
+    db: DbSession,
+) -> list[RoleRead]:
+    return [
+        RoleRead(
+            id=role.id,
+            name=role.name,
+            is_default=role.is_default,
+            description=role.description,
+            permissions=sorted(role.permission_names),
+            grantable_by_join_code=role_service.grantable_by_join_code(role),
+        )
+        for role in role_service.list_roles(db, workspace_id)
+    ]
