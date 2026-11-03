@@ -31,6 +31,7 @@ AUTHENTICATED_ONLY = {
     ("GET", "/api/v1/workspaces"),
     ("POST", "/api/v1/workspaces"),
     ("GET", "/api/v1/composer/templates"),  # static EARS catalogue, no tenant data (FR-81)
+    ("POST", "/api/v1/join"),  # a signed-in user entering a code: not yet a member (US-25)
 }
 
 

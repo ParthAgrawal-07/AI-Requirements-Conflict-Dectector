@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "benchmark_v2/schema.json",
+  "title": "Benchmark labels and scripted change requests",
+  "description": "Ground-truth labels for the AI Requirements Conflict Detector benchmark. Backward compatible with sample-docs/planted-conflicts/srs_v1_labels.json. labels.csv rows use the same field names (r1, r2, category, note, ...) and are validated as 'label' records after reading the file.",
+  "type": "object",
+  "required": ["labels"],
+  "additionalProperties": false,
+  "properties": {
+    "categories": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/category" },
+      "uniqueItems": true
+    },
+    "labels": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/label" }
+    },
+    "change_requests": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/change_request" }
+    }
+  },
+  "$defs": {
+    "req_id": {
+      "type": "string",
+      "pattern": "^REQ-[0-9]{3,}$"
+    },
+    "category": {
+      "description": "Matches backend/app/models/enums.py::FindingCategory plus 'None' for hard negatives.",
+      "enum": ["Conflicting", "Duplicate", "Ambiguous", "Incomplete", "Dependent", "None"]
+    },
+    "label": {
+      "type": "object",
+      "required": ["r1", "category", "note"],
+      "additionalProperties": false,
+      "properties": {
+        "r1": { "$ref": "#/$defs/req_id" },
+        "r2": {
+          "description": "Second requirement of a pairwise finding. Absent for single-requirement categories (Ambiguous, Incomplete).",
+          "$ref": "#/$defs/req_id"
+        },
+        "category": { "$ref": "#/$defs/category" },
+        "note": {
+          "description": "One-sentence rationale.",
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "description": "v2 only. Which benchmark component the label belongs to.",
+          "enum": ["planted_srs", "post_style", "reworded"]
+        },
+        "reworded": {
+          "description": "v2 only. True when the issue is worded to share little vocabulary with its counterpart (below-threshold set).",
+          "type": "boolean"
+        },
+        "split": {
+          "description": "v2 only. dev = visible to developers for tuning; heldout = reported by QA only.",
+          "enum": ["dev", "heldout"]
+        },
+        "annotators": {
+          "description": "v2 only. Who labeled this entry.",
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "category": { "enum": ["Ambiguous", "Incomplete"] } }, "required": ["category"] },
+          "then": { "not": { "required": ["r2"] } }
+        },
+        {
+          "if": { "properties": { "category": { "enum": ["Conflicting", "Duplicate", "Dependent", "None"] } }, "required": ["category"] },
+          "then": { "required": ["r2"] }
+        }
+      ]
+    },
+    "change_request": {
+      "type": "object",
+      "required": ["cr_id", "target_req_id", "proposed_text", "expected_affected_ids", "expected_owners", "split"],
+      "additionalProperties": false,
+      "properties": {
+        "cr_id": { "type": "string", "pattern": "^CR-[0-9]+$" },
+        "target_req_id": { "$ref": "#/$defs/req_id" },
+        "proposed_text": { "type": "string", "minLength": 1 },
+        "expected_affected_ids": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/req_id" },
+          "uniqueItems": true
+        },
+        "expected_owners": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        },
+        "expected_new_conflicts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/req_id" },
+          "uniqueItems": true
+        },
+        "split": { "enum": ["dev", "heldout"] },
+        "notes": { "type": "string" }
+      }
+    }
+  }
+}

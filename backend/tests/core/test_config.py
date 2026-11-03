@@ -10,6 +10,7 @@ BASE = {
     "database_url": "postgresql://u:p@db:5432/app",
     "redis_url": "redis://redis:6379/0",
     "jwt_secret": GOOD_SECRET,
+    "join_code_pepper": "another-genuinely-random-pepper-0123456789abcdef",
 }
 
 
@@ -80,6 +81,11 @@ class TestProductionSafety:
     def test_dev_placeholder_secret_rejected(self, environment: str) -> None:
         with pytest.raises(ValidationError, match="JWT_SECRET"):
             make(environment=environment, jwt_secret="dev-only-" + "x" * 60)
+
+    @pytest.mark.parametrize("pepper", ["short", "dev-only-" + "x" * 60])
+    def test_weak_join_code_pepper_rejected(self, environment: str, pepper: str) -> None:
+        with pytest.raises(ValidationError, match="JOIN_CODE_PEPPER"):
+            make(environment=environment, join_code_pepper=pepper)
 
     def test_wildcard_cors_rejected(self, environment: str) -> None:
         with pytest.raises(ValidationError, match="CORS"):
