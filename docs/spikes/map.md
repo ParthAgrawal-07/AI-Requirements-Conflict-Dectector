@@ -5,8 +5,8 @@
 | **Owners** | Dhavni didi, Abhijeet |
 | **Question** | Can the live map (US-14) stay usable with 500 requirement nodes and 2,000 finding edges, and with which library? |
 | **Candidates** | React Flow 11 (already in `package.json`) · Cytoscape.js 3 |
-| **Harness** | `frontend/src/features/prototypes/MapSpike.tsx` — open `/prototypes/map-spike` in `npm run dev` |
-| **Status** | Harness ready. **Numbers below must be measured on a team laptop — none have been filled in yet.** |
+| **Harness** | Not in the repo yet — planned as `frontend/src/features/prototypes/MapSpike.tsx` (`/prototypes/map-spike` in `npm run dev`). `cytoscape` is added to `package.json` in the same PR as the harness. |
+| **Status** | Harness not committed. **Numbers below must be measured on a team laptop — none have been filled in yet.** |
 
 ## Method
 
