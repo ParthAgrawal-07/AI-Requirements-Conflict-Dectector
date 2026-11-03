@@ -19,6 +19,10 @@ After the requirements, the document's sections are stored (``document_sections`
 project is still in Setup, the project brief is drafted from them (US-60, Bansil —
 ``app.context``). Drafting is best effort: if it fails the document is still ``done`` and the
 Project Manager writes the brief by hand.
+
+Progress (US-03, Dhavni): each stage is committed and then announced as an ``analysis.progress``
+event (``app.realtime``) — *after* the commit, so a client that re-reads ``GET /documents/{id}``
+on the event always sees the state the event describes. Events are hints; polling still works.
 """
 
 import logging
@@ -47,13 +51,17 @@ from app.models import (
     RequirementState,
     RequirementVersion,
 )
+from app.realtime import bus
+from app.realtime.events import analysis_progress
 from app.services.storage import LocalFileStorage, get_storage
 
 logger = logging.getLogger(__name__)
 
 MAX_LOCATION_LENGTH = 64  # requirements.location is VARCHAR(64)
 
+# Progress shown for each stage (US-03): claimed, text extracted, requirements stored.
 PROGRESS_STARTED = 10
+PROGRESS_EXTRACTED = 60
 PROGRESS_DONE = 100
 
 
@@ -103,12 +111,15 @@ def process_document(
     document.progress_percent = PROGRESS_STARTED
     document.error_message = None
     db.commit()  # visible to status polling immediately (US-03), and releases the row lock
+    _announce(document, Stage.EXTRACTION)
 
     try:
         result = _extract(document, storage, extract)
+        _mark_extracted(db, document)
         _persist(db, document, result)
     except _StageFailure as failure:
         return _fail(db, document_id, failure.stage, failure.message)
+    _announce(document, None)
 
     logger.info("Processed document %s: %d requirements", document_id, len(result.requirements))
     _draft_project_context(db, document_id, result.sections)
@@ -149,6 +160,19 @@ def _extract(
             "password-protected files are not supported.",
         )
     return result
+
+
+def _mark_extracted(db: Session, document: Document) -> None:
+    try:
+        document.progress_percent = PROGRESS_EXTRACTED
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("Could not record progress for document %s", document.id)
+        raise _StageFailure(
+            Stage.PERSISTENCE, "The extracted requirements could not be saved. Please try again."
+        ) from None
+    _announce(document, Stage.PERSISTENCE)
 
 
 def _persist(db: Session, document: Document, result: SegmentationResult) -> None:
@@ -241,7 +265,7 @@ def _draft_project_context(
             db,
             project_id=project.id,
             sections=sections,
-            drafter=get_brief_drafter(project_id=project.id),
+            drafter=get_brief_drafter(),
             document=document,
         )
     except Exception:
@@ -257,4 +281,20 @@ def _fail(db: Session, document_id: uuid.UUID, stage: Stage, message: str) -> Pr
         document.progress_percent = 0
         document.error_message = f"[{stage.value}] {message}"
         db.commit()
+        _announce(document, stage)
     return ProcessingOutcome.FAILED
+
+
+def _announce(document: Document, stage: Stage | None) -> None:
+    """Publish the document's committed state. Never raises (the bus logs and moves on)."""
+    bus.publish(
+        analysis_progress(
+            workspace_id=document.workspace_id,
+            project_id=document.project_id,
+            document_id=document.id,
+            status=document.status.value,
+            progress_percent=document.progress_percent,
+            stage=stage.value if stage else None,
+            error_message=document.error_message,
+        )
+    )
