@@ -5,7 +5,9 @@ import uuid
 from collections.abc import Callable
 
 import pytest
+import redis
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 from starlette.websockets import WebSocketDisconnect
 
 from app.core import security
@@ -124,5 +126,44 @@ def test_ping_pong(client: TestClient, event_bus: bus.InProcessEventBus, user: U
     with client.websocket_connect("/ws") as socket:
         socket.send_json({"type": "auth", "token": _token(user)})
         socket.receive_json()
+        socket.send_json({"type": "ping"})
+        assert socket.receive_json() == {"type": "pong"}
+
+
+def test_an_idle_socket_does_not_hold_a_database_transaction(
+    client: TestClient,
+    event_bus: bus.InProcessEventBus,
+    db_session: Session,
+    user: User,
+    project: Project,
+) -> None:
+    with client.websocket_connect("/ws") as socket:
+        socket.send_json({"type": "auth", "token": _token(user)})
+        socket.receive_json()
+        assert not db_session.in_transaction()
+
+        socket.send_json({"type": "subscribe", "project_id": str(project.id)})
+        socket.receive_json()
+        assert not db_session.in_transaction()
+
+
+def test_a_redis_outage_on_subscribe_is_reported_not_fatal(
+    client: TestClient,
+    event_bus: bus.InProcessEventBus,
+    monkeypatch: pytest.MonkeyPatch,
+    user: User,
+    project: Project,
+) -> None:
+    class DownFanout(gateway.MemoryFanout):
+        async def add(self, workspace_id: uuid.UUID) -> None:
+            raise redis.ConnectionError("down")
+
+    monkeypatch.setattr(gateway, "make_fanout", lambda: DownFanout(event_bus))
+    with client.websocket_connect("/ws") as socket:
+        socket.send_json({"type": "auth", "token": _token(user)})
+        socket.receive_json()
+
+        socket.send_json({"type": "subscribe", "project_id": str(project.id)})
+        assert socket.receive_json() == {"type": "error", "code": "unavailable"}
         socket.send_json({"type": "ping"})
         assert socket.receive_json() == {"type": "pong"}

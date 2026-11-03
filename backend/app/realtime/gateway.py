@@ -22,11 +22,12 @@ import contextlib
 import json
 import logging
 import uuid
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Generator
 from typing import Annotated, Any, Protocol
 
 import redis.asyncio as aioredis
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from redis.exceptions import RedisError
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
@@ -116,6 +117,7 @@ class _Session:
 
     def __init__(self, user: User) -> None:
         self.user = user
+        self.user_id = str(user.id)  # read without touching the DB from the forwarding task
         self.workspaces: set[uuid.UUID] = set()
         self.projects: set[uuid.UUID] = set()
         self.whole_workspaces: set[uuid.UUID] = set()
@@ -126,6 +128,30 @@ class _Session:
         if event.project_id is None or event.workspace_id in self.whole_workspaces:
             return True
         return event.project_id in self.projects
+
+
+@contextlib.contextmanager
+def _released(db: Session) -> Generator[None, None, None]:
+    """End the read transaction so the socket does not hold a pooled connection while idle.
+
+    The session lives as long as the socket; without this, its first query leaves a connection
+    checked out ("idle in transaction") until disconnect, and a few dozen open tabs exhaust the
+    pool for REST. Commit rather than roll back: with ``expire_on_commit=False`` loaded objects
+    (the user) stay usable without a reload.
+    """
+    try:
+        yield
+    finally:
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+
+
+def _load_active_user(db: Session, subject: uuid.UUID) -> User | None:
+    with _released(db):
+        user = get_user(db, subject)
+        return user if user is not None and user.is_active else None
 
 
 async def _authenticate(websocket: WebSocket, db: Session) -> User | None:
@@ -139,8 +165,7 @@ async def _authenticate(websocket: WebSocket, db: Session) -> User | None:
         payload = decode_access_token(str(frame.get("token", "")))
     except TokenError:
         return None
-    user = await run_in_threadpool(get_user, db, payload.subject)
-    return user if user is not None and user.is_active else None
+    return await run_in_threadpool(_load_active_user, db, payload.subject)
 
 
 def _check_subscription(
@@ -152,12 +177,13 @@ def _check_subscription(
     }
     if not params:
         raise AppError("Give workspace_id or project_id", status_code=400, code="scope_required")
-    db.expire_all()  # re-read membership and role, as every REST request does
-    scope = resolve_scope(db, params)
-    context = build_access_context(db, user, scope)
-    if not context.can("view"):
-        raise AppError("Forbidden", status_code=403, code="forbidden")
-    return scope.workspace_id, scope.project_id
+    with _released(db):
+        db.expire_all()  # re-read membership and role, as every REST request does
+        scope = resolve_scope(db, params)
+        context = build_access_context(db, user, scope)
+        if not context.can("view"):
+            raise AppError("Forbidden", status_code=403, code="forbidden")
+        return scope.workspace_id, scope.project_id
 
 
 @router.websocket("/ws")
@@ -204,7 +230,12 @@ async def _subscribe(
         await websocket.send_json({"type": "error", "code": "not_found"})
         return
     if workspace_id not in state.workspaces:
-        await fanout.add(workspace_id)
+        try:
+            await fanout.add(workspace_id)
+        except RedisError:
+            logger.warning("Could not subscribe to workspace %s: Redis unavailable", workspace_id)
+            await websocket.send_json({"type": "error", "code": "unavailable"})
+            return
         state.workspaces.add(workspace_id)
     if project_id is None:
         state.whole_workspaces.add(workspace_id)
@@ -221,7 +252,7 @@ async def _subscribe(
 
 async def _forward(websocket: WebSocket, fanout: Fanout, state: _Session) -> None:
     async for event in fanout.events():
-        if event.type == MEMBERSHIP_REVOKED and event.data.get("user_id") == str(state.user.id):
+        if event.type == MEMBERSHIP_REVOKED and event.data.get("user_id") == state.user_id:
             await websocket.close(code=CLOSE_REVOKED)
             return
         if state.wants(event):
