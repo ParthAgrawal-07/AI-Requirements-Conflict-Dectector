@@ -68,7 +68,7 @@ class DocumentRead(BaseModel):
 class RequirementRead(BaseModel):
     requirement_id: uuid.UUID
     project_id: uuid.UUID
-    document_id: uuid.UUID
+    document_id: uuid.UUID | None
     # The identifier printed in the source document ("REQ-014"), or null if it had none —
     # we never present a generated ID as if it came from the document (FR-04).
     source_req_id: str | None

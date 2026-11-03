@@ -163,9 +163,9 @@ class LLMClient:
                     "Reply again with only the JSON object that matches the schema."
                 )
 
-    def as_draft_llm(self) -> Callable[[str, str], str]:
+    def as_draft_llm(self, project_id: uuid.UUID | None = None) -> Callable[[str, str], str]:
         """The ``(system, user) -> text`` callable ``app.context.drafter.BriefDrafter`` takes."""
-        return lambda system, user: self.complete_text(system, user)
+        return lambda system, user: self.complete_text(system, user, project_id=project_id)
 
 
 def _parse(reply: str, output: type[T]) -> T:

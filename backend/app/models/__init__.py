@@ -11,7 +11,10 @@ from app.models.context import DocumentSection, ProjectContext
 from app.models.document import Document
 from app.models.embedding import EMBEDDING_DIM, Embedding
 from app.models.enums import (
+    AnalysisRunStatus,
+    AnalysisScope,
     AuditAction,
+    ClassificationStatus,
     DocumentFormat,
     DocumentStatus,
     FindingCategory,
@@ -35,6 +38,9 @@ from app.models.workspace import Workspace
 
 __all__ = [
     "EMBEDDING_DIM",
+    "AnalysisRunStatus",
+    "AnalysisScope",
+    "ClassificationStatus",
     "AuditAction",
     "AuditLog",
     "Base",

@@ -63,18 +63,18 @@ def validate_password_strength(password: str) -> None:
 
 
 def hash_password(password: str) -> str:
-    return _hasher.hash(password)
+    return str(_hasher.hash(password))
 
 
 def verify_password(password: str, password_hash: str) -> bool:
     try:
-        return _hasher.verify(password_hash, password)
+        return bool(_hasher.verify(password_hash, password))
     except (VerificationError, InvalidHashError):
         return False
 
 
 def password_needs_rehash(password_hash: str) -> bool:
-    return _hasher.check_needs_rehash(password_hash)
+    return bool(_hasher.check_needs_rehash(password_hash))
 
 
 @lru_cache
@@ -84,7 +84,7 @@ def dummy_password_hash() -> str:
     Verifying against it when the email is unknown keeps login timing the same as for a real
     account, so response time can't be used to discover which emails are registered.
     """
-    return _hasher.hash(uuid.uuid4().hex)
+    return str(_hasher.hash(uuid.uuid4().hex))
 
 
 # ── JWT ──────────────────────────────────────────────────────────────────────
