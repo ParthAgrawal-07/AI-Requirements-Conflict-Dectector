@@ -117,3 +117,28 @@ class AuditAction(StrEnum):
     CONTEXT_DRAFTED = "context_drafted"
     CONTEXT_UPDATED = "context_updated"
     PROJECT_ACTIVATED = "project_activated"
+    # Join codes (US-25). Code ids and code hints only — never the code itself.
+    JOIN_CODE_CREATED = "join_code_created"
+    JOIN_CODE_REVOKED = "join_code_revoked"
+    JOIN_CODE_REDEEMED = "join_code_redeemed"
+    JOIN_REQUEST_CREATED = "join_request_created"
+    JOIN_REQUEST_APPROVED = "join_request_approved"
+    JOIN_REQUEST_DENIED = "join_request_denied"
+
+
+class JoinCodeStatus(StrEnum):
+    """Join-code lifecycle (design update §7.3). Only ``active`` codes can be redeemed."""
+
+    ACTIVE = "active"
+    REVOKED = "revoked"  # by a manager; irreversible
+    EXPIRED = "expired"  # past ``expires_at`` (set at redemption time or by the beat task)
+    EXHAUSTED = "exhausted"  # ``uses`` reached ``max_uses``
+
+
+class JoinRequestStatus(StrEnum):
+    """A join request made with an approval-gated code (design update §7.3)."""
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    DENIED = "denied"
+    EXPIRED = "expired"  # undecided for 14 days

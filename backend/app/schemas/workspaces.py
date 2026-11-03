@@ -37,3 +37,12 @@ class WorkspaceMembershipRead(WorkspaceRead):
 
     role: RoleRef
     joined_at: datetime
+
+
+class RoleRead(RoleRef):
+    """A role the workspace can assign, with the permissions it holds (FR-48)."""
+
+    description: str | None
+    permissions: list[str]
+    # False for Owner, Admin and any role holding their permissions (FR-44, SX-14).
+    grantable_by_join_code: bool
