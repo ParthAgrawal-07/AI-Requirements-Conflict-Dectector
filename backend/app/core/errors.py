@@ -99,6 +99,16 @@ class NotAuthenticatedError(AppError):
         super().__init__(message, headers={"WWW-Authenticate": "Bearer"})
 
 
+class SessionExpiredError(AppError):
+    """No usable refresh cookie: missing, expired, revoked or replayed. The user signs in again."""
+
+    status_code = 401
+    code = "session_expired"
+
+    def __init__(self, *, headers: Mapping[str, str] | None = None) -> None:
+        super().__init__("Your session has ended. Please sign in again.", headers=headers)
+
+
 class InvalidCredentialsError(AppError):
     status_code = 401
     code = "invalid_credentials"

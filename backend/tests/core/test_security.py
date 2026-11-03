@@ -166,3 +166,41 @@ class TestAccessTokens:
     def test_garbage_rejected(self, garbage: str) -> None:
         with pytest.raises(TokenError):
             decode_access_token(garbage)
+
+
+class TestRefreshTokens:
+    def test_round_trip_keeps_the_session(self) -> None:
+        subject = uuid.uuid4()
+        token, issued = security.create_refresh_token(subject)
+        decoded = security.decode_refresh_token(token)
+        assert (decoded.subject, decoded.jti, decoded.session_id) == (
+            subject,
+            issued.jti,
+            issued.session_id,
+        )
+        assert decoded.expires_at == issued.expires_at.replace(microsecond=0)  # JWT: whole seconds
+
+    def test_rotation_continues_the_session_with_a_new_id(self) -> None:
+        _, first = security.create_refresh_token(uuid.uuid4())
+        _, second = security.create_refresh_token(first.subject, session_id=first.session_id)
+        assert second.session_id == first.session_id
+        assert second.jti != first.jti
+
+    def test_lifetime_comes_from_settings(self) -> None:
+        now = datetime.now(UTC)
+        _, payload = security.create_refresh_token(uuid.uuid4(), now=now)
+        assert payload.expires_at == now + timedelta(days=get_settings().refresh_token_expire_days)
+
+    def test_the_two_token_types_are_not_interchangeable(self) -> None:
+        access, _ = security.create_access_token(uuid.uuid4())
+        refresh, _ = security.create_refresh_token(uuid.uuid4())
+        with pytest.raises(TokenError):
+            security.decode_refresh_token(access)
+        with pytest.raises(TokenError):
+            decode_access_token(refresh)
+
+    def test_an_expired_refresh_token_is_rejected(self) -> None:
+        long_ago = datetime.now(UTC) - timedelta(days=get_settings().refresh_token_expire_days + 1)
+        token, _ = security.create_refresh_token(uuid.uuid4(), now=long_ago)
+        with pytest.raises(TokenError):
+            security.decode_refresh_token(token)

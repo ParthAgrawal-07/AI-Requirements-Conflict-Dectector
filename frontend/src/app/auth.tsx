@@ -1,15 +1,21 @@
 // Authentication state (Pranshu — US-19).
 //
 // The JWT is kept in memory only (US-19 AC; never localStorage, so an XSS bug cannot read a
-// stored token). Reloading the tab therefore asks the user to sign in again. When the server
-// answers 401 the session is cleared and the user is sent to the sign-in screen, which returns
-// them to where they were afterwards. Silent re-login needs a refresh endpoint on the backend
-// (Parth) — until it exists, an expired token means signing in again.
+// stored token). Silent re-login rests on the HttpOnly refresh cookie the backend sets at sign-in:
+// on page load the provider restores the session from it, and apiFetch refreshes an expired
+// token and retries (api/client.ts). Only when the cookie is gone too (expired, revoked, signed
+// out elsewhere) is the session cleared and the user sent to the sign-in screen, which returns
+// them to where they were afterwards.
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { apiFetch, setAccessToken, setUnauthorizedHandler } from "../api/client";
+import {
+  apiFetch,
+  refreshAccessToken,
+  setAccessToken,
+  setUnauthorizedHandler,
+} from "../api/client";
 import type { Me, SignupResponse, TokenResponse } from "../api/types";
 
 export interface SignupInput {
@@ -24,6 +30,8 @@ interface AuthState {
   user: Me | null;
   /** True between a successful token and the first /auth/me answer. */
   loading: boolean;
+  /** True while a page load tries to restore the session from the refresh cookie. */
+  restoring: boolean;
   /** Set when the session ended because the token expired (shown on the sign-in screen). */
   expired: boolean;
   login: (email: string, password: string) => Promise<void>;
@@ -34,9 +42,16 @@ interface AuthState {
 
 const AuthContext = createContext<AuthState | null>(null);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+interface AuthProviderProps {
+  children: ReactNode;
+  /** Try the refresh cookie on mount. Tests turn it off unless they are about it. */
+  restoreSession?: boolean;
+}
+
+export function AuthProvider({ children, restoreSession = true }: AuthProviderProps) {
   const queryClient = useQueryClient();
   const [token, setToken] = useState<string | null>(null);
+  const [restoring, setRestoring] = useState(restoreSession);
   const [user, setUser] = useState<Me | null>(null);
   const [loading, setLoading] = useState(false);
   const [expired, setExpired] = useState(false);
@@ -60,6 +75,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    // Revoke the refresh cookie server-side. Best effort: sign-out is immediate either way.
+    apiFetch("/auth/logout", { method: "POST" }).catch(() => undefined);
     setAccessToken(null);
     setToken(null);
     setUser(null);
@@ -73,6 +90,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     return () => setUnauthorizedHandler(null);
   }, [logout]);
+
+  useEffect(() => {
+    if (!restoreSession) return;
+    let cancelled = false;
+    void (async () => {
+      const restored = await refreshAccessToken();
+      if (restored && !cancelled) {
+        await start(restored).catch(() => undefined); // no session: the sign-in screen shows
+      }
+      if (!cancelled) setRestoring(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [restoreSession, start]);
 
   const login = useCallback(
     async (email: string, password: string) => {
@@ -101,8 +133,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<AuthState>(
-    () => ({ token, user, loading, expired, login, signup, logout, refreshUser }),
-    [token, user, loading, expired, login, signup, logout, refreshUser],
+    () => ({ token, user, loading, restoring, expired, login, signup, logout, refreshUser }),
+    [token, user, loading, restoring, expired, login, signup, logout, refreshUser],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

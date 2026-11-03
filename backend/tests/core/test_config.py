@@ -103,3 +103,20 @@ def test_weak_secret_is_fine_in_development_and_test() -> None:
 
 def test_secret_is_not_leaked_by_repr() -> None:
     assert GOOD_SECRET not in repr(make())
+
+
+class TestRefreshCookie:
+    @pytest.mark.parametrize(
+        ("environment", "secure"),
+        [("development", False), ("test", False), ("staging", True), ("production", True)],
+    )
+    def test_secure_by_default_outside_development(self, environment: str, secure: bool) -> None:
+        assert make(environment=environment).refresh_cookie_is_secure is secure
+
+    def test_an_explicit_setting_wins(self) -> None:
+        assert make(environment="development", refresh_cookie_secure=True).refresh_cookie_is_secure
+
+    def test_samesite_none_needs_a_secure_cookie(self) -> None:
+        with pytest.raises(ValidationError, match="REFRESH_COOKIE_SAMESITE"):
+            make(environment="development", refresh_cookie_samesite="none")
+        make(environment="production", refresh_cookie_samesite="none")  # secure by default: fine

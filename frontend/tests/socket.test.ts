@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient } from "@tanstack/react-query";
+import { setAccessToken, setUnauthorizedHandler } from "../src/api/client";
 import { RealtimeConnection, applyEvent, realtimeUrl } from "../src/app/socket";
 import type { RealtimeEvent } from "../src/api/types";
 
@@ -53,7 +54,18 @@ beforeEach(() => {
   FakeSocket.all = [];
   vi.useFakeTimers();
 });
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+  setAccessToken(null);
+  setUnauthorizedHandler(null);
+});
+
+function stubRefresh(answer: () => Response) {
+  const fetchMock = vi.fn(async () => answer());
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
 
 describe("RealtimeConnection", () => {
   it("authenticates in the first frame and subscribes once ready", () => {
@@ -104,6 +116,53 @@ describe("RealtimeConnection", () => {
     FakeSocket.all[0].drop(4403);
     vi.advanceTimersByTime(60_000);
     expect(FakeSocket.all).toHaveLength(1);
+  });
+
+  it("refreshes an expired token and reconnects with the new one (4401)", async () => {
+    stubRefresh(() => new Response(JSON.stringify({ access_token: "fresh", token_type: "bearer", expires_in: 1 })));
+    const signedOut = vi.fn();
+    setUnauthorizedHandler(signedOut);
+    const realtime = connection();
+    realtime.connect("stale");
+    FakeSocket.all[0].open();
+
+    FakeSocket.all[0].drop(4401);
+    await vi.waitFor(() => expect(FakeSocket.all).toHaveLength(2));
+    FakeSocket.all[1].open();
+
+    expect(FakeSocket.all[1].sent[0]).toEqual({ type: "auth", token: "fresh" });
+    expect(signedOut).not.toHaveBeenCalled();
+  });
+
+  it("ends the session when the socket is refused and the refresh fails too", async () => {
+    stubRefresh(() => new Response(null, { status: 401 }));
+    const signedOut = vi.fn();
+    setUnauthorizedHandler(signedOut);
+    const realtime = connection();
+    realtime.connect("stale");
+    FakeSocket.all[0].open();
+
+    FakeSocket.all[0].drop(4401);
+
+    await vi.waitFor(() => expect(signedOut).toHaveBeenCalledOnce());
+    expect(FakeSocket.all).toHaveLength(1);
+  });
+
+  it("refreshes at most once until the server accepts a token", async () => {
+    const fetchMock = stubRefresh(() => new Response(JSON.stringify({ access_token: "fresh", token_type: "bearer", expires_in: 1 })));
+    const signedOut = vi.fn();
+    setUnauthorizedHandler(signedOut);
+    const realtime = connection();
+    realtime.connect("stale");
+    FakeSocket.all[0].open();
+    FakeSocket.all[0].drop(4401);
+    await vi.waitFor(() => expect(FakeSocket.all).toHaveLength(2));
+    FakeSocket.all[1].open();
+
+    FakeSocket.all[1].drop(4401); // refused again before any "ready"
+
+    await vi.waitFor(() => expect(signedOut).toHaveBeenCalledOnce());
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 
   it("builds the ws URL from the API base", () => {

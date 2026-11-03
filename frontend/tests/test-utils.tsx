@@ -14,11 +14,13 @@ import { ToastProvider } from "../src/components/Toast";
 export interface ProviderOptions extends Omit<RenderOptions, "wrapper"> {
   route?: string;
   path?: string;
+  /** Let the AuthProvider try the refresh cookie on mount (off: tests start signed out). */
+  restoreSession?: boolean;
 }
 
 export function renderWithProviders(
   ui: ReactElement,
-  { route = "/", path, ...options }: ProviderOptions = {},
+  { route = "/", path, restoreSession = false, ...options }: ProviderOptions = {},
 ) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -27,7 +29,7 @@ export function renderWithProviders(
     return (
       <QueryClientProvider client={queryClient}>
         <ToastProvider>
-          <AuthProvider>
+          <AuthProvider restoreSession={restoreSession}>
             <MemoryRouter
               initialEntries={[route]}
               future={{ v7_startTransition: true, v7_relativeSplatPath: true }}

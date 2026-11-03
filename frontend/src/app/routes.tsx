@@ -15,8 +15,9 @@ import { ComingSoon } from "./ComingSoon";
 
 /** Routes behind sign-in; a signed-out visitor goes to /login and comes back afterwards. */
 export function RequireAuth({ children }: { children?: ReactNode }) {
-  const { token, loading } = useAuth();
+  const { token, loading, restoring } = useAuth();
   const location = useLocation();
+  if (restoring) return <p className="page">Loading…</p>;
   if (!token) {
     return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
   }

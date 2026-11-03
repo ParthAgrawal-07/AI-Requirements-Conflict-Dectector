@@ -206,10 +206,10 @@ class TestCurrentUser:
         assert client.get(ME, headers=auth_headers).status_code == 401
 
 
-PUBLIC_PATHS = {LOGIN, "/api/v1/auth/signup"}
+PUBLIC_PATHS = {LOGIN, "/api/v1/auth/signup", "/api/v1/auth/refresh", "/api/v1/auth/logout"}
 
 
-def test_every_api_route_except_login_and_signup_requires_authentication(
+def test_every_api_route_except_the_public_auth_routes_requires_authentication(
     plain_client: TestClient,
 ) -> None:
     """Security invariant (FR-37): a route added by any teammate must be authenticated by default.

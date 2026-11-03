@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Base path** | `/api/v1` |
-| **Auth** | Bearer JWT (FR-37) on every endpoint except `/auth/login` and `/auth/signup`. Every route also declares the **permission** it needs (`roles-and-access.md`) |
+| **Auth** | Bearer JWT (FR-37) on every endpoint except `/auth/login`, `/auth/signup`, `/auth/refresh` and `/auth/logout`. Every route also declares the **permission** it needs (`roles-and-access.md`) |
 | **Status** | Implemented (Sprint 0–1, rev. 5 plan): section 0 below. Everything else is planned. |
 
 ---
@@ -19,6 +19,8 @@
 |---|---|---|---|
 | `POST /auth/login` | public | Authenticate, issue JWT | US-19 |
 | `POST /auth/signup` | public (+ a join code) | Create an account **with a join code**; rate-limited | US-19 |
+| `POST /auth/refresh` | refresh cookie | Silent re-login: a new access token, and a rotated cookie | US-19 |
+| `POST /auth/logout` | refresh cookie (optional) | Revoke this browser's session and clear the cookie | US-19 |
 | `GET /auth/me` | signed in | The user and every workspace they belong to, with their role in each | US-19, US-24 |
 | `GET /me/permissions?project={p}` or `?workspace={w}` | signed in | The caller's effective permissions there (drives the UI; never the gate) | US-27 |
 | `POST /workspaces` | platform admin (or any user if `ALLOW_USER_WORKSPACE_CREATION`) | Create a workspace; you become its Owner | US-24 |
@@ -56,6 +58,30 @@ endpoint cannot be used to find out which e-mails are registered (existing users
 instead); `429 too_many_requests` with `Retry-After` (5 attempts per minute per client address and per e-mail —
 `SIGNUP_ATTEMPTS_PER_MINUTE`; behind a reverse proxy set `TRUSTED_PROXY_HOPS`). If Redis is unreachable the limit
 falls back to a per-process counter instead of failing sign-up.
+
+### Refresh cookie: `POST /auth/refresh`, `POST /auth/logout`  *(US-19)*
+
+Login and sign-up also set `rcd_refresh`: HttpOnly, `Path=/api/v1/auth`, `SameSite` from `REFRESH_COOKIE_SAMESITE`
+(default `lax`), `Secure` outside development/test, lifetime `REFRESH_TOKEN_EXPIRE_DAYS` (default 14). The access token
+stays in the response body and in the SPA's memory only.
+
+```
+POST /auth/refresh      Cookie: rcd_refresh=…   X-Requested-With: <any>
+Response 200: { "access_token", "token_type": "bearer", "expires_in" }   + Set-Cookie: a new rcd_refresh
+
+POST /auth/logout       Cookie: rcd_refresh=… (optional)   X-Requested-With: <any>
+Response 204            + Set-Cookie: rcd_refresh cleared
+```
+
+Each refresh token is **single-use**: refreshing rotates it. A token presented again more than 30 s after its first
+use means two parties hold it, so the whole session (every token since that sign-in) is revoked; within 30 s it is
+answered normally (two tabs share one cookie). Logout revokes the session. The account's active flag is re-read on
+every refresh. Errors: `401 session_expired` (missing, expired, revoked or replayed; the cookie is cleared — sign in
+again); `403` without `X-Requested-With` (a custom header forces a CORS preflight, so other sites cannot trigger these
+routes); `503 session_store_unavailable` when Redis is down (refresh fails closed). Logout always answers 204.
+
+Clients send these four routes with `credentials: "include"`; the API answers CORS with
+`Access-Control-Allow-Credentials: true` for the origins in `CORS_ALLOWED_ORIGINS`.
 
 ### `GET /me/permissions`  *(US-27)*
 

@@ -58,7 +58,7 @@ Subscribe error codes: `not_found` (unknown id **or** not a member — deliberat
 
 | Code | Meaning | Client |
 |---|---|---|
-| 4401 | No valid `auth` frame (invalid/expired token, timeout) | Clear auth state, prompt sign-in, do not reconnect |
+| 4401 | No valid `auth` frame (invalid/expired token, timeout) | Refresh the token once (`POST /auth/refresh`) and reconnect; if that fails, clear auth state and prompt sign-in |
 | 4403 | Membership revoked | Invalidate workspace and permission caches, do not reconnect |
 
 ### Reconnection (client)
