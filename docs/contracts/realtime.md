@@ -115,3 +115,4 @@ When an event occurs on a subscribed project, the server pushes an event frame:
 - **Backoff:** On abnormal disconnect, client reconnects with exponential backoff (`delay = min(30000, 1000 * 2^attempts)`).
 - **Retry Cap:** Client stops retrying after 5 consecutive failures, logging no further console errors and gracefully falling back to REST polling.
 - **No retry on authentication errors:** No reconnect occurs after close code `4401` or `4403`.
+
