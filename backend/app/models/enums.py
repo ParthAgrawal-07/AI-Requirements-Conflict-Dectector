@@ -170,3 +170,9 @@ class AnalysisScope(StrEnum):
     DOCUMENT = "document"  # a whole uploaded document (Sprint 2)
     REQUIREMENT = "requirement"  # one posted requirement against the baseline (US-31, S3)
     CHANGE_REQUEST = "change_request"  # consequence checks (US-34, S4)
+
+
+class MessageKind(StrEnum):
+    CHAT = "chat"
+    REQUIREMENT_POST = "requirement_post"
+    CARD = "card"
