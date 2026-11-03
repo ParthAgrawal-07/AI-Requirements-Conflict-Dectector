@@ -1,40 +1,62 @@
-"""Redis Pub/Sub publisher for project-scoped graph events.
+"""Real-time event envelope (Dhavni — US-03, US-29, design update §3.4).
 
-Redis Pub/Sub is ephemeral. Call publish_graph_delta only after the database
-transaction has committed. Clients must fetch a REST snapshot if their
-revision sequence has a gap.
+Every message pushed to browsers has the same shape::
+
+    {"type": "analysis.progress", "workspace_id": "...", "project_id": "...",
+     "channel_id": null, "entity_id": "<document id>", "at": "2026-10-24T10:42:00Z",
+     "data": {...}}
+
+* ``type`` is ``<area>.<what happened>``; the constants below are the ones that exist today.
+* ``workspace_id`` decides who may receive it (the gateway checks membership on subscribe);
+  ``project_id`` / ``channel_id`` narrow it further.
+* ``data`` carries ids, states and numbers only — never requirement or message text (CR-04).
+  A client that needs the text re-reads it over REST, which also re-checks permissions.
 """
 
-from __future__ import annotations
+import uuid
+from datetime import UTC, datetime
+from typing import Any
 
-import json
-from uuid import UUID
+from pydantic import BaseModel, Field
 
-from redis.asyncio import Redis
+ANALYSIS_PROGRESS = "analysis.progress"  # a document moved to a new stage or percentage (US-03)
+MEMBERSHIP_REVOKED = "membership.revoked"  # the gateway closes the member's sockets (US-26, S2)
+GRAPH_DELTA = "graph.delta"  # nodes/edges changed on the live map (US-14, S3)
 
-from app.core.config import get_settings
-from app.graph.schemas import GraphDeltaEvent
-
-
-def project_channel(project_id: UUID) -> str:
-    """Return the Redis channel for a project's events."""
-    return f"rcd:project:{project_id}:events"
+EVENT_TYPES = frozenset({ANALYSIS_PROGRESS, MEMBERSHIP_REVOKED, GRAPH_DELTA})
 
 
-async def publish_graph_delta(event: GraphDeltaEvent) -> int:
-    """Publish a validated graph event and return the subscriber count."""
-    redis = Redis.from_url(
-        get_settings().redis_url,
-        decode_responses=True,
+class Event(BaseModel):
+    type: str
+    workspace_id: uuid.UUID
+    project_id: uuid.UUID | None = None
+    channel_id: uuid.UUID | None = None
+    entity_id: uuid.UUID | None = None
+    at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    data: dict[str, Any] = Field(default_factory=dict)
+
+
+def analysis_progress(
+    *,
+    workspace_id: uuid.UUID,
+    project_id: uuid.UUID,
+    document_id: uuid.UUID,
+    status: str,
+    progress_percent: int,
+    stage: str | None = None,
+    error_message: str | None = None,
+) -> Event:
+    """A document's processing state, as ``GET /documents/{id}`` would report it."""
+    return Event(
+        type=ANALYSIS_PROGRESS,
+        workspace_id=workspace_id,
+        project_id=project_id,
+        entity_id=document_id,
+        data={
+            "document_id": str(document_id),
+            "status": status,
+            "progress_percent": progress_percent,
+            "stage": stage,
+            "error_message": error_message,
+        },
     )
-
-    try:
-        return await redis.publish(
-            project_channel(event.project_id),
-            json.dumps(
-                event.model_dump(mode="json"),
-                separators=(",", ":"),
-            ),
-        )
-    finally:
-        await redis.aclose()

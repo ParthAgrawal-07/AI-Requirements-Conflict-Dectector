@@ -20,7 +20,7 @@ from app.core.middleware import (
     MaxBodySizeMiddleware,
     RequestContextMiddleware,
 )
-from app.realtime.router import router as realtime_router
+from app.realtime import gateway
 from app.services.documents import too_large_message
 
 logger = logging.getLogger(__name__)
@@ -79,7 +79,7 @@ def create_app() -> FastAPI:
     install_exception_handlers(app)
     app.include_router(health.router)
     app.include_router(api_router)
-    app.include_router(realtime_router)
+    app.include_router(gateway.router)  # /ws — authenticates in its first frame
     return app
 
 

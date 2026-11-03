@@ -92,6 +92,7 @@ class Settings(BaseSettings):
     llm_effort: Effort = "low"
     llm_timeout_seconds: float = Field(default=60.0, gt=0, le=600)
     llm_max_retries: int = Field(default=2, ge=0, le=6)  # transport retries (429, 5xx, network)
+    realtime_bus: Literal["redis", "memory"] = "redis"
 
     # ── Validators ────────────────────────────────────────
     @field_validator("database_url")

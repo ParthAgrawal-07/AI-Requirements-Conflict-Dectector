@@ -1,67 +1,65 @@
-from __future__ import annotations
+"""Live-map graph schemas (Dhavni — US-14; agreed in Sprint 0 with Abhijeet and Pranshu).
 
-from datetime import UTC, datetime
+``GET /projects/{p}/graph`` (Sprint 2) returns a :class:`GraphSnapshot`; after every analysis run
+the server publishes a ``graph.delta`` event whose ``data`` is a :class:`GraphDelta` (Sprint 3).
+A client applies a delta only if ``from_revision`` equals the revision it holds; otherwise it
+re-fetches the snapshot (missed events are never replayed).
+
+Nodes are requirements, edges are findings (and, later, human links). Text stays out of deltas:
+``label`` is the printed ID (``REQ-014``) and the client fetches the statement over REST.
+"""
+
+import uuid
 from typing import Literal
-from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
-
-class EventEnvelope(BaseModel):
-    """Common metadata shared by project-scoped events."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    type: str = Field(min_length=1, max_length=100)
-    workspace_id: UUID
-    project_id: UUID
-    channel_id: UUID | None = None
-    entity_id: UUID | None = None
-    at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+NodeState = Literal["Proposed", "Under_Review", "Approved", "Rejected", "Implemented", "Deprecated"]
+EdgeKind = Literal["conflict", "duplicate", "depends_on", "ambiguous", "incomplete", "link"]
 
 
 class GraphNode(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    id: str = Field(min_length=1, max_length=200)
-    label: str | None = Field(default=None, max_length=500)
-    kind: str | None = Field(default=None, max_length=100)
-    data: dict[str, object] = Field(default_factory=dict)
+    id: uuid.UUID  # requirement id
+    label: str | None  # printed ID, e.g. "REQ-014"; None when the document had none
+    state: NodeState
+    group: str | None = None  # stakeholder group, for "group by" on the map
+    owner_id: uuid.UUID | None = None
+    open_issues: int = 0
 
 
 class GraphEdge(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    id: str = Field(min_length=1, max_length=200)
-    source: str = Field(min_length=1, max_length=200)
-    target: str = Field(min_length=1, max_length=200)
-    label: str | None = Field(default=None, max_length=500)
-    kind: str | None = Field(default=None, max_length=100)
-    data: dict[str, object] = Field(default_factory=dict)
+    id: uuid.UUID  # finding id (or link id)
+    source: uuid.UUID
+    target: uuid.UUID
+    kind: EdgeKind
+    severity: Literal["low", "medium", "high"] | None = None
+    confidence: float | None = Field(default=None, ge=0, le=1)
 
 
-class GraphDeltaChanges(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    nodes: list[GraphNode] = Field(default_factory=list, max_length=5000)
-    edges: list[GraphEdge] = Field(default_factory=list, max_length=20000)
-
-
-class GraphDeltaRemoved(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    nodes: list[str] = Field(default_factory=list, max_length=5000)
-    edges: list[str] = Field(default_factory=list, max_length=20000)
+class GraphSnapshot(BaseModel):
+    project_id: uuid.UUID
+    revision: int
+    nodes: list[GraphNode]
+    edges: list[GraphEdge]
 
 
-class GraphDeltaEvent(EventEnvelope):
-    """One revision of the graph belonging to a project."""
+class GraphChanges(BaseModel):
+    nodes: list[GraphNode] = Field(default_factory=list)
+    edges: list[GraphEdge] = Field(default_factory=list)
 
-    type: Literal["graph.delta"] = "graph.delta"
 
-    revision: int = Field(ge=1)
-    actor_id: UUID | None = None
+class GraphRemovals(BaseModel):
+    node_ids: list[uuid.UUID] = Field(default_factory=list)
+    edge_ids: list[uuid.UUID] = Field(default_factory=list)
 
-    added: GraphDeltaChanges = Field(default_factory=GraphDeltaChanges)
-    changed: GraphDeltaChanges = Field(default_factory=GraphDeltaChanges)
-    removed: GraphDeltaRemoved = Field(default_factory=GraphDeltaRemoved)
+
+class GraphDelta(BaseModel):
+    project_id: uuid.UUID
+    from_revision: int
+    to_revision: int
+    added: GraphChanges = Field(default_factory=GraphChanges)
+    changed: GraphChanges = Field(default_factory=GraphChanges)
+    removed: GraphRemovals = Field(default_factory=GraphRemovals)
+    # One-line written feed under the map (US-14), e.g. "REQ-041 added by Heet; conflicts with
+    # REQ-012". Template sentences built by the narrator (S3), not by an LLM.
+    sentences: list[str] = Field(default_factory=list)
