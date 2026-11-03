@@ -124,7 +124,6 @@ def _cmd_seed_demo(_: argparse.Namespace) -> int:
     with session_scope() as db:
         _seed_demo(db)
     print(f"\nDemo password for every account: {DEMO_PASSWORD}")
-    print("Development join code (until join codes land): TEST1234")
     return 0
 
 
