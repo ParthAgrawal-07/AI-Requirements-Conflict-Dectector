@@ -28,6 +28,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    op.drop_constraint(op.f("uq_findings_candidate_pair_id"), "findings", type_="unique")
     op.add_column("findings", sa.Column("project_id", sa.Uuid(), nullable=True))
     op.execute(
         "UPDATE findings f SET project_id = d.project_id FROM documents d WHERE d.id = f.document_id"
@@ -93,3 +94,8 @@ def downgrade() -> None:
     op.drop_index("ix_findings_project_id_status", table_name="findings")
     op.drop_constraint(op.f("fk_findings_project_id_projects"), "findings", type_="foreignkey")
     op.drop_column("findings", "project_id")
+    op.create_unique_constraint(
+        op.f("uq_findings_candidate_pair_id"),
+        "findings",
+        ["candidate_pair_id"],
+    )

@@ -4,12 +4,13 @@ Importing this package registers every table on ``Base.metadata`` — Alembic's 
 relies on that, so a new model file must be imported here.
 """
 
-from app.models.analysis import CandidatePair, Clarification, Finding
+from app.models.analysis import AnalysisRun, CandidatePair, Clarification, Finding
 from app.models.audit import AuditLog
 from app.models.base import Base
 from app.models.channel import Channel, ChannelMember, ChannelRead, Message
 from app.models.context import DocumentSection, ProjectContext
 from app.models.document import Document
+from app.models.draft import RequirementDraft
 from app.models.embedding import EMBEDDING_DIM, Embedding
 from app.models.enums import (
     AnalysisRunStatus,
@@ -40,6 +41,7 @@ from app.models.workspace import Workspace
 
 __all__ = [
     "EMBEDDING_DIM",
+    "AnalysisRun",
     "AnalysisRunStatus",
     "AnalysisScope",
     "ClassificationStatus",
@@ -73,6 +75,7 @@ __all__ = [
     "ProjectMember",
     "ProjectStatus",
     "Requirement",
+    "RequirementDraft",
     "RequirementOrigin",
     "RequirementState",
     "RequirementVersion",

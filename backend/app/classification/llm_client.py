@@ -110,6 +110,21 @@ class AnthropicTransport:
         return "".join(block.text for block in response.content if block.type == "text")
 
 
+class FallbackTransport:
+    """Tries the primary transport and switches to backup only on LLMUnavailableError (ADR-31)."""
+
+    def __init__(self, primary: LLMTransport, backup: LLMTransport) -> None:
+        self.primary = primary
+        self.backup = backup
+
+    def send(self, system: str, user: str) -> str:
+        try:
+            return self.primary.send(system, user)
+        except LLMUnavailableError as exc:
+            logger.warning("Primary LLM transport unavailable (%s); falling back to backup", exc)
+            return self.backup.send(system, user)
+
+
 @dataclass
 class FakeTransport:
     """Scripted replies for tests: returns ``replies`` in order and records every prompt."""
