@@ -137,7 +137,7 @@ export function RequirementsTable({
 
       <div className="card" style={{ marginTop: 16, overflowX: "auto" }}>
         {isError ? (
-          <div style={{ padding: "var(--space-6)", color: "var(--danger)", textAlign: "center" }} role="alert">
+          <div className="empty-state error-state" role="alert">
             <strong>Could not load requirements:</strong>{" "}
             <span>{error instanceof Error ? error.message : "error"}</span>
           </div>

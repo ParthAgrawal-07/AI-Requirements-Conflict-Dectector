@@ -4,7 +4,7 @@
 // TanStack Query cache. Events are hints — after every (re)connect the cache is invalidated so
 // the screen re-reads over REST, because events missed while offline are never replayed.
 
-import { createContext, createElement, useContext, useEffect, useRef } from "react";
+import { createContext, createElement, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { API_BASE_URL, triggerUnauthorized } from "../api/client";
@@ -192,8 +192,7 @@ export function RealtimeProvider({
   connection?: RealtimeConnection;
 }) {
   const queryClient = useQueryClient();
-  const ref = useRef<RealtimeConnection>(connection ?? new RealtimeConnection());
-  const realtime = ref.current;
+  const [realtime] = useState(() => connection ?? new RealtimeConnection());
 
   useEffect(() => {
     if (!token) return;

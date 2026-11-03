@@ -13,11 +13,11 @@ export function KitPage() {
   const [tab, setTab] = useState("members");
 
   return (
-    <div className="page grid-paper" style={{ minHeight: "100%" }}>
+    <div className="page grid-paper kit-page">
       <h1>Component kit</h1>
 
       <h2>Buttons</h2>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <div className="row">
         <Button variant="primary">Primary</Button>
         <Button>Secondary</Button>
         <Button variant="accent">+ New requirement</Button>
@@ -28,7 +28,7 @@ export function KitPage() {
       </div>
 
       <h2>Badges — icon plus word, never colour alone</h2>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <div className="row">
         <Badge tone="approved">Approved v2</Badge>
         <Badge tone="proposed">Proposed</Badge>
         <Badge tone="conflict">conflict</Badge>
@@ -55,7 +55,7 @@ export function KitPage() {
       </Tabs>
 
       <h2>Drawer and toast</h2>
-      <div style={{ display: "flex", gap: 8 }}>
+      <div className="row">
         <Button onClick={() => setDrawer(true)}>Open drawer</Button>
         <Button onClick={() => notify("Saved.", "success")}>Success toast</Button>
         <Button onClick={() => notify("Something failed.", "error")}>Error toast</Button>

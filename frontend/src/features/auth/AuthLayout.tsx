@@ -6,7 +6,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <div className="auth-layout">
       <aside className="auth-art grid-paper" aria-hidden="true">
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div className="auth-brand">
           <span className="logo">RCD</span>
           <strong>Requirements Conflict Detector</strong>
         </div>
@@ -46,7 +46,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
             ))}
           </g>
         </svg>
-        <p style={{ fontSize: 18, maxWidth: 360 }}>
+        <p className="auth-tagline">
           Every requirement your team writes, checked against everything you already agreed.
         </p>
       </aside>

@@ -35,12 +35,12 @@ export function RequirementsPage() {
         )}
       </div>
       {inFlight.length > 0 && (
-        <section aria-label="Uploads in progress" style={{ marginBottom: 24 }}>
+        <section aria-label="Uploads in progress" className="page-section">
           <DocumentProgressList documents={inFlight} />
         </section>
       )}
       {failed.length > 0 && (
-        <section aria-label="Failed uploads" style={{ marginBottom: 24 }}>
+        <section aria-label="Failed uploads" className="page-section">
           <DocumentProgressList documents={failed} />
         </section>
       )}
