@@ -39,7 +39,7 @@ export function usePermissions(scope: Scope | null): Permissions {
   for (const restricted of query.data?.protected_only ?? []) granted.delete(restricted);
   return {
     can: (permission: string) => granted.has(permission),
-    role: query.data?.role.name ?? null,
+    role: query.data?.role?.name ?? null,
     isLoading: query.isLoading,
   };
 }

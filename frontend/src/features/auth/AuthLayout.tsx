@@ -12,15 +12,15 @@ export function AuthLayout({ children }: { children: ReactNode }) {
         </div>
         <svg viewBox="0 0 460 300" width="100%" role="presentation">
           <g fontFamily="var(--font-mono)" fontSize="12">
-            <line x1="90" y1="50" x2="230" y2="150" stroke="#1b1b1d" strokeWidth="1.5" />
-            <line x1="90" y1="50" x2="100" y2="240" stroke="#1b1b1d" strokeWidth="1.5" />
-            <line x1="230" y1="150" x2="100" y2="240" stroke="#9a948a" strokeWidth="1.5" />
-            <line x1="230" y1="150" x2="380" y2="70" stroke="#c2410c" strokeWidth="2.5" />
-            <line x1="230" y1="150" x2="370" y2="260" stroke="#1b1b1d" strokeDasharray="2 4" />
-            <circle cx="305" cy="110" r="10" fill="#faf8f3" stroke="#c2410c" strokeWidth="2" />
-            <text x="299" y="114" fill="#c2410c">✕</text>
-            <text x="320" y="140" fill="#c2410c">conflict</text>
-            <text x="270" y="220" fill="#4a4a4f">depends on</text>
+            <line x1="90" y1="50" x2="230" y2="150" stroke="var(--ink)" strokeWidth="1.5" />
+            <line x1="90" y1="50" x2="100" y2="240" stroke="var(--ink)" strokeWidth="1.5" />
+            <line x1="230" y1="150" x2="100" y2="240" stroke="var(--line-strong)" strokeWidth="1.5" />
+            <line x1="230" y1="150" x2="380" y2="70" stroke="var(--conflict)" strokeWidth="2.5" />
+            <line x1="230" y1="150" x2="370" y2="260" stroke="var(--ink)" strokeDasharray="2 4" />
+            <circle cx="305" cy="110" r="10" fill="var(--paper-raised)" stroke="var(--conflict)" strokeWidth="2" />
+            <text x="299" y="114" fill="var(--conflict)">✕</text>
+            <text x="320" y="140" fill="var(--conflict)">conflict</text>
+            <text x="270" y="220" fill="var(--ink-soft)">depends on</text>
             {[
               [40, 35, "REQ-002", false],
               [180, 136, "REQ-014", false],
@@ -35,11 +35,11 @@ export function AuthLayout({ children }: { children: ReactNode }) {
                   width="100"
                   height="30"
                   rx="4"
-                  fill="#faf8f3"
-                  stroke={dashed ? "#c2410c" : "#1b1b1d"}
+                  fill="var(--paper-raised)"
+                  stroke={dashed ? "var(--conflict)" : "var(--ink)"}
                   strokeDasharray={dashed ? "4 3" : undefined}
                 />
-                <text x={Number(x) + 18} y={Number(y) + 19} fill="#1b1b1d">
+                <text x={Number(x) + 18} y={Number(y) + 19} fill="var(--ink)">
                   {String(label)}
                 </text>
               </g>

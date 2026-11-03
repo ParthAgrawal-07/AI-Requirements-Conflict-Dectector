@@ -17,7 +17,8 @@ export function RequirementsPage() {
   const [uploading, setUploading] = useState(false);
 
   const docs = documents.data?.items ?? [];
-  const inFlight = docs.filter((doc) => doc.status !== "done");
+  const inFlight = docs.filter((doc) => doc.status === "queued" || doc.status === "processing");
+  const failed = docs.filter((doc) => doc.status === "failed");
   const allFailed = docs.length > 0 && docs.every((doc) => doc.status === "failed");
 
   return (
@@ -36,6 +37,11 @@ export function RequirementsPage() {
       {inFlight.length > 0 && (
         <section aria-label="Uploads in progress" style={{ marginBottom: 24 }}>
           <DocumentProgressList documents={inFlight} />
+        </section>
+      )}
+      {failed.length > 0 && (
+        <section aria-label="Failed uploads" style={{ marginBottom: 24 }}>
+          <DocumentProgressList documents={failed} />
         </section>
       )}
       <RequirementsTable projectId={projectId} extractionFailed={allFailed} />

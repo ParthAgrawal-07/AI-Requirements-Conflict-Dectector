@@ -59,10 +59,22 @@ export function RequirementsTable({
   const [offset, setOffset] = useState(0);
 
   useEffect(() => {
-    const timer = setTimeout(() => setQ(search.trim()), 300); // don't query on every keystroke
+    const timer = setTimeout(() => {
+      setQ(search.trim());
+      setOffset(0);
+    }, 300); // don't query on every keystroke
     return () => clearTimeout(timer);
   }, [search]);
-  useEffect(() => setOffset(0), [filter, origin, q]);
+
+  const onFilterChange = (nextFilter: Filter) => {
+    setFilter(nextFilter);
+    setOffset(0);
+  };
+
+  const onOriginChange = (nextOrigin: RequirementFilters["origin"]) => {
+    setOrigin(nextOrigin);
+    setOffset(0);
+  };
 
   const filters: RequirementFilters = {
     q: q || undefined,
@@ -85,7 +97,7 @@ export function RequirementsTable({
               type="button"
               className="pill"
               aria-pressed={filter === item.id}
-              onClick={() => setFilter(item.id)}
+              onClick={() => onFilterChange(item.id)}
             >
               {item.label}
             </button>
@@ -100,7 +112,7 @@ export function RequirementsTable({
             className="select"
             value={origin ?? ""}
             onChange={(event) =>
-              setOrigin((event.target.value || undefined) as RequirementFilters["origin"])
+              onOriginChange((event.target.value || undefined) as RequirementFilters["origin"])
             }
           >
             <option value="">Any origin</option>
@@ -115,6 +127,7 @@ export function RequirementsTable({
             id="req-search"
             className="input"
             type="search"
+            maxLength={200}
             placeholder="Search ID or text"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -124,9 +137,10 @@ export function RequirementsTable({
 
       <div className="card" style={{ marginTop: 16, overflowX: "auto" }}>
         {isError ? (
-          <p className="empty-state" role="alert">
-            Could not load requirements: {error instanceof Error ? error.message : "error"}
-          </p>
+          <div style={{ padding: "var(--space-6)", color: "var(--danger)", textAlign: "center" }} role="alert">
+            <strong>Could not load requirements:</strong>{" "}
+            <span>{error instanceof Error ? error.message : "error"}</span>
+          </div>
         ) : isLoading ? (
           <p className="empty-state">Loading requirements…</p>
         ) : total === 0 ? (

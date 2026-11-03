@@ -43,11 +43,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const start = useCallback(async (newToken: string) => {
     setAccessToken(newToken);
-    setToken(newToken);
     setExpired(false);
     setLoading(true);
     try {
-      setUser(await apiFetch<Me>("/auth/me"));
+      const me = await apiFetch<Me>("/auth/me");
+      setUser(me);
+      setToken(newToken);
+    } catch (error) {
+      setAccessToken(null);
+      setToken(null);
+      setUser(null);
+      throw error;
     } finally {
       setLoading(false);
     }

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { ApiError } from "../../api/client";
 import { useAuth } from "../../app/auth";
 import { useProjectRealtime } from "../../app/socket";
 import { usePermissions } from "../../app/usePermissions";
@@ -20,6 +21,21 @@ export function ProjectHomePage() {
   const [uploading, setUploading] = useState(false);
 
   if (project.isLoading) return <p className="page">Loading project…</p>;
+  if (project.isError) {
+    const isNotFound = project.error instanceof ApiError && project.error.status === 404;
+    if (isNotFound) {
+      return <p className="page">This project does not exist or you have no access.</p>;
+    }
+    return (
+      <div className="page" role="alert">
+        <h1>Could not load project</h1>
+        <p className="field-error">
+          {project.error instanceof Error ? project.error.message : "Failed to load project."}
+        </p>
+        <Button onClick={() => void project.refetch()}>Try again</Button>
+      </div>
+    );
+  }
   if (!project.data) return <p className="page">This project does not exist or you have no access.</p>;
 
   return (

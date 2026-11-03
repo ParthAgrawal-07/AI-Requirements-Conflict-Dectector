@@ -9,25 +9,63 @@ export interface DrawerProps {
   footer?: ReactNode;
 }
 
+const FOCUSABLE_SELECTOR =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 /** A side panel used as a modal dialog: focus moves in, Escape and the backdrop close it,
- *  and focus returns to whatever opened it. */
+ *  focus is trapped inside the panel, and focus returns to whatever opened it. */
 export function Drawer({ open, title, onClose, children, footer }: DrawerProps) {
   const titleId = useId();
   const panel = useRef<HTMLDivElement>(null);
+
+  const onCloseRef = useRef(onClose);
+  // keep the latest onClose in the ref without triggering the effect
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return;
     const opener = document.activeElement as HTMLElement | null;
     panel.current?.focus();
+
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        onCloseRef.current();
+        return;
+      }
+      if (event.key === "Tab" && panel.current) {
+        const focusable = Array.from(
+          panel.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+        );
+        if (focusable.length === 0) {
+          event.preventDefault();
+          panel.current.focus();
+          return;
+        }
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey) {
+          if (
+            document.activeElement === first ||
+            !panel.current.contains(document.activeElement)
+          ) {
+            event.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+          }
+        }
+      }
     };
+
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("keydown", onKey);
       opener?.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
   return (

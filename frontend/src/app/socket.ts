@@ -7,7 +7,7 @@
 import { createContext, createElement, useContext, useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { API_BASE_URL } from "../api/client";
+import { API_BASE_URL, triggerUnauthorized } from "../api/client";
 import type { RealtimeEvent } from "../api/types";
 
 export type EventHandler = (event: RealtimeEvent) => void;
@@ -22,8 +22,14 @@ export type SocketFactory = (url: string) => SocketLike;
 
 const PING_MS = 25_000;
 const MAX_BACKOFF_MS = 30_000;
+const MAX_ATTEMPTS = 5;
 const CLOSE_UNAUTHENTICATED = 4401;
 const CLOSE_REVOKED = 4403;
+
+const REALTIME_ENABLED =
+  typeof import.meta !== "undefined" && import.meta.env
+    ? import.meta.env.VITE_REALTIME_ENABLED !== "false"
+    : true;
 
 export function realtimeUrl(base: string = API_BASE_URL): string {
   const url = new URL("/ws", base);
@@ -40,6 +46,7 @@ export class RealtimeConnection {
   private readonly projects = new Map<string, number>(); // project id -> subscriber count
   private readonly handlers = new Set<EventHandler>();
   private readonly resyncHandlers = new Set<() => void>();
+  private readonly revokedHandlers = new Set<() => void>();
 
   constructor(
     private readonly url: string = realtimeUrl(),
@@ -65,8 +72,12 @@ export class RealtimeConnection {
     this.sendSubscribe(projectId);
     return () => {
       const count = (this.projects.get(projectId) ?? 1) - 1;
-      if (count <= 0) this.projects.delete(projectId);
-      else this.projects.set(projectId, count);
+      if (count <= 0) {
+        this.projects.delete(projectId);
+        this.sendUnsubscribe(projectId);
+      } else {
+        this.projects.set(projectId, count);
+      }
     };
   }
 
@@ -81,8 +92,13 @@ export class RealtimeConnection {
     return () => this.resyncHandlers.delete(handler);
   }
 
+  onRevoked(handler: () => void): () => void {
+    this.revokedHandlers.add(handler);
+    return () => this.revokedHandlers.delete(handler);
+  }
+
   private open(): void {
-    if (!this.token) return;
+    if (!REALTIME_ENABLED || !this.token) return;
     this.socket?.close();
     const socket = this.factory(this.url);
     this.socket = socket;
@@ -113,7 +129,15 @@ export class RealtimeConnection {
     if (socket !== this.socket) return; // an old socket we replaced
     this.clearTimers();
     this.socket = null;
-    if (!this.token || code === CLOSE_UNAUTHENTICATED || code === CLOSE_REVOKED) return;
+    if (code === CLOSE_UNAUTHENTICATED) {
+      triggerUnauthorized();
+      return;
+    }
+    if (code === CLOSE_REVOKED) {
+      this.revokedHandlers.forEach((handler) => handler());
+      return;
+    }
+    if (!this.token || this.attempts >= MAX_ATTEMPTS) return;
     const delay = Math.min(MAX_BACKOFF_MS, 1000 * 2 ** this.attempts);
     this.attempts += 1;
     this.retryTimer = setTimeout(() => this.open(), delay);
@@ -122,6 +146,12 @@ export class RealtimeConnection {
   private sendSubscribe(projectId: string): void {
     if (this.socket && this.socket.readyState === 1) {
       this.socket.send(JSON.stringify({ type: "subscribe", project_id: projectId }));
+    }
+  }
+
+  private sendUnsubscribe(projectId: string): void {
+    if (this.socket && this.socket.readyState === 1) {
+      this.socket.send(JSON.stringify({ type: "unsubscribe", project_id: projectId }));
     }
   }
 
@@ -170,9 +200,14 @@ export function RealtimeProvider({
     realtime.connect(token);
     const stopEvents = realtime.onEvent((event) => applyEvent(queryClient, event));
     const stopResync = realtime.onResync(() => void queryClient.invalidateQueries());
+    const stopRevoked = realtime.onRevoked(() => {
+      void queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+      void queryClient.invalidateQueries({ queryKey: ["permissions"] });
+    });
     return () => {
       stopEvents();
       stopResync();
+      stopRevoked();
       realtime.disconnect();
     };
   }, [token, realtime, queryClient]);

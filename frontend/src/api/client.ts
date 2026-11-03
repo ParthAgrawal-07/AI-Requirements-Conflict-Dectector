@@ -38,6 +38,10 @@ export function setUnauthorizedHandler(handler: (() => void) | null): void {
   onUnauthorized = handler;
 }
 
+export function triggerUnauthorized(): void {
+  onUnauthorized?.();
+}
+
 export interface RequestOptions {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   json?: unknown;

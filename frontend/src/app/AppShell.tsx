@@ -1,5 +1,7 @@
+import { useEffect } from "react";
 import { NavLink, Outlet, useNavigate, useParams } from "react-router-dom";
 import { ProjectSwitcher } from "../features/projects/ProjectSwitcher";
+import { rememberLastProject } from "../features/projects/api";
 import { Button } from "../components/Button";
 import { useAuth } from "./auth";
 import { usePermissions } from "./usePermissions";
@@ -30,6 +32,12 @@ export function AppShell() {
   const navigate = useNavigate();
   const { can } = usePermissions(projectId ? { projectId } : null);
   const projectBase = workspaceId && projectId ? `/w/${workspaceId}/p/${projectId}` : null;
+
+  useEffect(() => {
+    if (workspaceId) {
+      rememberLastProject(workspaceId, projectId);
+    }
+  }, [workspaceId, projectId]);
 
   return (
     <div className="shell">
