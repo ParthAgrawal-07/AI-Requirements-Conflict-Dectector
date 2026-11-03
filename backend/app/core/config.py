@@ -72,6 +72,13 @@ class Settings(BaseSettings):
     join_attempts_per_window: int = Field(default=10, ge=1, le=1000)
     join_attempt_window_seconds: int = Field(default=600, ge=1, le=24 * 60 * 60)
 
+    # ── Real time (US-03, US-29) ──────────────────────────
+    # "redis": events fan out between API processes over Redis pub/sub (every deployment).
+    # "memory": in-process only — tests and a single `uvicorn` without Redis.
+    realtime_bus: Literal["redis", "memory"] = "redis"
+    # US-29: chat messages (posts, replies, edits) per user per minute.
+    messages_per_minute: int = Field(default=30, ge=1, le=1000)
+
     # ── HTTP ──────────────────────────────────────────────
     cors_allowed_origins: Annotated[list[str], NoDecode] = ["http://localhost:5173"]
 
@@ -87,17 +94,20 @@ class Settings(BaseSettings):
         # .env.example historically used SIMILARITY_THRESHOLD; docs use *_DEFAULT. Accept both.
         validation_alias=AliasChoices("SIMILARITY_THRESHOLD_DEFAULT", "SIMILARITY_THRESHOLD"),
     )
-    llm_provider: Literal["gemini", "groq", "anthropic", "openai"] = "gemini"
-    llm_fallback_provider: Literal["groq", "none"] | None = "groq"
-    gemini_api_key: SecretStr | None = None
-    gemini_model: str = "gemini-2.5-flash"
-    groq_api_key: SecretStr | None = None
-    groq_model: str = "llama-3.3-70b-versatile"
+    # Heet (US-05): neighbours per requirement sent to the classifier. Recall over cost: raise it
+    # before lowering the similarity threshold.
+    candidate_top_k: int = Field(default=10, ge=1, le=50)
+    llm_provider: Literal["anthropic", "openai"] = "anthropic"
     llm_api_key: SecretStr | None = None
-    llm_model: str = "gemini-2.5-flash"
+    # Keval (LLM client): the model and how hard it thinks. Effort trades depth for tokens;
+    # classification is short and frequent, so "low" is the starting point — tune it with the
+    # benchmark (CP1), never by guessing.
+    llm_model: str = "claude-opus-5-5"
     llm_effort: Effort = "low"
     llm_timeout_seconds: float = Field(default=60.0, gt=0, le=600)
     llm_max_retries: int = Field(default=2, ge=0, le=6)  # transport retries (429, 5xx, network)
+    # US-05: re-asks when a reply does not validate against the schema; then the pair is failed.
+    llm_output_retries: int = Field(default=3, ge=0, le=5)
 
     # ── Validators ────────────────────────────────────────
     @field_validator("database_url")

@@ -24,7 +24,17 @@ from sqlalchemy.orm import Session
 
 from app.core import security
 from app.core.permissions import DEFAULT_ROLE_PERMISSIONS, PERMISSIONS, DefaultRole
-from app.models import Document, DocumentFormat, JoinRequest, Project, User, Workspace
+from app.models import (
+    Document,
+    DocumentFormat,
+    Finding,
+    FindingCategory,
+    JoinRequest,
+    Project,
+    Requirement,
+    User,
+    Workspace,
+)
 from app.services import documents as document_service
 from app.services import join_codes as join_code_service
 from app.services.access import Scope, build_access_context
@@ -61,6 +71,7 @@ class World:
     join_code_id: uuid.UUID
     join_request: JoinRequest
     viewer_role_id: uuid.UUID
+    finding: Finding
 
 
 @dataclass(frozen=True)
@@ -107,6 +118,9 @@ CASES = [
         "/api/v1/workspaces/{workspace_id}/join-requests/{join_request_id}/decision",
         lambda _: {"approve": False},
     ),
+    # Sprint 2 — findings (US-07)
+    Case("GET", "/api/v1/projects/{project_id}/findings"),
+    Case("GET", "/api/v1/findings/{finding_id}"),
 ]
 
 
@@ -156,7 +170,21 @@ def world(
     assert isinstance(request, JoinRequest)
     db_session.commit()
     viewer = get_default_role(db_session, DefaultRole.VIEWER).id
-    return World(workspace, project, document, code.join_code.id, request, viewer)
+    vague = Requirement(document_id=document.id, project_id=project.id, body="It shall be fast.")
+    db_session.add(vague)
+    db_session.flush()
+    finding = Finding(
+        project_id=project.id,
+        document_id=document.id,
+        requirement_id=vague.id,
+        category=FindingCategory.AMBIGUOUS,
+        confidence=0.8,
+        rationale="fast",
+        original_ai_output={},
+    )
+    db_session.add(finding)
+    db_session.commit()
+    return World(workspace, project, document, code.join_code.id, request, viewer, finding)
 
 
 @pytest.fixture
@@ -178,6 +206,7 @@ def _call(api: TestClient, case: Case, world: World, user: User) -> int:
         document_id=world.document.id,
         join_code_id=world.join_code_id,
         join_request_id=world.join_request.id,
+        finding_id=world.finding.id,
     )
     headers = {"Authorization": f"Bearer {security.create_access_token(user.id)[0]}"}
     body = case.body(world)
@@ -215,6 +244,6 @@ def test_every_permission_route_is_in_the_matrix() -> None:
         (method, route.path)
         for method, route in _api_routes()
         if _declarations(route.dependant)[0].kind in ("permission", "any_permission")
-        and not route.path.startswith(("/api/v1/findings", "/api/v1/reports"))
+        and not route.path.startswith("/api/v1/reports")
     }
     assert declared <= covered, f"add these routes to CASES: {sorted(declared - covered)}"

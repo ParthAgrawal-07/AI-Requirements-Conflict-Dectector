@@ -9,9 +9,11 @@ belong to one workspace. Authorisation checks permission *names* from the catalo
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
 from sqlalchemy import (
     CheckConstraint,
+    DateTime,
     ForeignKey,
     Index,
     PrimaryKeyConstraint,
@@ -45,7 +47,8 @@ class Role(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             "workspace_id",
             "name",
             unique=True,
-            postgresql_where=text("workspace_id IS NOT NULL"),
+            # A deleted custom role keeps its name in history but frees it for reuse (0006).
+            postgresql_where=text("workspace_id IS NOT NULL AND deleted_at IS NULL"),
         ),
     )
 
@@ -56,6 +59,9 @@ class Role(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(80))
     description: Mapped[str | None] = mapped_column(Text)
     is_default: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
+    # Custom roles are deleted softly (US-49): ended memberships, old join codes and decided join
+    # requests still reference them. A deleted role can never be assigned again.
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     permissions: Mapped[list[RolePermission]] = relationship(
         back_populates="role", passive_deletes=True, cascade="all, delete-orphan"

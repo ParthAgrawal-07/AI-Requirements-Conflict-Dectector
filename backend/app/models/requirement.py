@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
     CheckConstraint,
@@ -42,9 +42,30 @@ class Requirement(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         CheckConstraint("order_index >= 0", name="order_non_negative"),
         Index("ix_requirements_document_id_order_index", "document_id", "order_index"),
         Index("ix_requirements_project_id_state", "project_id", "state"),
+        CheckConstraint(
+            "req_type IS NULL OR req_type IN ('functional', 'non_functional', 'constraint')",
+            name="req_type_values",
+        ),
+        CheckConstraint(
+            "priority IS NULL OR priority IN ('must', 'should', 'could', 'wont')",
+            name="priority_values",
+        ),
+        # Only extracted requirements come without a post, and only posts without a document.
+        CheckConstraint(
+            "document_id IS NOT NULL OR origin <> 'document'", name="document_origin_has_document"
+        ),
+        Index(
+            "uq_requirements_origin_message_id",
+            "origin_message_id",
+            unique=True,
+            postgresql_where=text("origin_message_id IS NOT NULL"),
+        ),
     )
 
-    document_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    # NULL for a requirement that was posted rather than extracted (US-30, migration 0006b).
+    document_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE")
+    )
     # Denormalised from the document so project-level queries need no join (ADR-14). Must equal
     # ``document.project_id`` — set by the services that create requirements.
     project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id", ondelete="RESTRICT"))
@@ -81,8 +102,19 @@ class Requirement(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # Compliance-critical: never auto-resolved, all access audited (FR-21, DR-05, NFR-13).
     is_protected: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
     current_version: Mapped[int] = mapped_column(default=1, server_default=text("1"))
+    # The version last checked for Ambiguous/Incomplete (US-05, 0006c): never paid for twice.
+    single_checked_version: Mapped[int | None]
+    # Requirement posts (US-30, migration 0006b): the channel message that created it, the
+    # composer's type and priority, and the composer fields as submitted (template, slots,
+    # acceptance criteria, tags, rationale) so the statement can always be traced to its input.
+    origin_message_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("messages.id", ondelete="SET NULL")
+    )
+    req_type: Mapped[str | None] = mapped_column(String(32))
+    priority: Mapped[str | None] = mapped_column(String(32))
+    composer_fields: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
-    document: Mapped[Document] = relationship(back_populates="requirements")
+    document: Mapped[Document | None] = relationship(back_populates="requirements")
     owner: Mapped[User | None] = relationship(foreign_keys=[owner_id])
     versions: Mapped[list[RequirementVersion]] = relationship(
         back_populates="requirement", passive_deletes=True, order_by="RequirementVersion.version_no"

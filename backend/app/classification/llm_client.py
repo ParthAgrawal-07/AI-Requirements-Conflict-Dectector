@@ -63,118 +63,6 @@ class LLMTransport(Protocol):
         ...
 
 
-class GeminiTransport:
-    """Google Gemini through the official ``google-genai`` SDK (ADR-31 primary)."""
-
-    def __init__(
-        self,
-        *,
-        api_key: str,
-        model: str = "gemini-2.5-flash",
-        timeout_seconds: float = 60.0,
-        max_retries: int = 2,
-    ) -> None:
-        from google import genai
-        from google.genai import types
-
-        self._genai = genai
-        self._types = types
-        self._client = genai.Client(api_key=api_key)
-        self._model = model
-        self._timeout_seconds = timeout_seconds
-
-    def send(self, system: str, user: str) -> str:
-        from google.genai import errors
-
-        config = self._types.GenerateContentConfig(
-            system_instruction=system,
-            max_output_tokens=MAX_OUTPUT_TOKENS,
-        )
-        try:
-            response = self._client.models.generate_content(
-                model=self._model,
-                contents=user,
-                config=config,
-            )
-        except errors.ClientError as exc:
-            msg = str(exc)
-            if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
-                raise LLMUnavailableError("Gemini rate limit exceeded") from exc
-            raise LLMError(f"Gemini client error: {exc}") from exc
-        except errors.ServerError as exc:
-            raise LLMUnavailableError("Gemini server is unavailable") from exc
-        except Exception as exc:
-            raise LLMUnavailableError(f"Gemini transport error: {exc}") from exc
-
-        if hasattr(response, "candidates") and response.candidates:
-            candidate = response.candidates[0]
-            finish_reason = getattr(candidate, "finish_reason", None)
-            if finish_reason and str(finish_reason).upper() in (
-                "SAFETY",
-                "RECITATION",
-                "BLOCKLIST",
-                "PROHIBITED_CONTENT",
-            ):
-                raise LLMRefusedError(f"Gemini declined to answer: {finish_reason}")
-        if response.text is None:
-            raise LLMRefusedError("Gemini returned an empty reply")
-        return response.text
-
-
-class GroqTransport:
-    """Groq through the official ``groq`` SDK (ADR-31 backup)."""
-
-    def __init__(
-        self,
-        *,
-        api_key: str,
-        model: str = "llama-3.3-70b-versatile",
-        timeout_seconds: float = 60.0,
-        max_retries: int = 2,
-    ) -> None:
-        import groq
-
-        self._groq = groq
-        self._client = groq.Groq(
-            api_key=api_key,
-            timeout=timeout_seconds,
-            max_retries=max_retries,
-        )
-        self._model = model
-
-    def send(self, system: str, user: str) -> str:
-        errors = self._groq
-        try:
-            response = self._client.chat.completions.create(
-                model=self._model,
-                max_tokens=MAX_OUTPUT_TOKENS,
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user},
-                ],
-            )
-        except (
-            errors.AuthenticationError,
-            errors.PermissionDeniedError,
-            errors.NotFoundError,
-        ) as exc:
-            raise LLMError(f"Groq rejected credentials or model: {exc}") from exc
-        except errors.BadRequestError as exc:
-            raise LLMError(f"Groq request invalid: {exc.message}") from exc
-        except (
-            errors.RateLimitError,
-            errors.APIStatusError,
-            errors.APIConnectionError,
-            errors.APITimeoutError,
-        ) as exc:
-            raise LLMUnavailableError("Groq is unavailable") from exc
-
-        choice = response.choices[0]
-        if getattr(choice, "finish_reason", None) == "refusal":
-            raise LLMRefusedError("Groq declined to answer")
-        return choice.message.content or ""
-
-
 class AnthropicTransport:
     """Claude through the official ``anthropic`` SDK."""
 
@@ -205,18 +93,16 @@ class AnthropicTransport:
                 system=system,
                 messages=[{"role": "user", "content": user}],
                 output_config={"effort": self._effort},
+                # A safety decline is re-run server-side on Anthropic's recommended fallback.
                 betas=["server-side-fallback-2026-07-01"],
                 fallbacks="default",
             )
-        except (
-            errors.AuthenticationError,
-            errors.PermissionDeniedError,
-            errors.NotFoundError,
-        ) as exc:
-            raise LLMError(f"The LLM provider rejected credentials or model: {exc}") from exc
+        except (errors.AuthenticationError, errors.PermissionDeniedError) as exc:
+            raise LLMUnavailableError("The LLM provider rejected the credentials") from exc
         except errors.BadRequestError as exc:
             raise LLMError(f"The LLM request was invalid: {exc.message}") from exc
         except (errors.RateLimitError, errors.APIStatusError, errors.APIConnectionError) as exc:
+            # The SDK already retried 429/5xx/network errors ``max_retries`` times.
             raise LLMUnavailableError("The LLM provider is unavailable") from exc
 
         if response.stop_reason == "refusal":
@@ -225,9 +111,9 @@ class AnthropicTransport:
 
 
 class FallbackTransport:
-    """Tries the primary transport and switches to backup only on LLMUnavailableError (ADR-31 §2)."""
+    """Tries the primary transport and switches to backup only on LLMUnavailableError (ADR-31)."""
 
-    def __init__(self, primary: LLMTransport, backup: LLMTransport | None = None) -> None:
+    def __init__(self, primary: LLMTransport, backup: LLMTransport) -> None:
         self.primary = primary
         self.backup = backup
 
@@ -235,9 +121,7 @@ class FallbackTransport:
         try:
             return self.primary.send(system, user)
         except LLMUnavailableError as exc:
-            if self.backup is None:
-                raise
-            logger.warning("Primary LLM unavailable (%s), falling back to backup transport", exc)
+            logger.warning("Primary LLM transport unavailable (%s); falling back to backup", exc)
             return self.backup.send(system, user)
 
 
@@ -259,10 +143,12 @@ class LLMClient:
     def __init__(self, transport: LLMTransport, budget: BudgetGuard | None = None) -> None:
         self._transport = transport
         self._budget = budget or UnlimitedBudget()
+        self.calls = 0  # requests sent, for analysis-run accounting (llm_calls)
 
     def complete_text(self, system: str, user: str, *, project_id: uuid.UUID | None = None) -> str:
         """A plain-text reply (the brief drafter validates its own JSON)."""
         self._budget.reserve(project_id)
+        self.calls += 1
         return self._transport.send(system, user)
 
     def complete_json(
@@ -272,22 +158,25 @@ class LLMClient:
         output: type[T],
         *,
         project_id: uuid.UUID | None = None,
+        retries: int = 1,
     ) -> T:
-        """A reply validated into ``output``; re-asks once with the validation error."""
-        reply = self.complete_text(system, user, project_id=project_id)
-        try:
-            return _parse(reply, output)
-        except (ValueError, ValidationError) as first:
-            logger.info("LLM reply did not validate (%s); asking again", type(first).__name__)
-            retry_user = (
-                f"{user}\n\nYour previous reply was not valid: {_short(first)}\n"
-                "Reply again with only the JSON object that matches the schema."
-            )
-            reply = self.complete_text(system, retry_user, project_id=project_id)
+        """A reply validated into ``output``. An invalid reply is re-asked with the validation
+        error, up to ``retries`` times (the classifier uses 3, US-05); after that
+        :class:`LLMOutputError`."""
+        prompt = user
+        while True:
+            reply = self.complete_text(system, prompt, project_id=project_id)
             try:
                 return _parse(reply, output)
-            except (ValueError, ValidationError) as second:
-                raise LLMOutputError(f"Invalid model output: {_short(second)}") from second
+            except (ValueError, ValidationError) as error:
+                if retries <= 0:
+                    raise LLMOutputError(f"Invalid model output: {_short(error)}") from error
+                retries -= 1
+                logger.info("LLM reply did not validate (%s); asking again", type(error).__name__)
+                prompt = (
+                    f"{user}\n\nYour previous reply was not valid: {_short(error)}\n"
+                    "Reply again with only the JSON object that matches the schema."
+                )
 
     def as_draft_llm(self, project_id: uuid.UUID | None = None) -> Callable[[str, str], str]:
         """The ``(system, user) -> text`` callable ``app.context.drafter.BriefDrafter`` takes."""
@@ -308,69 +197,18 @@ def _short(error: Exception) -> str:
 def get_llm_client() -> LLMClient | None:
     """The configured client, or ``None`` when no API key is set (rules-only mode)."""
     settings = get_settings()
-
-    gemini_key = settings.gemini_api_key or settings.llm_api_key
-    gemini_key_val = gemini_key.get_secret_value() if gemini_key else ""
-
-    groq_key = settings.groq_api_key or (
-        settings.llm_api_key if settings.llm_provider == "groq" else None
-    )
-    groq_key_val = groq_key.get_secret_value() if groq_key else ""
-
-    primary: LLMTransport | None = None
-    backup: LLMTransport | None = None
-
-    if settings.llm_provider == "gemini":
-        if gemini_key_val:
-            primary = GeminiTransport(
-                api_key=gemini_key_val,
-                model=settings.gemini_model,
-                timeout_seconds=settings.llm_timeout_seconds,
-                max_retries=settings.llm_max_retries,
-            )
-        elif groq_key_val:
-            # ADR-31 §3: No Gemini key configured, Groq key present -> Groq used as only provider
-            primary = GroqTransport(
-                api_key=groq_key_val,
-                model=settings.groq_model,
-                timeout_seconds=settings.llm_timeout_seconds,
-                max_retries=settings.llm_max_retries,
-            )
-        if (
-            groq_key_val
-            and primary is not None
-            and not isinstance(primary, GroqTransport)
-            and settings.llm_fallback_provider == "groq"
-        ):
-            backup = GroqTransport(
-                api_key=groq_key_val,
-                model=settings.groq_model,
-                timeout_seconds=settings.llm_timeout_seconds,
-                max_retries=settings.llm_max_retries,
-            )
-    elif settings.llm_provider == "groq":
-        if groq_key_val:
-            primary = GroqTransport(
-                api_key=groq_key_val,
-                model=settings.groq_model,
-                timeout_seconds=settings.llm_timeout_seconds,
-                max_retries=settings.llm_max_retries,
-            )
-    elif settings.llm_provider == "anthropic":
-        anthropic_key = settings.llm_api_key.get_secret_value() if settings.llm_api_key else ""
-        if anthropic_key:
-            primary = AnthropicTransport(
-                api_key=anthropic_key,
-                model=settings.llm_model,
-                effort=settings.llm_effort,
-                timeout_seconds=settings.llm_timeout_seconds,
-                max_retries=settings.llm_max_retries,
-            )
-
-    if primary is None:
+    key = settings.llm_api_key.get_secret_value() if settings.llm_api_key else ""
+    if not key:
         return None
-
-    transport: LLMTransport = FallbackTransport(primary, backup) if backup is not None else primary
+    if settings.llm_provider != "anthropic":
+        raise LLMUnavailableError(f"LLM provider {settings.llm_provider!r} is not implemented")
     from app.classification.budget import get_budget_guard
 
+    transport = AnthropicTransport(
+        api_key=key,
+        model=settings.llm_model,
+        effort=settings.llm_effort,
+        timeout_seconds=settings.llm_timeout_seconds,
+        max_retries=settings.llm_max_retries,
+    )
     return LLMClient(transport, get_budget_guard())

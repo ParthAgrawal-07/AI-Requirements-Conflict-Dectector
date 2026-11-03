@@ -45,17 +45,11 @@ for _router in (
     requirements.router,
     intake.router,
     join_codes.router,
+    findings.router,
 ):
     api_router.include_router(_router, dependencies=_authenticated, responses=_unauthorized)
 
 # Placeholders owned by later sprints; they get their own prefix and declarations when filled in.
-api_router.include_router(
-    findings.router,
-    prefix="/findings",
-    tags=["findings"],
-    dependencies=_authenticated,
-    responses=_unauthorized,
-)
 api_router.include_router(
     reports.router,
     prefix="/reports",
