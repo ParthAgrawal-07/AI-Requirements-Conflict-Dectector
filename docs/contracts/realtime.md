@@ -1,118 +1,88 @@
-# Realtime WebSocket Contract (Sprint 0–1)
+# Real-time events — contract (Sprint 0–1)
 
-**Status:** Ratified for frontend client (`app/socket.ts`) and backend gateway (US-03, Dhvani).  
-**Path:** `/ws`  
-**Protocol:** WebSocket text frames carrying JSON payloads.
+| | |
+|---|---|
+| **Producer** | Dhavni didi (`app/realtime/`, `app/graph/schemas.py`) |
+| **Consumers** | Pranshu (`app/socket.ts`, upload progress) · Abhijeet (live map) · Madhav (notifications, S5) · Affan (WebSocket tests) |
+| **Stories** | US-03 (S1), US-29 (S2), US-14 (S3) |
+| **Path** | `/ws` — WebSocket text frames carrying JSON |
 
----
+## 1. Model
 
-## 1. Overview & Architecture
+- **One connection per browser tab.** Components never open sockets; they register interest via
+  `useProjectRealtime(projectId)`.
+- **Events are hints.** Missed events are never replayed. On every `ready` frame (connect or reconnect) the client
+  invalidates the relevant TanStack Query caches and re-syncs over REST — the REST API is the source of truth.
+- **Polling fallback.** If realtime is unavailable or disabled (`VITE_REALTIME_ENABLED=false`), screens poll
+  (e.g. `useDocuments` every 3 s while documents are active).
 
-- **One connection per browser tab:** Components never open sockets directly. They register interest via `useProjectRealtime(projectId)`.
-- **Cache-invalidation model:** Realtime events are hints. Missed events while offline are never replayed. On every connection or reconnection `ready` frame, the client invalidates the relevant TanStack Query caches to re-sync state over REST.
-- **Polling fallback:** If realtime is unavailable or disabled via `VITE_REALTIME_ENABLED=false`, screens fall back to polling (e.g. `useDocuments` polls every 3 s while documents are active).
-
----
-
-## 2. Connection Lifecycle & Authentication
-
-1. **Connect:** Client initiates WebSocket handshake at `ws://<api-host>/ws` (or `wss://` in production).
-2. **First frame (Client -> Server):**
-   ```json
-   {
-     "type": "auth",
-     "token": "<JWT_ACCESS_TOKEN>"
-   }
-   ```
-3. **Authentication response:**
-   - **Success (Server -> Client):**
-     ```json
-     {
-       "type": "ready",
-       "user_id": "<uuid>"
-     }
-     ```
-   - **Failure (Server closes connection):**
-     - Code `4401` (`CLOSE_UNAUTHENTICATED`): Token invalid or expired. The client clears authentication state and prompts for sign-in.
-     - Code `4403` (`CLOSE_REVOKED`): Membership revoked or access forbidden. The client invalidates workspace and permission caches and does not reconnect.
-
----
-
-## 3. Subscriptions
-
-Clients subscribe to project event rooms:
-
-- **Subscribe (Client -> Server):**
-  ```json
-  {
-    "type": "subscribe",
-    "project_id": "<project_uuid>"
-  }
-  ```
-- **Unsubscribe (Client -> Server):**
-  When all components watching a project unmount:
-  ```json
-  {
-    "type": "unsubscribe",
-    "project_id": "<project_uuid>"
-  }
-  ```
-
----
-
-## 4. Heartbeat (Ping/Pong)
-
-To keep NAT mappings alive and detect dropped TCP sessions:
-
-- **Ping (Client -> Server):** Sent every 25 seconds while connection is ready.
-  ```json
-  {
-    "type": "ping"
-  }
-  ```
-- **Pong (Server -> Client):**
-  ```json
-  {
-    "type": "pong"
-  }
-  ```
-
----
-
-## 5. Event Frame Format
-
-When an event occurs on a subscribed project, the server pushes an event frame:
+## 2. Envelope
 
 ```json
-{
-  "type": "event",
-  "event": {
-    "type": "analysis.progress",
-    "workspace_id": "<workspace_uuid>",
-    "project_id": "<project_uuid>",
-    "channel_id": null,
-    "entity_id": "<document_uuid>",
-    "at": "2026-10-24T12:00:00Z",
-    "data": {
-      "status": "processing",
-      "progress_percent": 45,
-      "current_stage": "extracting"
-    }
-  }
-}
+{"type": "analysis.progress", "workspace_id": "…", "project_id": "…", "channel_id": null,
+ "entity_id": "…", "at": "2026-10-24T10:42:00Z", "data": {}}
 ```
 
-### Event Types
-- `analysis.progress`: Document extraction/embedding status update.
-  - `status`: `"queued"` | `"processing"` | `"done"` | `"failed"`
-  - `progress_percent`: `0`–`100`
-  - On `"done"`, client invalidates both `["documents", projectId]` and `["requirements", projectId]`.
+`data` carries ids, states and numbers — never requirement or message text (CR-04). A client that needs text re-reads
+it over REST, which also re-checks permissions.
 
----
+| `type` | Since | `entity_id` | `data` |
+|---|---|---|---|
+| `analysis.progress` | S1 | document | `document_id, status (queued/processing/done/failed), progress_percent, stage, error_message` |
+| `membership.revoked` | S2 | — | `user_id` — the gateway closes that user's sockets (4403) |
+| `graph.delta` | S3 | — | `GraphDelta` (`app/graph/schemas.py`): `from_revision, to_revision, added, changed, removed, sentences` |
 
-## 6. Error & Reconnection Policy
+On `analysis.progress` with `status: "done"` the client invalidates `["documents", projectId]` and
+`["requirements", projectId]`.
 
-- **Backoff:** On abnormal disconnect, client reconnects with exponential backoff (`delay = min(30000, 1000 * 2^attempts)`).
-- **Retry Cap:** Client stops retrying after 5 consecutive failures, logging no further console errors and gracefully falling back to REST polling.
-- **No retry on authentication errors:** No reconnect occurs after close code `4401` or `4403`.
+## 3. Socket protocol
 
+| Direction | Frame |
+|---|---|
+| client → | `{"type": "auth", "token": "<JWT>"}` — first frame, within 10 s, else close **4401** |
+| ← server | `{"type": "ready", "user_id": "…"}` |
+| client → | `{"type": "subscribe", "project_id": "…"}` or `{"type": "subscribe", "workspace_id": "…"}` |
+| ← server | `{"type": "subscribed", "workspace_id": "…", "project_id": "…"}` or `{"type": "error", "code": "…"}` |
+| client → | `{"type": "unsubscribe", "project_id": "…"}` (or `workspace_id`) — no reply |
+| ← server | `{"type": "event", "event": {…envelope…}}` |
+| client → / ← | `{"type": "ping"}` / `{"type": "pong"}` — every 25 s, keeps proxies and NAT from idling the socket out |
+
+The token travels in the first frame, not the URL, so it never lands in proxy logs. Membership is re-read on every
+`subscribe`, as on every REST request. A workspace subscription receives every event of the workspace; a project
+subscription receives that project's events and workspace-level ones.
+
+Subscribe error codes: `not_found` (unknown id **or** not a member — deliberately the same answer), `forbidden`
+(member without `view`), `scope_required` (neither id given), `unavailable` (event bus down; retry later or poll).
+
+### Close codes
+
+| Code | Meaning | Client |
+|---|---|---|
+| 4401 | No valid `auth` frame (invalid/expired token, timeout) | Clear auth state, prompt sign-in, do not reconnect |
+| 4403 | Membership revoked | Invalidate workspace and permission caches, do not reconnect |
+
+### Reconnection (client)
+
+On any other disconnect: exponential backoff, `delay = min(30000, 1000 * 2^attempts)`; after 5 consecutive failures
+stop retrying and fall back to REST polling.
+
+## 4. Publishing (backend)
+
+`app.realtime.bus.publish(event)` — **after** the commit, never inside a transaction; it never raises. Redis pub/sub,
+one channel per workspace: `rcd:events:<workspace_id>`. `REALTIME_BUS=memory` uses an in-process bus (tests, one
+process).
+
+## 5. Progress stages (US-03)
+
+| Stage | `status` | `progress_percent` |
+|---|---|---|
+| uploaded | `queued` | 0 |
+| claimed by the worker, extracting | `processing` (`stage: extraction`) | 10 |
+| text extracted, saving | `processing` (`stage: persistence`) | 60 |
+| finished | `done` (`stage: null`) | 100 |
+| failed | `failed` (`stage` = where, `error_message` = `[stage] reason`) | 0 |
+
+## 6. Queues
+
+`documents.*` → `documents`; `embeddings.*`, `classification.*`, `analysis.*` → `analysis`; everything else →
+`celery`. Compose runs one worker on all three and one `beat` (periodic jobs: join-code expiry; later the budget reset).
