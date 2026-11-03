@@ -6,6 +6,7 @@ One socket per browser tab. The conversation is JSON frames::
     server  {"type": "ready", "user_id": "..."}
     client  {"type": "subscribe", "project_id": "..."}          or "workspace_id"
     server  {"type": "subscribed", "workspace_id": "...", "project_id": "..."}
+    client  {"type": "unsubscribe", "project_id": "..."}        or "workspace_id"; no reply
     server  {"type": "event", "event": {...envelope...}}         from then on
     client  {"type": "ping"}  ->  server {"type": "pong"}
 
@@ -129,6 +130,19 @@ class _Session:
             return True
         return event.project_id in self.projects
 
+    def unsubscribe(self, frame: dict[str, Any]) -> None:
+        """Stop forwarding a project (or whole-workspace) subscription. Unknown ids are ignored.
+
+        The workspace's bus channel stays subscribed: other projects in it may still be watched,
+        and :meth:`wants` filters what is forwarded.
+        """
+        targets = (("project_id", self.projects), ("workspace_id", self.whole_workspaces))
+        for key, subscriptions in targets:
+            if frame.get(key) is None:
+                continue
+            with contextlib.suppress(ValueError):
+                subscriptions.discard(uuid.UUID(str(frame[key])))
+
 
 @contextlib.contextmanager
 def _released(db: Session) -> Generator[None, None, None]:
@@ -207,6 +221,8 @@ async def websocket_endpoint(websocket: WebSocket, db: Annotated[Session, Depend
                 await websocket.send_json({"type": "pong"})
             elif frame.get("type") == "subscribe":
                 await _subscribe(websocket, db, fanout, state, frame)
+            elif frame.get("type") == "unsubscribe":
+                state.unsubscribe(frame)
     except (WebSocketDisconnect, json.JSONDecodeError, RuntimeError):
         pass
     finally:

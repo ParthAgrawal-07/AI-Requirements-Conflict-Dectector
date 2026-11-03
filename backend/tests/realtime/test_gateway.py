@@ -167,3 +167,28 @@ def test_a_redis_outage_on_subscribe_is_reported_not_fatal(
         assert socket.receive_json() == {"type": "error", "code": "unavailable"}
         socket.send_json({"type": "ping"})
         assert socket.receive_json() == {"type": "pong"}
+
+
+def test_unsubscribe_stops_forwarding_that_project(
+    client: TestClient,
+    event_bus: bus.InProcessEventBus,
+    user: User,
+    make_project: Callable[..., Project],
+) -> None:
+    dropped, kept = make_project(), make_project()
+    with client.websocket_connect("/ws") as socket:
+        socket.send_json({"type": "auth", "token": _token(user)})
+        socket.receive_json()
+        for project in (dropped, kept):
+            socket.send_json({"type": "subscribe", "project_id": str(project.id)})
+            socket.receive_json()
+
+        socket.send_json({"type": "unsubscribe", "project_id": str(dropped.id)})
+        socket.send_json({"type": "unsubscribe", "project_id": "not-a-uuid"})
+        socket.send_json({"type": "ping"})
+        assert socket.receive_json() == {"type": "pong"}  # unsubscribes were handled, no reply
+
+        event_bus.publish(_progress(dropped, 11))
+        event_bus.publish(_progress(kept, 22))
+
+        assert socket.receive_json()["event"]["data"]["progress_percent"] == 22
