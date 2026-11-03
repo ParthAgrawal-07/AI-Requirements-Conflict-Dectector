@@ -242,6 +242,7 @@ class TestRegressions:
         for status in (FindingStatus.FLAGGED, FindingStatus.CONFIRMED, FindingStatus.DISMISSED):
             db_session.add(
                 Finding(
+                    project_id=requirement.project_id,
                     document_id=requirement.document_id,
                     requirement_id=requirement.id,
                     category=FindingCategory.AMBIGUOUS,

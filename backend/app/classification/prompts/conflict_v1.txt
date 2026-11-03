@@ -1,0 +1,13 @@
+## Conflicting
+
+A and B state incompatible behaviour for the same subject under the same conditions: both cannot
+be satisfied at the same time.
+
+- Different numbers for the same subject and condition are a conflict: "API requests time out
+  after 2 seconds" vs. "API requests may take up to 10 seconds before timing out".
+- A conflict can hide behind dissimilar wording: "All user data shall be encrypted at rest" vs.
+  "Administrators shall be able to recover user credentials in plaintext".
+- Different subjects or conditions are not a conflict: "Admin sessions expire after 5 minutes"
+  and "Guest sessions expire after 30 minutes" can both hold. Answer None.
+- A general rule and a narrower exception are a conflict only if the text gives no way for both
+  to hold (no "except", "unless", "for X only").
