@@ -72,6 +72,13 @@ class Settings(BaseSettings):
     join_attempts_per_window: int = Field(default=10, ge=1, le=1000)
     join_attempt_window_seconds: int = Field(default=600, ge=1, le=24 * 60 * 60)
 
+    # ── Real time (US-03, US-29) ──────────────────────────
+    # "redis": events fan out between API processes over Redis pub/sub (every deployment).
+    # "memory": in-process only — tests and a single `uvicorn` without Redis.
+    realtime_bus: Literal["redis", "memory"] = "redis"
+    # US-29: chat messages (posts, replies, edits) per user per minute.
+    messages_per_minute: int = Field(default=30, ge=1, le=1000)
+
     # ── HTTP ──────────────────────────────────────────────
     cors_allowed_origins: Annotated[list[str], NoDecode] = ["http://localhost:5173"]
 
@@ -87,6 +94,9 @@ class Settings(BaseSettings):
         # .env.example historically used SIMILARITY_THRESHOLD; docs use *_DEFAULT. Accept both.
         validation_alias=AliasChoices("SIMILARITY_THRESHOLD_DEFAULT", "SIMILARITY_THRESHOLD"),
     )
+    # Heet (US-05): neighbours per requirement sent to the classifier. Recall over cost: raise it
+    # before lowering the similarity threshold.
+    candidate_top_k: int = Field(default=10, ge=1, le=50)
     llm_provider: Literal["gemini", "groq", "anthropic", "openai"] = "gemini"
     llm_fallback_provider: Literal["groq", "none"] | None = "groq"
     gemini_api_key: SecretStr | None = None
