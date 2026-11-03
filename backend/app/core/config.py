@@ -102,6 +102,9 @@ class Settings(BaseSettings):
         # .env.example historically used SIMILARITY_THRESHOLD; docs use *_DEFAULT. Accept both.
         validation_alias=AliasChoices("SIMILARITY_THRESHOLD_DEFAULT", "SIMILARITY_THRESHOLD"),
     )
+    # Heet (US-05): neighbours per requirement sent to the classifier. Recall over cost: raise it
+    # before lowering the similarity threshold.
+    candidate_top_k: int = Field(default=10, ge=1, le=50)
     llm_provider: Literal["gemini", "groq", "anthropic", "openai"] = "gemini"
     llm_fallback_provider: Literal["groq", "none"] | None = "groq"
     gemini_api_key: SecretStr | None = None
