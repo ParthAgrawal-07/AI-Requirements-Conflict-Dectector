@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import health
+from app.api import auth, health
 from app.api.router import api_router
 from app.core.config import get_settings
 from app.core.database import get_engine
@@ -70,9 +70,12 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.cors_allowed_origins,
         allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", REQUEST_ID_HEADER],
+        allow_headers=["Authorization", "Content-Type", REQUEST_ID_HEADER, auth.CSRF_HEADER],
         expose_headers=[REQUEST_ID_HEADER],
-        allow_credentials=False,  # bearer tokens travel in a header, not cookies
+        # Only for the refresh cookie (US-19): it is HttpOnly and scoped to /api/v1/auth, and every
+        # other route authenticates with the bearer header. Origins are always explicit here (`*`
+        # is refused outside development), which credentialed CORS requires.
+        allow_credentials=True,
     )
     app.add_middleware(RequestContextMiddleware)
 

@@ -509,6 +509,7 @@ flowchart LR
 | Credential theft / guessing | Argon2id hashing; min 12-character passphrases; one generic login error; constant-time-ish path for unknown emails | ✅ |
 | Token forgery | JWT pinned to HS256 (no `alg=none`/algorithm confusion); issuer, audience, expiry, type and `jti` required | ✅ |
 | Stale privileges | Role and active flag re-read from the database on every request | ✅ |
+| Session theft | Access token in memory only; refresh token in an HttpOnly cookie scoped to `/api/v1/auth`, single-use and rotated, a replay revokes the whole session; logout revokes it; refresh/logout need a custom header (CSRF) | ✅ |
 | Cross-tenant access | Workspace filter in every query; 404 for foreign rows; an invariant test fails if any `/api/v1` route lacks authentication | ✅ |
 | Privilege escalation | `require_roles()` per route; no public sign-up, accounts are provisioned via CLI | ✅ |
 | Malicious uploads | Extension allow-list, **content sniffing** (never the client `Content-Type`), PDF end-marker check, DOCX structure and zip-bomb limits, sanitised filename used for display only, files stored under generated keys, storage keys cannot escape the root | ✅ |

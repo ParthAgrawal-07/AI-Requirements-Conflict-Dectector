@@ -66,6 +66,9 @@ lint, typecheck, migrations).
 | `REDIS_URL` | Celery broker/result backend |
 | `JWT_SECRET` | Signing key for auth tokens (FR-37) — never committed (NFR-12) |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | JWT lifetime, default 60 |
+| `REFRESH_TOKEN_EXPIRE_DAYS` | How long a session may stay idle before signing in again (rotating refresh cookie, US-19), default 14 |
+| `REFRESH_COOKIE_SAMESITE` | `lax` (default: SPA and API on one site, e.g. localhost) or `none` when they are on different sites (e.g. Vercel + Render); `none` requires `Secure` |
+| `REFRESH_COOKIE_SECURE` | Unset = `Secure` everywhere except development/test |
 | `LLM_PROVIDER` / `LLM_FALLBACK_PROVIDER` | `gemini` / `groq` (ADR-31, [`ai-providers.md`](ai-providers.md) §5) |
 | `GEMINI_API_KEY`, `GEMINI_MODEL` | Google Gemini API key and model — never exposed client-side (NFR-12) |
 | `GROQ_API_KEY`, `GROQ_MODEL` | Groq API key and model, used only when Gemini is unavailable |

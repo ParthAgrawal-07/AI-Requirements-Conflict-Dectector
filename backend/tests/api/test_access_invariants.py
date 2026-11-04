@@ -23,6 +23,8 @@ from app.services.access import SCOPE_RESOLVERS
 PUBLIC = {
     ("POST", "/api/v1/auth/login"),
     ("POST", "/api/v1/auth/signup"),
+    ("POST", "/api/v1/auth/refresh"),  # the access token may have expired: the cookie authenticates
+    ("POST", "/api/v1/auth/logout"),
 }
 # Any signed-in user, no workspace involved. Keep this list short and think before extending it.
 AUTHENTICATED_ONLY = {

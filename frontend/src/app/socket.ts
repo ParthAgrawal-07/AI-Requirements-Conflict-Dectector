@@ -7,7 +7,12 @@
 import { createContext, createElement, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { API_BASE_URL, triggerUnauthorized } from "../api/client";
+import {
+  API_BASE_URL,
+  getAccessToken,
+  refreshAccessToken,
+  triggerUnauthorized,
+} from "../api/client";
 import type { RealtimeEvent } from "../api/types";
 
 export type EventHandler = (event: RealtimeEvent) => void;
@@ -41,6 +46,7 @@ export class RealtimeConnection {
   private socket: SocketLike | null = null;
   private token: string | null = null;
   private attempts = 0;
+  private refreshedSinceReady = false;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private readonly projects = new Map<string, number>(); // project id -> subscriber count
@@ -102,7 +108,9 @@ export class RealtimeConnection {
     this.socket?.close();
     const socket = this.factory(this.url);
     this.socket = socket;
-    socket.onopen = () => socket.send(JSON.stringify({ type: "auth", token: this.token }));
+    // The client's token is the freshest one: apiFetch may have refreshed it since connect().
+    const token = getAccessToken() ?? this.token;
+    socket.onopen = () => socket.send(JSON.stringify({ type: "auth", token }));
     socket.onmessage = (message) => this.receive(String(message.data));
     socket.onclose = (event) => this.closed(socket, event.code);
   }
@@ -116,6 +124,7 @@ export class RealtimeConnection {
     }
     if (frame.type === "ready") {
       this.attempts = 0;
+      this.refreshedSinceReady = false;
       for (const projectId of this.projects.keys()) this.sendSubscribe(projectId);
       this.startPing();
       this.resyncHandlers.forEach((handler) => handler());
@@ -130,7 +139,7 @@ export class RealtimeConnection {
     this.clearTimers();
     this.socket = null;
     if (code === CLOSE_UNAUTHENTICATED) {
-      triggerUnauthorized();
+      void this.reauthenticate();
       return;
     }
     if (code === CLOSE_REVOKED) {
@@ -141,6 +150,18 @@ export class RealtimeConnection {
     const delay = Math.min(MAX_BACKOFF_MS, 1000 * 2 ** this.attempts);
     this.attempts += 1;
     this.retryTimer = setTimeout(() => this.open(), delay);
+  }
+
+  /** The token expired: refresh once and reconnect, or end the session if that fails too. */
+  private async reauthenticate(): Promise<void> {
+    const token = this.refreshedSinceReady ? null : await refreshAccessToken();
+    if (!token || !this.token) {
+      if (this.token) triggerUnauthorized(); // still signed in here, but the session is gone
+      return;
+    }
+    this.refreshedSinceReady = true;
+    this.token = token;
+    this.open();
   }
 
   private sendSubscribe(projectId: string): void {

@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getAccessToken, setAccessToken } from "../src/api/client";
+import { useAuth } from "../src/app/auth";
+import { RequireAuth } from "../src/app/routes";
 import { LoginPage } from "../src/features/auth/LoginPage";
 import { SignupWithCodePage } from "../src/features/auth/SignupWithCodePage";
 import { mockApi, renderWithProviders, screen, waitFor } from "./test-utils";
@@ -134,5 +136,65 @@ describe("SignupWithCodePage", () => {
     await user.click(screen.getByRole("button", { name: /create account/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("We could not create an account.");
+  });
+});
+
+describe("session restore and sign-out (US-19)", () => {
+  const TOKEN = { access_token: "jwt", token_type: "bearer", expires_in: 3600 };
+
+  function SignOut() {
+    const { logout, user } = useAuth();
+    return (
+      <button type="button" onClick={logout}>
+        Sign out {user?.full_name}
+      </button>
+    );
+  }
+
+  it("reopens the page after a reload from the refresh cookie, without signing in", async () => {
+    mockApi({ "POST /api/v1/auth/refresh": TOKEN, "GET /api/v1/auth/me": ME });
+
+    renderWithProviders(
+      <RequireAuth>
+        <p>project page</p>
+      </RequireAuth>,
+      { route: "/p/1", path: "/p/1", restoreSession: true },
+    );
+
+    expect(await screen.findByText("project page")).toBeInTheDocument();
+    expect(screen.queryByText("navigated away")).not.toBeInTheDocument();
+    expect(getAccessToken()).toBe("jwt");
+  });
+
+  it("sends a visitor without a session to sign in", async () => {
+    mockApi({
+      "POST /api/v1/auth/refresh": [401, { error: { code: "session_expired", message: "x" } }],
+    });
+
+    renderWithProviders(
+      <RequireAuth>
+        <p>project page</p>
+      </RequireAuth>,
+      { route: "/p/1", path: "/p/1", restoreSession: true },
+    );
+
+    expect(await screen.findByText("navigated away")).toBeInTheDocument();
+    expect(screen.queryByText("project page")).not.toBeInTheDocument();
+  });
+
+  it("revokes the session on the server when signing out", async () => {
+    const { calls } = mockApi({
+      "POST /api/v1/auth/refresh": TOKEN,
+      "GET /api/v1/auth/me": ME,
+      "POST /api/v1/auth/logout": [204, null],
+    });
+    const { user } = renderWithProviders(<SignOut />, { restoreSession: true });
+
+    await user.click(await screen.findByRole("button", { name: "Sign out Riya Kumar" }));
+
+    const revoked = () =>
+      calls.some((call) => call.method === "POST" && call.path === "/api/v1/auth/logout");
+    await waitFor(() => expect(revoked()).toBe(true));
+    expect(getAccessToken()).toBeNull();
   });
 });
