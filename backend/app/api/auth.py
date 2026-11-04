@@ -50,7 +50,7 @@ CSRF_HEADER = "X-Requested-With"
 
 
 def _expires_in(expires_at: datetime) -> int:
-    return int((expires_at - datetime.now(UTC)).total_seconds())
+    return round((expires_at - datetime.now(UTC)).total_seconds())
 
 
 def _set_refresh_cookie(response: Response, tokens: sessions.IssuedTokens) -> None:
