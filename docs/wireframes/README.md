@@ -41,6 +41,24 @@ Allows reviewers to prepare clarification questions and record responses from re
 - **Key features:** AI-generated questions, answer fields, requirement owners, supporting source references, affected requirements, previous exchanges, and draft/submission status.
 - **Export:** `Clarification-screen.pdf`
 
+### 5. Dashboard
+
+Provides an overview of requirement analysis results, helping users monitor findings, prioritise issues, and track items requiring review.
+
+- **Design tool:** Figma
+- **Figma link:** https://www.figma.com/design/PFmviC8y2l8PxQbdLDW6kF/Sprint0_dashboard_wireframe?node-id=0-1&t=OrDllI9R4Rz8pfSG-1
+- **Key features:** Total findings, pending reviews, high-severity issues, clarification status, issue categories, recent activity, and priority findings.
+- **Export:** `Dashboard-screen.pdf`
+
+### 6. Requirements Relationship Graph
+
+Visualises relationships between requirements to help users explore potential conflicts, duplicates, dependencies, and related requirements.
+
+- **Design tool:** Figma
+- **Figma link:** https://www.figma.com/design/PFmviC8y2l8PxQbdLDW6kF/Sprint0_dashboard_wireframe?node-id=0-1&t=OrDllI9R4Rz8pfSG-1
+- **Key features:** Relationship map, requirement search, issue-type and confidence filters, selected-requirement details, connected requirements, relationship explanations, review status, and links to findings and clarifications.
+- **Export:** `Requirements Relationship Graph-screen.pdf`
+
 ## Notes
 
 - These wireframes represent the proposed UI design and may evolve during implementation.
