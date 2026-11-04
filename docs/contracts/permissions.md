@@ -130,9 +130,8 @@ def redeem(db: Session, code: str, user: User) -> Membership | JoinRequest: ...
   `TRUSTED_PROXY_HOPS` (Render: 1), otherwise everyone shares one limit. Reuse `enforce(limiter, key, limit=…)` for `POST /join`
   rather than writing a second limiter.
 
-**Until it merges**, `get_join_code_redeemer()` uses a development stub: the code `TEST1234` joins "Demo Workspace"
-(created by `make seed-demo`) as Developer; it is refused outside development/test. When `app/services/join_codes.py`
-exists with a `redeem`, it is picked up automatically — no change in Parth's code.
+`get_join_code_redeemer()` (the sign-up route's dependency) returns `app.services.join_codes.redeem`; tests override it
+with a fake. The development stub and its `TEST1234` code were removed once join codes merged.
 
 ## 4. The ContextGate — no analysis while a project is in Setup (Bansil, Dhavni, Keval, Heet, Madhav)
 

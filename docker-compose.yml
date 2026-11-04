@@ -73,7 +73,8 @@ services:
     env_file: .env
     environment:
       RUN_MIGRATIONS: "0"
-    command: ["celery", "-A", "app.core.celery_app", "worker", "--loglevel=INFO"]
+    # Listens on every queue (US-03). In production run one worker per queue to scale them apart.
+    command: ["celery", "-A", "app.core.celery_app", "worker", "-Q", "celery,documents,analysis", "--loglevel=INFO"]
     depends_on:
       db:
         condition: service_healthy
@@ -84,6 +85,19 @@ services:
     volumes:
       - ./backend:/app
       - uploads:/data/uploads   # same volume as `backend`: the worker reads what the API saved
+
+  # Periodic jobs (join-code expiry; later the LLM budget reset). Exactly one beat may run.
+  beat:
+    build: ./backend
+    env_file: .env
+    environment:
+      RUN_MIGRATIONS: "0"
+    command: ["celery", "-A", "app.core.celery_app", "beat", "--loglevel=INFO", "--schedule", "/tmp/celerybeat-schedule"]
+    depends_on:
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   frontend:
     build: ./frontend

@@ -1,8 +1,6 @@
 """POST /auth/signup — there is no open sign-up: an account needs a valid join code (US-19)."""
 
-import sys
-import types
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
@@ -10,7 +8,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.config import Environment, get_settings
+from app.core.config import get_settings
 from app.core.errors import ConflictError, ForbiddenError, InvalidJoinCodeError, NotFoundError
 from app.core.permissions import DefaultRole
 from app.core.rate_limit import (
@@ -22,6 +20,7 @@ from app.core.rate_limit import (
     hash_key_part,
 )
 from app.models import Membership, Role, User, Workspace
+from app.services import join_codes
 from app.services import signup as signup_service
 from app.services.membership import add_member, get_default_role
 from tests.conftest import TEST_PASSWORD
@@ -448,65 +447,5 @@ class TestSignupRateLimit:
 
 
 class TestJoinCodeRedeemerWiring:
-    """Until Madhav's ``app.services.join_codes`` exists, a development stub stands in."""
-
-    def test_the_real_service_is_used_when_it_exists(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        module = types.ModuleType("app.services.join_codes")
-        module.redeem = lambda db, code, user: "real"  # type: ignore[attr-defined]
-        monkeypatch.setitem(sys.modules, "app.services.join_codes", module)
-        assert signup_service.get_join_code_redeemer()(None, "c", None) == "real"  # type: ignore[arg-type]
-
-    def test_the_stub_is_used_when_the_module_does_not_exist_yet(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setitem(sys.modules, "app.services.join_codes", None)  # import -> ImportError
-        # ModuleNotFoundError for exactly this module -> stub
-        redeemer = signup_service.get_join_code_redeemer()
-        assert redeemer is signup_service._dev_stub_redeem
-
-    def test_a_broken_import_inside_the_real_module_is_not_hidden(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        def broken(_name: str) -> object:
-            raise ModuleNotFoundError("No module named 'redis_missing'", name="redis_missing")
-
-        monkeypatch.setattr(signup_service.importlib, "import_module", broken)
-        with pytest.raises(ModuleNotFoundError, match="redis_missing"):
-            signup_service.get_join_code_redeemer()
-
-    def test_a_module_without_redeem_falls_back_to_the_stub(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setitem(sys.modules, "app.services.join_codes", types.ModuleType("x"))
-        assert signup_service.get_join_code_redeemer() is signup_service._dev_stub_redeem
-
-    def test_the_stub_accepts_only_the_development_code_into_the_demo_workspace(
-        self,
-        db_session: Session,
-        make_workspace: Callable[..., Workspace],
-        make_user: Callable[..., User],
-    ) -> None:
-        demo = make_workspace(signup_service.DEV_JOIN_WORKSPACE)
-        newcomer = make_user(role=None)
-
-        with pytest.raises(InvalidJoinCodeError):
-            signup_service._dev_stub_redeem(db_session, "NOPE", newcomer)
-        membership = signup_service._dev_stub_redeem(db_session, " test1234 ", newcomer)
-        assert membership.workspace_id == demo.id
-
-    def test_the_stub_is_unavailable_in_production(
-        self, db_session: Session, monkeypatch: pytest.MonkeyPatch, make_user: Callable[..., User]
-    ) -> None:
-        from types import SimpleNamespace
-
-        from app.core.errors import ServiceUnavailableError
-
-        monkeypatch.setattr(
-            signup_service,
-            "get_settings",
-            lambda: SimpleNamespace(environment=Environment.PRODUCTION),
-        )
-        with pytest.raises(ServiceUnavailableError):
-            signup_service._dev_stub_redeem(
-                db_session, signup_service.DEV_JOIN_CODE, make_user(role=None)
-            )
+    def test_sign_up_redeems_through_the_join_code_service(self) -> None:
+        assert signup_service.get_join_code_redeemer() is join_codes.redeem

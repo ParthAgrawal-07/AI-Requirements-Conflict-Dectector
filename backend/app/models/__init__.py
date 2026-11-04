@@ -17,12 +17,15 @@ from app.models.enums import (
     FindingCategory,
     FindingStatus,
     ImportMode,
+    JoinCodeStatus,
+    JoinRequestStatus,
     PlatformRole,
     ProjectStatus,
     RequirementOrigin,
     RequirementState,
     Severity,
 )
+from app.models.join_code import JoinCode, JoinRequest
 from app.models.membership import Membership, ProjectMember
 from app.models.project import Project
 from app.models.requirement import Requirement, RequirementVersion
@@ -46,6 +49,10 @@ __all__ = [
     "FindingCategory",
     "FindingStatus",
     "ImportMode",
+    "JoinCode",
+    "JoinCodeStatus",
+    "JoinRequest",
+    "JoinRequestStatus",
     "Membership",
     "PlatformRole",
     "Project",
