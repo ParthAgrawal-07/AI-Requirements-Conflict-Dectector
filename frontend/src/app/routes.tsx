@@ -1,14 +1,22 @@
 import type { ReactNode } from "react";
-import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { Link, Navigate, Outlet, useLocation } from "react-router-dom";
 import type { RouteObject } from "react-router-dom";
 import { Button } from "../components/Button";
 import { LoginPage } from "../features/auth/LoginPage";
 import { SignupWithCodePage } from "../features/auth/SignupWithCodePage";
 import { KitPage } from "../features/kit/KitPage";
+import { JoinPage } from "../features/members/JoinPage";
+import { MembersPage } from "../features/members/MembersPage";
+import { WorkspaceCreate } from "../features/members/WorkspaceCreate";
 import { lastProject, useProjects, useWorkspaces } from "../features/projects/api";
 import { ProjectHomePage } from "../features/projects/ProjectHomePage";
 import { WorkspaceHomePage } from "../features/projects/WorkspaceHomePage";
+import { prototypeRoutes } from "../features/prototypes/routes";
 import { RequirementsPage } from "../features/requirements/RequirementsPage";
+import { ProjectCreatePage } from "../features/setup/ProjectCreatePage";
+import { ProjectSetupLayout } from "../features/setup/SetupBanner";
+import { SetupWizard } from "../features/setup/SetupWizard";
+import { WorkspaceActions } from "../features/setup/WorkspaceActions";
 import { AppShell } from "./AppShell";
 import { useAuth } from "./auth";
 import { ComingSoon } from "./ComingSoon";
@@ -68,6 +76,9 @@ export function NoWorkspace() {
         Ask your project manager for a join code. If you are waiting for approval, your workspace
         appears here once a manager approves your request.
       </p>
+      <p>
+        <Link to="/join">I have a join code</Link>
+      </p>
     </div>
   );
 }
@@ -86,6 +97,9 @@ export const routes: RouteObject[] = [
   { path: "/login", element: <LoginPage /> },
   { path: "/signup", element: <SignupWithCodePage /> },
   { path: "/kit", element: <KitPage /> },
+  { path: "/join", element: <JoinPage /> },
+  { path: "/join/:code", element: <JoinPage /> },
+  ...prototypeRoutes,
   {
     element: <RequireAuth />,
     children: [
@@ -93,17 +107,23 @@ export const routes: RouteObject[] = [
         element: <AppShell />,
         children: [
           { path: "/", element: <RootRedirect /> },
-          { path: "/w/:workspaceId", element: <WorkspaceHomePage /> },
+          { path: "/workspaces/new", element: <WorkspaceCreate /> },
+          { path: "/w/:workspaceId", element: <WorkspaceHomePage actions={<WorkspaceActions />} /> },
+          { path: "/w/:workspaceId/members", element: <MembersPage /> },
+          { path: "/w/:workspaceId/projects/new", element: <ProjectCreatePage /> },
           {
-            path: "/w/:workspaceId/members",
-            element: <ComingSoon title="Members & roles" sprint="Sprint 1 (Abhijeet)" />,
+            path: "/w/:workspaceId/p/:projectId",
+            element: <ProjectSetupLayout />,
+            children: [
+              { index: true, element: <ProjectHomePage /> },
+              { path: "setup", element: <SetupWizard /> },
+              { path: "requirements", element: <RequirementsPage /> },
+              ...LATER.map((item) => ({
+                path: item.path,
+                element: <ComingSoon title={item.title} sprint={item.sprint} />,
+              })),
+            ],
           },
-          { path: "/w/:workspaceId/p/:projectId", element: <ProjectHomePage /> },
-          { path: "/w/:workspaceId/p/:projectId/requirements", element: <RequirementsPage /> },
-          ...LATER.map((item) => ({
-            path: `/w/:workspaceId/p/:projectId/${item.path}`,
-            element: <ComingSoon title={item.title} sprint={item.sprint} />,
-          })),
         ],
       },
     ],
