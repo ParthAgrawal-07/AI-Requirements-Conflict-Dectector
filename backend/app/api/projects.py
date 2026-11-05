@@ -11,8 +11,17 @@ from fastapi import APIRouter, Query, Response
 
 from app.api.deps import DbSession, requires
 from app.core.errors import NotFoundError
+from app.models import ProjectMember
+from app.schemas.auth import RoleRef
 from app.schemas.common import ErrorResponse, Page
-from app.schemas.projects import ProjectCreate, ProjectRead, ProjectUpdate
+from app.schemas.projects import (
+    ProjectCreate,
+    ProjectMemberRead,
+    ProjectMemberUpdate,
+    ProjectRead,
+    ProjectUpdate,
+)
+from app.services import membership as membership_service
 from app.services import projects as project_service
 from app.services.access import AccessContext
 
@@ -111,3 +120,61 @@ def update_project(
         db, project=project, actor=ctx.user, changes=body.model_dump(exclude_unset=True)
     )
     return ProjectRead.from_model(project)
+
+
+# ── Project team and project-level roles (US-49, FR-79) ─────────────────────────────────────
+def _team_read(member: ProjectMember) -> ProjectMemberRead:
+    override = member.role_override
+    return ProjectMemberRead(
+        user_id=member.user_id,
+        full_name=member.user.full_name,
+        role_override=(
+            RoleRef(id=override.id, name=override.name, is_default=override.is_default)
+            if override
+            else None
+        ),
+        added_at=member.added_at,
+    )
+
+
+@router.get(
+    "/projects/{project_id}/members",
+    response_model=list[ProjectMemberRead],
+    summary="The project team, with any project-level roles",
+    responses=_NOT_FOUND,
+)
+def list_project_members(
+    project_id: uuid.UUID,
+    ctx: Annotated[AccessContext, requires("view")],
+    db: DbSession,
+) -> list[ProjectMemberRead]:
+    project = project_service.get_project(db, project_id)
+    if project is None:
+        raise NotFoundError("Project not found")
+    return [_team_read(m) for m in membership_service.list_project_members(db, project)]
+
+
+@router.put(
+    "/projects/{project_id}/members/{user_id}",
+    response_model=ProjectMemberRead,
+    summary="Add a workspace member to the team, optionally with a project-level role",
+    responses={
+        **_NOT_FOUND,
+        403: {"model": ErrorResponse, "description": "The role holds more than you may give"},
+        409: {"model": ErrorResponse},
+    },
+)
+def set_project_member(
+    project_id: uuid.UUID,
+    user_id: uuid.UUID,
+    body: ProjectMemberUpdate,
+    ctx: Annotated[AccessContext, requires("members.manage")],
+    db: DbSession,
+) -> ProjectMemberRead:
+    project = project_service.get_project(db, project_id)
+    if project is None:
+        raise NotFoundError("Project not found")
+    member = membership_service.set_project_role(
+        db, ctx=ctx, project=project, user_id=user_id, role_id=body.role_override_id
+    )
+    return _team_read(member)

@@ -24,6 +24,7 @@ from app.api import (
     projects,
     reports,
     requirements,
+    roles,
     workspaces,
 )
 from app.core.auth import get_current_user
@@ -39,6 +40,7 @@ _unauthorized: dict[int | str, dict[str, Any]] = {401: {"model": ErrorResponse}}
 for _router in (
     me.router,
     workspaces.router,
+    roles.router,
     projects.router,
     context.router,
     documents.router,
