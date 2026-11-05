@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -46,3 +47,33 @@ class RoleRead(RoleRef):
     permissions: list[str]
     # False for Owner, Admin and any role holding their permissions (FR-44, SX-14).
     grantable_by_join_code: bool
+
+
+class MemberUser(BaseModel):
+    id: uuid.UUID
+    full_name: str
+    email: str
+
+
+class MemberRead(BaseModel):
+    """One row of the Members table (interface design §4.3)."""
+
+    user: MemberUser
+    role: RoleRef
+    stakeholder_group: str | None
+    joined_at: datetime
+
+
+class MemberRoleUpdate(BaseModel):
+    role_id: uuid.UUID
+
+
+class ReassignmentRead(BaseModel):
+    """Something a former member still owns (SX-11): an admin assigns it to someone else."""
+
+    kind: Literal["requirement"]  # change requests and approvals join in Sprint 4
+    id: uuid.UUID
+    project_id: uuid.UUID
+    label: str | None
+    former_owner_id: uuid.UUID
+    former_owner_name: str  # shown as "Riya (former member)"

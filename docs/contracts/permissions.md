@@ -172,3 +172,31 @@ platform-wide UNIQUE on `workspaces.name` and fixes the Owner role's description
 Requirement writes: `app/services/processing.py` (extraction persist step) now sets `project_id`, `state`
 (`Approved` for a baseline import, else `Proposed`), `origin='document'` and `stakeholder_group`. **Bansil:** keep these
 when US-02 moves extraction into `app/ingestion/extract.py`.
+
+## Sprint 2 — members, custom roles and project roles (US-26, US-49)
+
+| Method and path | Permission | Notes |
+|---|---|---|
+| `GET /permissions` | signed in | the catalogue with its editor group: Workspace · Requirements · Review · Governance |
+| `GET /workspaces/{w}/members` | `view` | active members with their role |
+| `PATCH /workspaces/{w}/members/{u}` | `members.manage` | `{role_id}`; applies on the member's next request |
+| `DELETE /workspaces/{w}/members/{u}` | `members.manage` | ends the membership, drops project-team rows and private-channel listings, publishes `membership.revoked` (sockets close 4403); content stays, attributed to a former member |
+| `POST /workspaces/{w}/leave` | signed in + member | 409 `last_owner` for the only Owner |
+| `GET /workspaces/{w}/needs-reassignment` | `members.manage` | requirements owned by former members (change requests and approvals join in S4) |
+| `GET/POST /workspaces/{w}/roles` | `view` / `roles.manage` | `{name, description?, permissions[]}` |
+| `PATCH/DELETE /roles/{id}` | `roles.manage` | custom roles only — a default role's id is **404** (defaults are immutable) |
+| `GET /projects/{p}/members` · `PUT /projects/{p}/members/{u}` | `view` · `members.manage` | `{role_override_id \| null}` — the project-level role (FR-79) |
+
+**Who may give out which role** (`app.core.permissions.may_assign`, used for workspace roles, project roles and the
+member being changed or removed):
+
+1. a role holding `workspace.manage` (Owner) — only by someone who holds it;
+2. otherwise anything — for holders of `roles.manage` (Owner, Admin);
+3. otherwise only a role holding nothing the caller lacks — a Project Manager never grants more than they hold.
+
+**Custom roles** hold only catalogue permissions the author holds, never `workspace.manage`, and may not gain
+`workspace.manage`/`roles.manage` while an active join code grants them. A role in use (active member, project role,
+active join code, pending request) cannot be deleted (409 `role_in_use`); otherwise it is deleted **softly** — history
+keeps pointing at it, it disappears from lists, can never be assigned again, and its name becomes free.
+
+The workspace always keeps one Owner: demoting, removing or leaving as the last one is 409 `last_owner`.

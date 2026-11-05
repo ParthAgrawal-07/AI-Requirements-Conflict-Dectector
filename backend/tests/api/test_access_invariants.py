@@ -34,6 +34,9 @@ AUTHENTICATED_ONLY = {
     ("POST", "/api/v1/workspaces"),
     ("GET", "/api/v1/composer/templates"),  # static EARS catalogue, no tenant data (FR-81)
     ("POST", "/api/v1/join"),  # a signed-in user entering a code: not yet a member (US-25)
+    ("GET", "/api/v1/permissions"),  # the static permission catalogue (US-49)
+    # Any member may leave whatever their role; the handler requires the membership (US-26).
+    ("POST", "/api/v1/workspaces/{workspace_id}/leave"),
 }
 
 
