@@ -6,11 +6,15 @@ import pymupdf
 import pytest
 
 from app.ingestion.models import Requirement
-from app.ingestion.pipeline import ingest
+from app.ingestion.pipeline import ingest_document
+
+
+def ingest(path: str) -> list[Requirement]:
+    return ingest_document(path).requirements
 
 
 class TestPipeline:
-    """End-to-end tests for pipeline.ingest()."""
+    """End-to-end tests for pipeline.ingest_document()."""
 
     def test_pdf_end_to_end(self, sample_pdf):
         """Full pipeline: PDF → RawSegments → Requirements."""

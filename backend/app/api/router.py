@@ -17,6 +17,7 @@ from app.api import (
     auth,
     context,
     documents,
+    drafts,
     findings,
     intake,
     join_codes,
@@ -44,6 +45,7 @@ for _router in (
     documents.router,
     requirements.router,
     intake.router,
+    drafts.router,
     join_codes.router,
 ):
     api_router.include_router(_router, dependencies=_authenticated, responses=_unauthorized)

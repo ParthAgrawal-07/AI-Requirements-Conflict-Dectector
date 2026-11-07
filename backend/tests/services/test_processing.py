@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.ingestion import Requirement as Extracted
+from app.ingestion import SegmentationResult
 from app.models import (
     Document,
     DocumentSection,
@@ -119,10 +120,11 @@ class TestHappyPath:
         document = make_stored_document(make_docx("REQ-1: x"))
         observed: list[tuple[DocumentStatus, int]] = []
 
-        def spy(path: str) -> list[Extracted]:
+        def spy(path: str) -> SegmentationResult:
             db_session.refresh(document)
             observed.append((document.status, document.progress_percent))
-            return [Extracted(id="REQ-1", raw_text="REQ-1: x", source_document="s", location="p 1")]
+            item = Extracted(id="REQ-1", raw_text="REQ-1: x", source_document="s", location="p 1")
+            return SegmentationResult(requirements=[item])
 
         process_document(db_session, document.id, storage=storage, extract=spy)
         assert observed == [(DocumentStatus.PROCESSING, 10)]
@@ -173,7 +175,7 @@ class TestFailuresAreNeverSilent:
     def test_a_timeout_is_reported_as_one(
         self, db_session: Session, storage: LocalFileStorage, make_stored_document: MakeDoc
     ) -> None:
-        def too_slow(_: str) -> list[Extracted]:
+        def too_slow(_: str) -> SegmentationResult:
             raise SoftTimeLimitExceeded()
 
         document = make_stored_document(make_docx("REQ-1: x"))
@@ -188,9 +190,7 @@ class TestFailuresAreNeverSilent:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         document = make_stored_document(make_docx("REQ-1: x"))
-        real_extract = lambda path: [  # noqa: E731
-            Extracted(id="REQ-1", raw_text="REQ-1: x", source_document="s", location="p 1")
-        ]
+        item = Extracted(id="REQ-1", raw_text="REQ-1: x", source_document="s", location="p 1")
         original_flush = db_session.flush
         armed = {"fail": True}
 
@@ -199,9 +199,9 @@ class TestFailuresAreNeverSilent:
                 raise RuntimeError("connection reset by peer")
             original_flush(*args, **kwargs)  # type: ignore[arg-type]
 
-        def extract_then_break_the_next_flush(path: str) -> list[Extracted]:
+        def extract_then_break_the_next_flush(path: str) -> SegmentationResult:
             monkeypatch.setattr(db_session, "flush", flaky_flush)
-            return real_extract(path)
+            return SegmentationResult(requirements=[item])
 
         outcome = process_document(
             db_session, document.id, storage=storage, extract=extract_then_break_the_next_flush
@@ -321,7 +321,12 @@ class TestTextHygiene:
         db: Session, storage: LocalFileStorage, make: MakeDoc, items: list[Extracted]
     ) -> tuple[Document, ProcessingOutcome]:
         document = make(make_docx("placeholder"))
-        return document, process_document(db, document.id, storage=storage, extract=lambda _: items)
+        return document, process_document(
+            db,
+            document.id,
+            storage=storage,
+            extract=lambda _: SegmentationResult(requirements=items),
+        )
 
     def test_nul_bytes_are_stripped_because_postgres_cannot_store_them(
         self, db_session: Session, storage: LocalFileStorage, make_stored_document: MakeDoc
@@ -427,15 +432,15 @@ class TestSectionsAndProjectContext:
         assert all(s.project_id == document.project_id for s in sections)
 
         rows = requirements_of(db_session, document)
-        # The actor line is kept and flagged, not dropped: overview sections are only filtered
-        # out in Sprint 2 (docs/ingestion-design.md §12, step 4).
+        # The actor line under "User Classes" describes the users: it stays in its section (the
+        # context pack sees it) but is not a requirement (docs/ingestion-design.md §12, step 4).
         assert [(r.source_req_id, r.section_heading, r.needs_review) for r in rows] == [
-            (None, "2.3 User Classes", True),
             ("REQ-001", "3 Functional Requirements", False),
             (None, "3 Functional Requirements", True),
         ]
-        assert rows[1].review_reasons == []
-        assert "weaker modal verb" in rows[2].review_reasons[0]
+        assert "Customer" in sections[1].body
+        assert rows[0].review_reasons == []
+        assert "weaker modal verb" in rows[1].review_reasons[0]
 
     def test_a_rerun_replaces_the_sections(
         self, db_session: Session, storage: LocalFileStorage, make_stored_document: MakeDoc
@@ -498,4 +503,4 @@ class TestSectionsAndProjectContext:
         document = make_stored_document(INITIAL_SRS)
         assert process_document(db_session, document.id, storage=storage) is ProcessingOutcome.DONE
         assert refreshed(db_session, document).status is DocumentStatus.DONE
-        assert len(requirements_of(db_session, document)) == 3
+        assert len(requirements_of(db_session, document)) == 2  # the actor line is narrative

@@ -124,6 +124,8 @@ class AuditAction(StrEnum):
     JOIN_REQUEST_CREATED = "join_request_created"
     JOIN_REQUEST_APPROVED = "join_request_approved"
     JOIN_REQUEST_DENIED = "join_request_denied"
+    # Requirement posts (US-30 groundwork). Requirement, message and channel ids only.
+    REQUIREMENT_POSTED = "requirement_posted"
 
 
 class JoinCodeStatus(StrEnum):
