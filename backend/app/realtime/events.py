@@ -76,6 +76,16 @@ def analysis_progress(
     )
 
 
+def membership_revoked(*, workspace_id: uuid.UUID, user_id: uuid.UUID) -> Event:
+    """The user left or was removed: the gateway closes their sockets (US-26, NFR-27)."""
+    return Event(
+        type=MEMBERSHIP_REVOKED,
+        workspace_id=workspace_id,
+        entity_id=user_id,
+        data={"user_id": str(user_id)},
+    )
+
+
 def channel_event(
     event_type: str,
     *,

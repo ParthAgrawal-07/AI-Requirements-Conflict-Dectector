@@ -24,7 +24,17 @@ from sqlalchemy.orm import Session
 
 from app.core import security
 from app.core.permissions import DEFAULT_ROLE_PERMISSIONS, PERMISSIONS, DefaultRole
-from app.models import Channel, Document, DocumentFormat, JoinRequest, Project, User, Workspace
+from app.models import (
+    Channel,
+    Document,
+    DocumentFormat,
+    JoinRequest,
+    Project,
+    Role,
+    RolePermission,
+    User,
+    Workspace,
+)
 from app.services import documents as document_service
 from app.services import join_codes as join_code_service
 from app.services.access import Scope, build_access_context
@@ -61,8 +71,9 @@ class World:
     join_code_id: uuid.UUID
     join_request: JoinRequest
     viewer_role_id: uuid.UUID
-    channel: Channel  # public, in the project
     target: User  # a Developer that member routes act on
+    custom_role: Role  # an unused custom role ("Client reviewer")
+    channel: Channel  # public, in the project
 
 
 @dataclass(frozen=True)
@@ -109,6 +120,24 @@ CASES = [
         "/api/v1/workspaces/{workspace_id}/join-requests/{join_request_id}/decision",
         lambda _: {"approve": False},
     ),
+    # Sprint 2 — members, roles, project-level roles (US-26, US-49)
+    Case("GET", "/api/v1/workspaces/{workspace_id}/members"),
+    Case(
+        "PATCH",
+        "/api/v1/workspaces/{workspace_id}/members/{user_id}",
+        lambda w: {"role_id": str(w.viewer_role_id)},
+    ),
+    Case("DELETE", "/api/v1/workspaces/{workspace_id}/members/{user_id}"),
+    Case("GET", "/api/v1/workspaces/{workspace_id}/needs-reassignment"),
+    Case(
+        "POST",
+        "/api/v1/workspaces/{workspace_id}/roles",
+        lambda _: {"name": "Tech lead", "permissions": ["view", "rcr.review"]},
+    ),
+    Case("PATCH", "/api/v1/roles/{role_id}", lambda _: {"description": "Reviews only"}),
+    Case("DELETE", "/api/v1/roles/{role_id}"),
+    Case("GET", "/api/v1/projects/{project_id}/members"),
+    Case("PUT", "/api/v1/projects/{project_id}/members/{user_id}", lambda _: {}),
     # Sprint 2 — channels (US-28)
     Case("POST", "/api/v1/projects/{project_id}/channels", lambda _: {"name": "new-one"}),
     Case("GET", "/api/v1/projects/{project_id}/channels"),
@@ -170,8 +199,14 @@ def world(
     viewer = get_default_role(db_session, DefaultRole.VIEWER).id
     channel = Channel(project_id=project.id, name="matrix", created_by=owner.id)
     db_session.add(channel)
-    db_session.commit()
     target = make_user(role=DefaultRole.DEVELOPER)
+    custom_role = Role(
+        workspace_id=workspace.id,
+        name="Client reviewer",
+        permissions=[RolePermission(permission=p) for p in ("view", "rcr.review")],
+    )
+    db_session.add(custom_role)
+    db_session.commit()
     return World(
         workspace=workspace,
         project=project,
@@ -179,8 +214,9 @@ def world(
         join_code_id=code.join_code.id,
         join_request=request,
         viewer_role_id=viewer,
-        channel=channel,
         target=target,
+        custom_role=custom_role,
+        channel=channel,
     )
 
 
@@ -203,8 +239,9 @@ def _call(api: TestClient, case: Case, world: World, user: User) -> int:
         document_id=world.document.id,
         join_code_id=world.join_code_id,
         join_request_id=world.join_request.id,
-        channel_id=world.channel.id,
         user_id=world.target.id,
+        role_id=world.custom_role.id,
+        channel_id=world.channel.id,
     )
     headers = {"Authorization": f"Bearer {security.create_access_token(user.id)[0]}"}
     body = case.body(world)
