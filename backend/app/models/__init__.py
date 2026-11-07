@@ -7,6 +7,7 @@ relies on that, so a new model file must be imported here.
 from app.models.analysis import CandidatePair, Clarification, Finding
 from app.models.audit import AuditLog
 from app.models.base import Base
+from app.models.channel import Channel, ChannelMember, ChannelRead, Message
 from app.models.context import DocumentSection, ProjectContext
 from app.models.document import Document
 from app.models.embedding import EMBEDDING_DIM, Embedding
@@ -19,6 +20,7 @@ from app.models.enums import (
     ImportMode,
     JoinCodeStatus,
     JoinRequestStatus,
+    MessageKind,
     PlatformRole,
     ProjectStatus,
     RequirementOrigin,
@@ -39,6 +41,9 @@ __all__ = [
     "AuditLog",
     "Base",
     "CandidatePair",
+    "Channel",
+    "ChannelMember",
+    "ChannelRead",
     "Clarification",
     "Document",
     "DocumentSection",
@@ -54,6 +59,8 @@ __all__ = [
     "JoinRequest",
     "JoinRequestStatus",
     "Membership",
+    "Message",
+    "MessageKind",
     "PlatformRole",
     "Project",
     "ProjectContext",
