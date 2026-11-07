@@ -142,11 +142,19 @@ def test_only_listed_routes_admit_protected_only_grants() -> None:
     )
 
 
+# Writes that only touch the caller's *own* per-person state (a read marker), never shared data,
+# so every member who may read may make them. Keep this list short.
+OWN_STATE_WITH_VIEW = {
+    ("POST", "/api/v1/channels/{channel_id}/read"),  # unread counts (US-28)
+}
+
+
 def test_state_changing_routes_need_more_than_view() -> None:
     weak = [
         f"{method} {route.path}"
         for method, route in _api_routes()
         if method in {"POST", "PUT", "PATCH", "DELETE"}
+        and (method, route.path) not in OWN_STATE_WITH_VIEW
         and (declaration := _declarations(route.dependant)[0]).kind
         in ("permission", "any_permission")
         and set(declaration.permissions) == {"view"}

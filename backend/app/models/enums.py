@@ -124,6 +124,22 @@ class AuditAction(StrEnum):
     JOIN_REQUEST_CREATED = "join_request_created"
     JOIN_REQUEST_APPROVED = "join_request_approved"
     JOIN_REQUEST_DENIED = "join_request_denied"
+    # Channels (US-28). Channel and user ids only — never names, topics or messages (CR-04).
+    CHANNEL_CREATED = "channel_created"
+    CHANNEL_UPDATED = "channel_updated"
+    CHANNEL_ARCHIVED = "channel_archived"
+    CHANNEL_MEMBER_ADDED = "channel_member_added"
+    CHANNEL_MEMBER_REMOVED = "channel_member_removed"
+
+
+class MessageKind(StrEnum):
+    """What a channel message is (design update §4.1). Cards are distinct kinds, not chat text."""
+
+    CHAT = "chat"
+    REQUIREMENT_POST = "requirement_post"  # creates a Proposed requirement (US-30)
+    CHANGE_REQUEST = "change_request"  # card for an opened change request (US-33)
+    ANALYSIS_CARD = "analysis_card"  # result of live analysis (US-31)
+    SYSTEM = "system"  # "Riya joined", "channel renamed"…
 
 
 class JoinCodeStatus(StrEnum):

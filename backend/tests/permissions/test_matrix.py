@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.core import security
 from app.core.permissions import DEFAULT_ROLE_PERMISSIONS, PERMISSIONS, DefaultRole
-from app.models import Document, DocumentFormat, JoinRequest, Project, User, Workspace
+from app.models import Channel, Document, DocumentFormat, JoinRequest, Project, User, Workspace
 from app.services import documents as document_service
 from app.services import join_codes as join_code_service
 from app.services.access import Scope, build_access_context
@@ -61,6 +61,8 @@ class World:
     join_code_id: uuid.UUID
     join_request: JoinRequest
     viewer_role_id: uuid.UUID
+    channel: Channel  # public, in the project
+    target: User  # a Developer that member routes act on
 
 
 @dataclass(frozen=True)
@@ -107,6 +109,16 @@ CASES = [
         "/api/v1/workspaces/{workspace_id}/join-requests/{join_request_id}/decision",
         lambda _: {"approve": False},
     ),
+    # Sprint 2 — channels (US-28)
+    Case("POST", "/api/v1/projects/{project_id}/channels", lambda _: {"name": "new-one"}),
+    Case("GET", "/api/v1/projects/{project_id}/channels"),
+    Case("GET", "/api/v1/channels/{channel_id}"),
+    Case("PATCH", "/api/v1/channels/{channel_id}", lambda _: {"topic": "t"}),
+    Case("POST", "/api/v1/channels/{channel_id}/archive"),
+    Case("POST", "/api/v1/channels/{channel_id}/read"),
+    Case("GET", "/api/v1/channels/{channel_id}/members"),
+    Case("POST", "/api/v1/channels/{channel_id}/members", lambda w: {"user_id": str(w.target.id)}),
+    Case("DELETE", "/api/v1/channels/{channel_id}/members/{user_id}"),
 ]
 
 
@@ -156,7 +168,20 @@ def world(
     assert isinstance(request, JoinRequest)
     db_session.commit()
     viewer = get_default_role(db_session, DefaultRole.VIEWER).id
-    return World(workspace, project, document, code.join_code.id, request, viewer)
+    channel = Channel(project_id=project.id, name="matrix", created_by=owner.id)
+    db_session.add(channel)
+    db_session.commit()
+    target = make_user(role=DefaultRole.DEVELOPER)
+    return World(
+        workspace=workspace,
+        project=project,
+        document=document,
+        join_code_id=code.join_code.id,
+        join_request=request,
+        viewer_role_id=viewer,
+        channel=channel,
+        target=target,
+    )
 
 
 @pytest.fixture
@@ -178,6 +203,8 @@ def _call(api: TestClient, case: Case, world: World, user: User) -> int:
         document_id=world.document.id,
         join_code_id=world.join_code_id,
         join_request_id=world.join_request.id,
+        channel_id=world.channel.id,
+        user_id=world.target.id,
     )
     headers = {"Authorization": f"Bearer {security.create_access_token(user.id)[0]}"}
     body = case.body(world)
