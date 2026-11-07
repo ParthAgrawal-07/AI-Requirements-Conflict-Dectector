@@ -124,7 +124,21 @@ Brief schema, field states and drafting rules: [`docs/contracts/composer-and-con
 reason). `409` if the project is archived.
 
 `GET /projects/{p}/requirements` items also carry `section_heading`, `needs_review` and `review_reasons` (US-02: items
-segmentation was unsure about are surfaced, never dropped).
+segmentation was unsure about are surfaced, never dropped). `document_id` is null for a requirement that was posted
+rather than extracted.
+
+### Drafts and requirement posts  *(FR-81, US-30 backend — Sprint 2)*
+
+Contract: [`docs/contracts/composer-and-context.md`](../contracts/composer-and-context.md) §3.
+
+| Method & path | Permission | Purpose |
+|---|---|---|
+| `GET /me/drafts?project=` | signed in (must still `view` the project) | Your drafts, newest first |
+| `POST /me/drafts` | signed in (must still `view` the project) | `{project_id, fields}` → `201`; `409 too_many_drafts` after 50 in a project |
+| `GET /me/drafts/{id}` | signed in, author only | One draft (`404` for anyone else) |
+| `PATCH /me/drafts/{id}` | signed in, author only | Autosave: replace `fields` |
+| `DELETE /me/drafts/{id}` | signed in, author only | `204` |
+| `POST /channels/{c}/requirement-posts` | `req.propose` | `{fields, draft_id?}` → `201 {message, requirement}`: a card plus a Proposed requirement; `409` if the channel is archived; rate-limited like messages |
 
 ## 1. Endpoint Summary (10 planned)
 

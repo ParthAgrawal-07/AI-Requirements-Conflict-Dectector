@@ -4,8 +4,8 @@
 |---|---|
 | **Producer** | Bansil (ingestion and authoring) |
 | **Consumers** | Pranshu (composer UI) · Keval (EARS wording, lint, context pack, brief prompt) · Abhijeet (setup wizard, Setup banner) · Heet (section embeddings) · Abhyudit / Affan (tests) |
-| **Status** | Sprint 0 contracts agreed; the brief, context service and API are implemented in Sprint 1 (US-60). Composer posting and drafts persistence come with US-30 (Sprint 3) |
-| **Code** | `backend/app/intake/` (EARS, composer and draft schemas) · `backend/app/context/` (brief schema, drafter, service) · `backend/app/api/context.py` · migration `0011_project_context` |
+| **Status** | Sprint 0 contracts agreed; the brief, context service and API are implemented in Sprint 1 (US-60). Drafts and the requirement-post backend are implemented in Sprint 2 (migration `0006b`); the composer UI that calls them is US-30 (Sprint 3) |
+| **Code** | `backend/app/intake/` (EARS, composer and draft schemas; `drafts.py`, `posts.py`) · `backend/app/api/drafts.py` · `backend/app/context/` (brief schema, drafter, service) · `backend/app/api/context.py` · migration `0011_project_context` |
 
 ## 1. EARS templates (with Keval — FR-81, DR-18)
 
@@ -50,13 +50,19 @@ Unknown fields are rejected (`422`). The requirement `body` is the rendered sent
 
 Drafts autosave every 5 s and are private to their author (FR-81).
 
-* **Table** `requirement_drafts` (migration `0006`, Sprint 2–3): `id`, `author_id`, `project_id`, `fields` (jsonb,
-  `DraftFields`), `created_at`, `updated_at`. One author sees only their own drafts; a draft is deleted when it is
-  proposed.
+* **Table** `requirement_drafts` (migration `0006b`, Sprint 2): `id`, `author_id`, `project_id`, `fields` (jsonb,
+  `DraftFields`), `created_at`, `updated_at`. One author sees only their own drafts, and only while they may still
+  `view` the project (a removed member, or a project role override without `view`, gets 404). At most 50 drafts per
+  author per project (`409 too_many_drafts`). A draft is deleted when it is posted.
 * **`DraftFields`**: the same fields as `ComposerFields`, all optional, so half-written work saves.
 * **API** (design update §9): `GET /me/drafts?project=` · `POST /me/drafts` · `PATCH /me/drafts/{id}` (replace
   `fields`) · `DELETE /me/drafts/{id}`. Each item (`RequirementDraftRead`) is `{id, project_id, fields, preview,
   updated_at}`; `preview` is the rendered sentence, or null while slots are empty.
+* **Posting** (`POST /channels/{c}/requirement-posts`, `req.propose`, Sprint 2): body `{fields: ComposerFields,
+  draft_id?}`. In one transaction: a `requirement_post` message whose body is the rendered statement (never
+  editable), a **Proposed** requirement (`origin = post`, no document, version 1, owner, group, `req_type`,
+  `priority`, `composer_fields`), an audit row with ids only; the draft is deleted. `draft_id` must be the author's
+  draft **in the same project** (else 404). `message.created` is published after the commit.
 
 ## 4. Project brief schema (with Keval — FR-103, US-60)
 
