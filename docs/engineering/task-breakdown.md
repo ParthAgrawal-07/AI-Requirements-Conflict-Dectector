@@ -16,7 +16,7 @@
 |---|---|---|
 | Parth | Migrations `0003` (severity, `escalated`) and `0004` (projects, memberships, roles and permissions with the 9 defaults seeded); `require_permission()` skeleton; existing RBAC and isolation tests passing on it | ✅ |
 | Dhavni didi | WebSocket + Redis pub/sub spike; map library spike with Abhijeet (Cytoscape.js vs React Flow, 500 nodes / 2,000 edges, NFR-33); `graph.delta` event schema; Compose and CI for new packages | ⬜ |
-| Bansil | Composer field schema and draft model with Pranshu; EARS template definitions with Keval; project brief schema (required and optional fields); G3 plan | 🟡 Composer schema, EARS templates and brief schema ✅ (PR #27, `docs/contracts/composer-and-context.md`); G3 plan not tracked in the repo |
+| Bansil | Composer field schema and draft model with Pranshu; EARS template definitions with Keval; project brief schema (required and optional fields); G3 plan | ✅ Composer schema, EARS templates and brief schema (PR #27, `docs/contracts/composer-and-context.md`); G3 plan (`docs/ingestion-design.md` §12) |
 | Pranshu | App shell, routing, component kit (buttons, badges with icon + text, drawer, tabs); start login and sign-up-with-code screens | ⬜ |
 | Heet | Confirm embedding model; measure similar-requirement hint latency (target < 500 ms server time); draft `analyse_text()` contract | ⬜ |
 | Keval | `LLMClient` adapter; prompt v1 with delimited inputs and a context-pack slot; lint pattern catalogue v1 (shared with DR-07); `BudgetGuard` design | 🟡 (classification prompts in open PR #21) |
