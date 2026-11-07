@@ -138,8 +138,8 @@ class ConflictError(AppError):
     status_code = 409
     code = "conflict"
 
-    def __init__(self, message: str) -> None:
-        super().__init__(message)
+    def __init__(self, message: str, *, code: str | None = None) -> None:
+        super().__init__(message, code=code)
 
 
 class InvalidJoinCodeError(AppError):

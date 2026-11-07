@@ -22,8 +22,22 @@ from pydantic import BaseModel, Field
 ANALYSIS_PROGRESS = "analysis.progress"  # a document moved to a new stage or percentage (US-03)
 MEMBERSHIP_REVOKED = "membership.revoked"  # the gateway closes the member's sockets (US-26, S2)
 GRAPH_DELTA = "graph.delta"  # nodes/edges changed on the live map (US-14, S3)
+# Channels (US-28, Madhav). ``data.private`` is true for a private channel: the gateway then
+# forwards the event only to sockets subscribed to that channel by id (re-checked membership).
+CHANNEL_CREATED = "channel.created"
+CHANNEL_UPDATED = "channel.updated"  # renamed, topic changed or archived
+CHANNEL_MEMBER_REMOVED = "channel.member_removed"  # the gateway drops that user's subscription
 
-EVENT_TYPES = frozenset({ANALYSIS_PROGRESS, MEMBERSHIP_REVOKED, GRAPH_DELTA})
+EVENT_TYPES = frozenset(
+    {
+        ANALYSIS_PROGRESS,
+        MEMBERSHIP_REVOKED,
+        GRAPH_DELTA,
+        CHANNEL_CREATED,
+        CHANNEL_UPDATED,
+        CHANNEL_MEMBER_REMOVED,
+    }
+)
 
 
 class Event(BaseModel):
@@ -69,4 +83,24 @@ def membership_revoked(*, workspace_id: uuid.UUID, user_id: uuid.UUID) -> Event:
         workspace_id=workspace_id,
         entity_id=user_id,
         data={"user_id": str(user_id)},
+    )
+
+
+def channel_event(
+    event_type: str,
+    *,
+    workspace_id: uuid.UUID,
+    project_id: uuid.UUID,
+    channel_id: uuid.UUID,
+    private: bool,
+    **data: Any,
+) -> Event:
+    """A channel changed (``channel.*``). ``data`` holds ids and flags only — never names."""
+    return Event(
+        type=event_type,
+        workspace_id=workspace_id,
+        project_id=project_id,
+        channel_id=channel_id,
+        entity_id=channel_id,
+        data={"channel_id": str(channel_id), "private": private, **data},
     )

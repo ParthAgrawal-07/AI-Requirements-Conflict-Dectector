@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends
 
 from app.api import (
     auth,
+    channels,
     context,
     documents,
     findings,
@@ -47,6 +48,7 @@ for _router in (
     requirements.router,
     intake.router,
     join_codes.router,
+    channels.router,
 ):
     api_router.include_router(_router, dependencies=_authenticated, responses=_unauthorized)
 

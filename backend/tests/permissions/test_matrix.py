@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from app.core import security
 from app.core.permissions import DEFAULT_ROLE_PERMISSIONS, PERMISSIONS, DefaultRole
 from app.models import (
+    Channel,
     Document,
     DocumentFormat,
     JoinRequest,
@@ -72,6 +73,7 @@ class World:
     viewer_role_id: uuid.UUID
     target: User  # a Developer that member routes act on
     custom_role: Role  # an unused custom role ("Client reviewer")
+    channel: Channel  # public, in the project
 
 
 @dataclass(frozen=True)
@@ -136,6 +138,16 @@ CASES = [
     Case("DELETE", "/api/v1/roles/{role_id}"),
     Case("GET", "/api/v1/projects/{project_id}/members"),
     Case("PUT", "/api/v1/projects/{project_id}/members/{user_id}", lambda _: {}),
+    # Sprint 2 — channels (US-28)
+    Case("POST", "/api/v1/projects/{project_id}/channels", lambda _: {"name": "new-one"}),
+    Case("GET", "/api/v1/projects/{project_id}/channels"),
+    Case("GET", "/api/v1/channels/{channel_id}"),
+    Case("PATCH", "/api/v1/channels/{channel_id}", lambda _: {"topic": "t"}),
+    Case("POST", "/api/v1/channels/{channel_id}/archive"),
+    Case("POST", "/api/v1/channels/{channel_id}/read"),
+    Case("GET", "/api/v1/channels/{channel_id}/members"),
+    Case("POST", "/api/v1/channels/{channel_id}/members", lambda w: {"user_id": str(w.target.id)}),
+    Case("DELETE", "/api/v1/channels/{channel_id}/members/{user_id}"),
 ]
 
 
@@ -185,6 +197,8 @@ def world(
     assert isinstance(request, JoinRequest)
     db_session.commit()
     viewer = get_default_role(db_session, DefaultRole.VIEWER).id
+    channel = Channel(project_id=project.id, name="matrix", created_by=owner.id)
+    db_session.add(channel)
     target = make_user(role=DefaultRole.DEVELOPER)
     custom_role = Role(
         workspace_id=workspace.id,
@@ -202,6 +216,7 @@ def world(
         viewer_role_id=viewer,
         target=target,
         custom_role=custom_role,
+        channel=channel,
     )
 
 
@@ -226,6 +241,7 @@ def _call(api: TestClient, case: Case, world: World, user: User) -> int:
         join_request_id=world.join_request.id,
         user_id=world.target.id,
         role_id=world.custom_role.id,
+        channel_id=world.channel.id,
     )
     headers = {"Authorization": f"Bearer {security.create_access_token(user.id)[0]}"}
     body = case.body(world)
