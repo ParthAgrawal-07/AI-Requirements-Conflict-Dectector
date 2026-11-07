@@ -17,8 +17,10 @@ from app.models import (
     Message,
     MessageKind,
     Project,
+    ProjectMember,
     Requirement,
     RequirementVersion,
+    Role,
     User,
     Workspace,
 )
@@ -107,6 +109,23 @@ class TestDrafts:
         self, client: TestClient, project: Project, user: User
     ) -> None:
         assert _create(client, user, project, {"colour": "red"}).status_code == 422
+
+    def test_a_project_role_without_view_hides_its_drafts(
+        self, client: TestClient, db_session: Session, project: Project, user: User
+    ) -> None:
+        # US-49: a project-level override can take ``view`` away; drafts follow the project.
+        draft = _create(client, user, project, {}).json()
+        blind = Role(workspace_id=project.workspace_id, name="No access", is_default=False)
+        db_session.add(blind)
+        db_session.flush()
+        db_session.add(
+            ProjectMember(project_id=project.id, user_id=user.id, role_override_id=blind.id)
+        )
+        db_session.commit()
+
+        assert _create(client, user, project, {}).status_code == 404
+        assert client.get(f"{DRAFTS}/{draft['id']}", headers=headers_for(user)).status_code == 404
+        assert client.get(DRAFTS, headers=headers_for(user)).json() == []
 
     def test_a_project_of_another_workspace_is_a_404(
         self,
@@ -241,3 +260,23 @@ class TestRequirementPosts:
             self.url(channel), json={"fields": fields}, headers=headers_for(user)
         )
         assert response.status_code == 404
+
+    def test_a_draft_of_another_project_is_not_consumed(
+        self,
+        client: TestClient,
+        channel: Channel,
+        project: Project,
+        user: User,
+        make_project: Callable[..., Project],
+    ) -> None:
+        other = make_project()  # same workspace as `project`
+        draft = _create(client, user, other, {}).json()
+
+        response = client.post(
+            self.url(channel),
+            json={"fields": EVENT_DRIVEN, "draft_id": draft["id"]},
+            headers=headers_for(user),
+        )
+
+        assert response.status_code == 404
+        assert client.get(f"{DRAFTS}/{draft['id']}", headers=headers_for(user)).status_code == 200

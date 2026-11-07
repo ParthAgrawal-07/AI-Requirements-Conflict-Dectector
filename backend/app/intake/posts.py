@@ -56,6 +56,9 @@ def post_requirement(
     if active_membership(db, owner_id, project.workspace_id) is None:
         raise NotFoundError("The chosen owner is not a member of this workspace")
     draft = draft_service.get_draft(db, author, draft_id) if draft_id else None
+    if draft is not None and draft.project_id != project.id:
+        # Never delete a draft of another project as a side effect of this post.
+        raise NotFoundError("Draft not found")
 
     statement = fields.statement
     message = message_service.post_message(
