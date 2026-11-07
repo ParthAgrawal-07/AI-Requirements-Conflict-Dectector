@@ -72,12 +72,16 @@ def upgrade() -> None:
     op.create_index(
         "ix_candidate_pairs_classification_status", "candidate_pairs", ["classification_status"]
     )
-    # Pairs that already have a finding were classified by the Sprint 1 skeleton.
+    # Pairs that already have a finding were classified by the Sprint 1 skeleton. Stamp the
+    # current versions too, or generate_candidates sees NULL versions as changed and pays the
+    # LLM to classify every one of them again.
     op.execute(
         """
         UPDATE candidate_pairs p SET classification_status = 'done', attempts = 1,
-            classified_at = now()
-        WHERE EXISTS (SELECT 1 FROM findings f WHERE f.candidate_pair_id = p.id)
+            classified_at = now(), a_version = ra.current_version, b_version = rb.current_version
+        FROM requirements ra, requirements rb
+        WHERE ra.id = p.requirement_a_id AND rb.id = p.requirement_b_id
+          AND EXISTS (SELECT 1 FROM findings f WHERE f.candidate_pair_id = p.id)
         """
     )
 

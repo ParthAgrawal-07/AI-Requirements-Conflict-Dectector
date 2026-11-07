@@ -131,6 +131,15 @@ class TestCustomRoles:
         create(client, workspace, owner)
         assert create(client, workspace, owner).status_code == 409
 
+    def test_a_blank_rename_is_rejected(
+        self, client: TestClient, workspace: Workspace, owner: User
+    ) -> None:
+        role = create(client, workspace, owner).json()
+        response = client.patch(
+            f"/api/v1/roles/{role['id']}", json={"name": "   "}, headers=headers_for(owner)
+        )
+        assert response.status_code == 422
+
     def test_default_roles_cannot_be_edited_or_deleted(
         self, client: TestClient, db_session: Session, owner: User
     ) -> None:
