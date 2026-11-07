@@ -4,15 +4,17 @@ One socket per browser tab. The conversation is JSON frames::
 
     client  {"type": "auth", "token": "<JWT>"}                  first frame, within 10 s
     server  {"type": "ready", "user_id": "..."}
-    client  {"type": "subscribe", "project_id": "..."}          or "workspace_id"
+    client  {"type": "subscribe", "project_id": "..."}          or "workspace_id" or "channel_id"
     server  {"type": "subscribed", "workspace_id": "...", "project_id": "..."}
-    client  {"type": "unsubscribe", "project_id": "..."}        or "workspace_id"; no reply
     server  {"type": "event", "event": {...envelope...}}         from then on
     client  {"type": "ping"}  ->  server {"type": "pong"}
 
 * The token travels in the first frame, not the URL, so it never lands in proxy logs.
 * Each ``subscribe`` re-reads the membership (the same ``view`` check as REST): a non-member
   gets ``{"type": "error", "code": "not_found"}`` — the same answer as for an unknown id.
+* A ``channel_id`` subscription receives that channel's events. Events of a **private** channel
+  (``data.private``) reach only sockets subscribed to it by id, checked against the channel's
+  member list; a ``channel.member_removed`` for this user ends that subscription at once.
 * A ``membership.revoked`` event for this user closes the socket with code 4403.
 * Events fan out through the bus (``app.realtime.bus``): Redis pub/sub between API processes,
   or in-process when ``REALTIME_BUS=memory``.
@@ -23,12 +25,11 @@ import contextlib
 import json
 import logging
 import uuid
-from collections.abc import AsyncIterator, Callable, Generator
+from collections.abc import AsyncIterator, Callable
 from typing import Annotated, Any, Protocol
 
 import redis.asyncio as aioredis
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
-from redis.exceptions import RedisError
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
@@ -38,7 +39,8 @@ from app.core.errors import AppError
 from app.core.security import TokenError, decode_access_token
 from app.models import User
 from app.realtime import bus
-from app.realtime.events import MEMBERSHIP_REVOKED, Event
+from app.realtime.events import CHANNEL_MEMBER_REMOVED, MEMBERSHIP_REVOKED, Event
+from app.services import channels as channel_service
 from app.services.access import build_access_context, resolve_scope
 from app.services.users import get_user
 
@@ -118,54 +120,22 @@ class _Session:
 
     def __init__(self, user: User) -> None:
         self.user = user
-        self.user_id = str(user.id)  # read without touching the DB from the forwarding task
         self.workspaces: set[uuid.UUID] = set()
         self.projects: set[uuid.UUID] = set()
         self.whole_workspaces: set[uuid.UUID] = set()
+        self.channels: set[uuid.UUID] = set()
 
     def wants(self, event: Event) -> bool:
         if event.workspace_id not in self.workspaces:
             return False
+        if event.channel_id is not None:
+            if event.channel_id in self.channels:
+                return True
+            if event.data.get("private"):
+                return False  # a private channel's events go to its checked subscribers only
         if event.project_id is None or event.workspace_id in self.whole_workspaces:
             return True
         return event.project_id in self.projects
-
-    def unsubscribe(self, frame: dict[str, Any]) -> None:
-        """Stop forwarding a project (or whole-workspace) subscription. Unknown ids are ignored.
-
-        The workspace's bus channel stays subscribed: other projects in it may still be watched,
-        and :meth:`wants` filters what is forwarded.
-        """
-        targets = (("project_id", self.projects), ("workspace_id", self.whole_workspaces))
-        for key, subscriptions in targets:
-            if frame.get(key) is None:
-                continue
-            with contextlib.suppress(ValueError):
-                subscriptions.discard(uuid.UUID(str(frame[key])))
-
-
-@contextlib.contextmanager
-def _released(db: Session) -> Generator[None, None, None]:
-    """End the read transaction so the socket does not hold a pooled connection while idle.
-
-    The session lives as long as the socket; without this, its first query leaves a connection
-    checked out ("idle in transaction") until disconnect, and a few dozen open tabs exhaust the
-    pool for REST. Commit rather than roll back: with ``expire_on_commit=False`` loaded objects
-    (the user) stay usable without a reload.
-    """
-    try:
-        yield
-    finally:
-        try:
-            db.commit()
-        except Exception:
-            db.rollback()
-
-
-def _load_active_user(db: Session, subject: uuid.UUID) -> User | None:
-    with _released(db):
-        user = get_user(db, subject)
-        return user if user is not None and user.is_active else None
 
 
 async def _authenticate(websocket: WebSocket, db: Session) -> User | None:
@@ -179,25 +149,39 @@ async def _authenticate(websocket: WebSocket, db: Session) -> User | None:
         payload = decode_access_token(str(frame.get("token", "")))
     except TokenError:
         return None
-    return await run_in_threadpool(_load_active_user, db, payload.subject)
+    user = await run_in_threadpool(get_user, db, payload.subject)
+    return user if user is not None and user.is_active else None
 
 
 def _check_subscription(
     db: Session, user: User, frame: dict[str, Any]
-) -> tuple[uuid.UUID, uuid.UUID | None]:
-    """The (workspace, project) the user may watch, or :class:`AppError` (404/403)."""
+) -> tuple[uuid.UUID, uuid.UUID | None, uuid.UUID | None]:
+    """The (workspace, project, channel) the user may watch, or :class:`AppError` (404/403).
+
+    A ``channel_id`` subscription also checks the channel itself: a private channel the user is
+    not listed on is ``not_found``, exactly like an unknown id.
+    """
     params = {
-        key: frame[key] for key in ("workspace_id", "project_id") if frame.get(key) is not None
+        key: frame[key]
+        for key in ("workspace_id", "project_id", "channel_id")
+        if frame.get(key) is not None
     }
     if not params:
-        raise AppError("Give workspace_id or project_id", status_code=400, code="scope_required")
-    with _released(db):
-        db.expire_all()  # re-read membership and role, as every REST request does
-        scope = resolve_scope(db, params)
-        context = build_access_context(db, user, scope)
-        if not context.can("view"):
-            raise AppError("Forbidden", status_code=403, code="forbidden")
-        return scope.workspace_id, scope.project_id
+        raise AppError(
+            "Give workspace_id, project_id or channel_id", status_code=400, code="scope_required"
+        )
+    db.expire_all()  # re-read membership and role, as every REST request does
+    scope = resolve_scope(db, params)
+    context = build_access_context(db, user, scope)
+    if not context.can("view"):
+        raise AppError("Forbidden", status_code=403, code="forbidden")
+    channel_id = None
+    if "channel_id" in params:
+        channel = channel_service.get_visible_channel(
+            db, uuid.UUID(str(params["channel_id"])), user
+        )
+        channel_id = channel.id
+    return scope.workspace_id, scope.project_id, channel_id
 
 
 @router.websocket("/ws")
@@ -221,8 +205,6 @@ async def websocket_endpoint(websocket: WebSocket, db: Annotated[Session, Depend
                 await websocket.send_json({"type": "pong"})
             elif frame.get("type") == "subscribe":
                 await _subscribe(websocket, db, fanout, state, frame)
-            elif frame.get("type") == "unsubscribe":
-                state.unsubscribe(frame)
     except (WebSocketDisconnect, json.JSONDecodeError, RuntimeError):
         pass
     finally:
@@ -236,7 +218,7 @@ async def _subscribe(
     websocket: WebSocket, db: Session, fanout: Fanout, state: _Session, frame: dict[str, Any]
 ) -> None:
     try:
-        workspace_id, project_id = await run_in_threadpool(
+        workspace_id, project_id, channel_id = await run_in_threadpool(
             _check_subscription, db, state.user, frame
         )
     except AppError as error:
@@ -246,14 +228,11 @@ async def _subscribe(
         await websocket.send_json({"type": "error", "code": "not_found"})
         return
     if workspace_id not in state.workspaces:
-        try:
-            await fanout.add(workspace_id)
-        except RedisError:
-            logger.warning("Could not subscribe to workspace %s: Redis unavailable", workspace_id)
-            await websocket.send_json({"type": "error", "code": "unavailable"})
-            return
+        await fanout.add(workspace_id)
         state.workspaces.add(workspace_id)
-    if project_id is None:
+    if channel_id is not None:
+        state.channels.add(channel_id)  # channel events only, not the whole project
+    elif project_id is None:
         state.whole_workspaces.add(workspace_id)
     else:
         state.projects.add(project_id)
@@ -262,14 +241,21 @@ async def _subscribe(
             "type": "subscribed",
             "workspace_id": str(workspace_id),
             "project_id": str(project_id) if project_id else None,
+            "channel_id": str(channel_id) if channel_id else None,
         }
     )
 
 
 async def _forward(websocket: WebSocket, fanout: Fanout, state: _Session) -> None:
     async for event in fanout.events():
-        if event.type == MEMBERSHIP_REVOKED and event.data.get("user_id") == state.user_id:
+        if event.type == MEMBERSHIP_REVOKED and event.data.get("user_id") == str(state.user.id):
             await websocket.close(code=CLOSE_REVOKED)
             return
         if state.wants(event):
             await websocket.send_json({"type": "event", "event": event.model_dump(mode="json")})
+        if (
+            event.type == CHANNEL_MEMBER_REMOVED
+            and event.channel_id is not None
+            and event.data.get("user_id") == str(state.user.id)
+        ):
+            state.channels.discard(event.channel_id)  # taken off a private channel: stop at once

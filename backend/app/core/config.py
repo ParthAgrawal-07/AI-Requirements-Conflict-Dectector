@@ -56,14 +56,6 @@ class Settings(BaseSettings):
     # ── Auth (FR-37, NFR-11, NFR-12) ──────────────────────
     jwt_secret: SecretStr
     access_token_expire_minutes: int = Field(default=60, ge=1, le=24 * 60)
-    # US-19 silent re-login: the refresh token lives in an HttpOnly cookie and is rotated on every
-    # use, so this is how long a tab may stay idle before its user has to sign in again.
-    refresh_token_expire_days: int = Field(default=14, ge=1, le=90)
-    # "none" is needed when the SPA and the API are on different sites (e.g. Vercel + Render);
-    # it requires a Secure cookie. "lax" works when both share a site (localhost, one domain).
-    refresh_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
-    # None = Secure everywhere except development/test (plain-http localhost).
-    refresh_cookie_secure: bool | None = None
     # FR-43: who may create workspaces. False = platform admins only (the CLI creates the first
     # one); True = any signed-in user. Sign-up itself always needs a join code (SX-02).
     allow_user_workspace_creation: bool = False
@@ -80,6 +72,13 @@ class Settings(BaseSettings):
     join_attempts_per_window: int = Field(default=10, ge=1, le=1000)
     join_attempt_window_seconds: int = Field(default=600, ge=1, le=24 * 60 * 60)
 
+    # ── Real time (US-03, US-29) ──────────────────────────
+    # "redis": events fan out between API processes over Redis pub/sub (every deployment).
+    # "memory": in-process only — tests and a single `uvicorn` without Redis.
+    realtime_bus: Literal["redis", "memory"] = "redis"
+    # US-29: chat messages (posts, replies, edits) per user per minute.
+    messages_per_minute: int = Field(default=30, ge=1, le=1000)
+
     # ── HTTP ──────────────────────────────────────────────
     cors_allowed_origins: Annotated[list[str], NoDecode] = ["http://localhost:5173"]
 
@@ -95,18 +94,15 @@ class Settings(BaseSettings):
         # .env.example historically used SIMILARITY_THRESHOLD; docs use *_DEFAULT. Accept both.
         validation_alias=AliasChoices("SIMILARITY_THRESHOLD_DEFAULT", "SIMILARITY_THRESHOLD"),
     )
-    llm_provider: Literal["gemini", "groq", "anthropic", "openai"] = "gemini"
-    llm_fallback_provider: Literal["groq", "none"] | None = "groq"
-    gemini_api_key: SecretStr | None = None
-    gemini_model: str = "gemini-2.5-flash"
-    groq_api_key: SecretStr | None = None
-    groq_model: str = "llama-3.3-70b-versatile"
+    llm_provider: Literal["anthropic", "openai"] = "anthropic"
     llm_api_key: SecretStr | None = None
-    llm_model: str = "gemini-2.5-flash"
+    # Keval (LLM client): the model and how hard it thinks. Effort trades depth for tokens;
+    # classification is short and frequent, so "low" is the starting point — tune it with the
+    # benchmark (CP1), never by guessing.
+    llm_model: str = "claude-opus-5-5"
     llm_effort: Effort = "low"
     llm_timeout_seconds: float = Field(default=60.0, gt=0, le=600)
     llm_max_retries: int = Field(default=2, ge=0, le=6)  # transport retries (429, 5xx, network)
-    realtime_bus: Literal["redis", "memory"] = "redis"
 
     # ── Validators ────────────────────────────────────────
     @field_validator("database_url")
@@ -148,20 +144,12 @@ class Settings(BaseSettings):
                 )
             if "*" in self.cors_allowed_origins:
                 raise ValueError("CORS_ALLOWED_ORIGINS must list explicit origins, not '*'")
-        if self.refresh_cookie_samesite == "none" and not self.refresh_cookie_is_secure:
-            raise ValueError("REFRESH_COOKIE_SAMESITE=none requires a Secure cookie")
         return self
 
     # ── Derived helpers ───────────────────────────────────
     @property
     def is_production(self) -> bool:
         return self.environment is Environment.PRODUCTION
-
-    @property
-    def refresh_cookie_is_secure(self) -> bool:
-        if self.refresh_cookie_secure is not None:
-            return self.refresh_cookie_secure
-        return self.environment not in (Environment.DEVELOPMENT, Environment.TEST)
 
     @property
     def use_json_logs(self) -> bool:
