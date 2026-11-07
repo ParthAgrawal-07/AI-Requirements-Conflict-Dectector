@@ -496,7 +496,7 @@ class TestSectionsAndProjectContext:
         project.status = ProjectStatus.SETUP
         db_session.commit()
 
-        def broken_drafter() -> object:
+        def broken_drafter(**_: object) -> object:
             raise RuntimeError("LLM down")
 
         monkeypatch.setattr("app.services.processing.get_brief_drafter", broken_drafter)

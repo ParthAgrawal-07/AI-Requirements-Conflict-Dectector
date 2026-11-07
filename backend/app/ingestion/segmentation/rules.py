@@ -80,7 +80,7 @@ TERMINAL_PUNCTUATION_PATTERN = re.compile(r"[.!?:;]$")
 # Sentences that introduce or annotate other content rather than state a requirement
 # (ingestion-design §12, Sprint 2): "This section lists…", "The following table…",
 # "Note: …", document-control lines ("Version 2.0 …"). Excluded only when they carry no
-# 'shall'/'must' and no printed ID; the text stays in its document section.
+# modal verb and no printed ID; the text stays in its document section.
 LEAD_IN_PATTERN = re.compile(
     r"^(?:note\s*:|version\s+\d|this\s+(?:section|chapter|document|table|list|specification)\b"
     r"|the\s+following\b)",

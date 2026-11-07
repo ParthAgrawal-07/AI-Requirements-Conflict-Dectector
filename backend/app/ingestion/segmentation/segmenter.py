@@ -415,9 +415,12 @@ class Segmenter:
             return []
         if non_req_section:
             return "non_requirement_section"
-        if LEAD_IN_PATTERN.match(text):
+        # G3 (ingestion-design §12): a line with any modal verb is never dropped here, except
+        # descriptive "will" in an overview section; otherwise a requirement disappears silently.
+        weak_modals = {m.lower() for m in WEAK_MODAL_PATTERN.findall(text)}
+        if LEAD_IN_PATTERN.match(text) and not weak_modals:
             return "lead_in"
-        if heading and OVERVIEW_SECTION_PATTERN.search(heading):
+        if heading and OVERVIEW_SECTION_PATTERN.search(heading) and weak_modals <= {"will"}:
             return "narrative"
         words = len(_WORD.findall(text))  # ignores table "|" separators and bullets
         if words < _MIN_STATEMENT_WORDS and not TERMINAL_PUNCTUATION_PATTERN.search(text):
