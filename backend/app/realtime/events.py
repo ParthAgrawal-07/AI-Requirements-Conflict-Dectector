@@ -27,6 +27,10 @@ GRAPH_DELTA = "graph.delta"  # nodes/edges changed on the live map (US-14, S3)
 CHANNEL_CREATED = "channel.created"
 CHANNEL_UPDATED = "channel.updated"  # renamed, topic changed or archived
 CHANNEL_MEMBER_REMOVED = "channel.member_removed"  # the gateway drops that user's subscription
+# Messages (US-29, Dhavni). Ids only; the client re-reads the message over REST.
+MESSAGE_CREATED = "message.created"
+MESSAGE_UPDATED = "message.updated"
+MESSAGE_DELETED = "message.deleted"
 
 EVENT_TYPES = frozenset(
     {
@@ -36,6 +40,9 @@ EVENT_TYPES = frozenset(
         CHANNEL_CREATED,
         CHANNEL_UPDATED,
         CHANNEL_MEMBER_REMOVED,
+        MESSAGE_CREATED,
+        MESSAGE_UPDATED,
+        MESSAGE_DELETED,
     }
 )
 
@@ -76,16 +83,6 @@ def analysis_progress(
     )
 
 
-def membership_revoked(*, workspace_id: uuid.UUID, user_id: uuid.UUID) -> Event:
-    """The user left or was removed: the gateway closes their sockets (US-26, NFR-27)."""
-    return Event(
-        type=MEMBERSHIP_REVOKED,
-        workspace_id=workspace_id,
-        entity_id=user_id,
-        data={"user_id": str(user_id)},
-    )
-
-
 def channel_event(
     event_type: str,
     *,
@@ -103,4 +100,44 @@ def channel_event(
         channel_id=channel_id,
         entity_id=channel_id,
         data={"channel_id": str(channel_id), "private": private, **data},
+    )
+
+
+def membership_revoked(*, workspace_id: uuid.UUID, user_id: uuid.UUID) -> Event:
+    """The user left or was removed: the gateway closes their sockets (US-26, NFR-27)."""
+    return Event(
+        type=MEMBERSHIP_REVOKED,
+        workspace_id=workspace_id,
+        entity_id=user_id,
+        data={"user_id": str(user_id)},
+    )
+
+
+def message_event(
+    event_type: str,
+    *,
+    workspace_id: uuid.UUID,
+    project_id: uuid.UUID,
+    channel_id: uuid.UUID,
+    private: bool,
+    message_id: uuid.UUID,
+    parent_id: uuid.UUID | None,
+    author_id: uuid.UUID,
+    mentions: list[str],
+) -> Event:
+    """A message was posted, edited or deleted (``message.*``). Never the body (CR-04)."""
+    return Event(
+        type=event_type,
+        workspace_id=workspace_id,
+        project_id=project_id,
+        channel_id=channel_id,
+        entity_id=message_id,
+        data={
+            "message_id": str(message_id),
+            "channel_id": str(channel_id),
+            "parent_id": str(parent_id) if parent_id else None,
+            "author_id": str(author_id),
+            "mentions": mentions,
+            "private": private,
+        },
     )

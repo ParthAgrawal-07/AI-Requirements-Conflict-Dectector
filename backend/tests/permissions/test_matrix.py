@@ -29,6 +29,7 @@ from app.models import (
     Document,
     DocumentFormat,
     JoinRequest,
+    Message,
     Project,
     Role,
     RolePermission,
@@ -71,9 +72,11 @@ class World:
     join_code_id: uuid.UUID
     join_request: JoinRequest
     viewer_role_id: uuid.UUID
+    channel: Channel  # public, in the project
     target: User  # a Developer that member routes act on
     custom_role: Role  # an unused custom role ("Client reviewer")
-    channel: Channel  # public, in the project
+    message: Message  # a chat message by the Owner in `channel`
+    db: Session
 
 
 @dataclass(frozen=True)
@@ -84,6 +87,8 @@ class Case:
     upload: bool = False
     # For require_any_permission routes: the permission this particular request needs.
     needs: str | None = None
+    # Author-only routes: {message_id} is a message the calling member posted just before.
+    own_message: bool = False
 
 
 CASES = [
@@ -120,6 +125,16 @@ CASES = [
         "/api/v1/workspaces/{workspace_id}/join-requests/{join_request_id}/decision",
         lambda _: {"approve": False},
     ),
+    # Sprint 2 — channels (US-28)
+    Case("POST", "/api/v1/projects/{project_id}/channels", lambda _: {"name": "new-one"}),
+    Case("GET", "/api/v1/projects/{project_id}/channels"),
+    Case("GET", "/api/v1/channels/{channel_id}"),
+    Case("PATCH", "/api/v1/channels/{channel_id}", lambda _: {"topic": "t"}),
+    Case("POST", "/api/v1/channels/{channel_id}/archive"),
+    Case("POST", "/api/v1/channels/{channel_id}/read"),
+    Case("GET", "/api/v1/channels/{channel_id}/members"),
+    Case("POST", "/api/v1/channels/{channel_id}/members", lambda w: {"user_id": str(w.target.id)}),
+    Case("DELETE", "/api/v1/channels/{channel_id}/members/{user_id}"),
     # Sprint 2 — members, roles, project-level roles (US-26, US-49)
     Case("GET", "/api/v1/workspaces/{workspace_id}/members"),
     Case(
@@ -138,16 +153,14 @@ CASES = [
     Case("DELETE", "/api/v1/roles/{role_id}"),
     Case("GET", "/api/v1/projects/{project_id}/members"),
     Case("PUT", "/api/v1/projects/{project_id}/members/{user_id}", lambda _: {}),
-    # Sprint 2 — channels (US-28)
-    Case("POST", "/api/v1/projects/{project_id}/channels", lambda _: {"name": "new-one"}),
-    Case("GET", "/api/v1/projects/{project_id}/channels"),
-    Case("GET", "/api/v1/channels/{channel_id}"),
-    Case("PATCH", "/api/v1/channels/{channel_id}", lambda _: {"topic": "t"}),
-    Case("POST", "/api/v1/channels/{channel_id}/archive"),
-    Case("POST", "/api/v1/channels/{channel_id}/read"),
-    Case("GET", "/api/v1/channels/{channel_id}/members"),
-    Case("POST", "/api/v1/channels/{channel_id}/members", lambda w: {"user_id": str(w.target.id)}),
-    Case("DELETE", "/api/v1/channels/{channel_id}/members/{user_id}"),
+    # Sprint 2 — messages and the map (US-29, US-14 v0)
+    Case("GET", "/api/v1/channels/{channel_id}/messages"),
+    Case("POST", "/api/v1/channels/{channel_id}/messages", lambda _: {"body": "hi"}),
+    Case("GET", "/api/v1/messages/{message_id}"),
+    Case("GET", "/api/v1/messages/{message_id}/thread"),
+    Case("PATCH", "/api/v1/messages/{message_id}", lambda _: {"body": "edited"}, own_message=True),
+    Case("DELETE", "/api/v1/messages/{message_id}", own_message=True),
+    Case("GET", "/api/v1/projects/{project_id}/graph"),
 ]
 
 
@@ -199,6 +212,7 @@ def world(
     viewer = get_default_role(db_session, DefaultRole.VIEWER).id
     channel = Channel(project_id=project.id, name="matrix", created_by=owner.id)
     db_session.add(channel)
+    db_session.commit()
     target = make_user(role=DefaultRole.DEVELOPER)
     custom_role = Role(
         workspace_id=workspace.id,
@@ -207,6 +221,9 @@ def world(
     )
     db_session.add(custom_role)
     db_session.commit()
+    message = Message(channel_id=channel.id, author_id=owner.id, body="hello")
+    db_session.add(message)
+    db_session.commit()
     return World(
         workspace=workspace,
         project=project,
@@ -214,9 +231,11 @@ def world(
         join_code_id=code.join_code.id,
         join_request=request,
         viewer_role_id=viewer,
+        channel=channel,
         target=target,
         custom_role=custom_role,
-        channel=channel,
+        message=message,
+        db=db_session,
     )
 
 
@@ -233,15 +252,22 @@ def api(
 
 
 def _call(api: TestClient, case: Case, world: World, user: User) -> int:
+    message_id = world.message.id
+    if case.own_message:
+        own = Message(channel_id=world.channel.id, author_id=user.id, body="mine")
+        world.db.add(own)
+        world.db.commit()
+        message_id = own.id
     path = case.path.format(
+        message_id=message_id,
         workspace_id=world.workspace.id,
         project_id=world.project.id,
         document_id=world.document.id,
         join_code_id=world.join_code_id,
         join_request_id=world.join_request.id,
+        channel_id=world.channel.id,
         user_id=world.target.id,
         role_id=world.custom_role.id,
-        channel_id=world.channel.id,
     )
     headers = {"Authorization": f"Bearer {security.create_access_token(user.id)[0]}"}
     body = case.body(world)

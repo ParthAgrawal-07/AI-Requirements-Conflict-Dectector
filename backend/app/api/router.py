@@ -22,6 +22,7 @@ from app.api import (
     intake,
     join_codes,
     me,
+    messages,
     projects,
     reports,
     requirements,
@@ -29,6 +30,7 @@ from app.api import (
     workspaces,
 )
 from app.core.auth import get_current_user
+from app.graph import api as graph_api
 from app.schemas.common import ErrorResponse
 
 api_router = APIRouter(prefix="/api/v1")
@@ -49,6 +51,8 @@ for _router in (
     intake.router,
     join_codes.router,
     channels.router,
+    messages.router,
+    graph_api.router,
 ):
     api_router.include_router(_router, dependencies=_authenticated, responses=_unauthorized)
 

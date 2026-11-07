@@ -80,6 +80,13 @@ class Settings(BaseSettings):
     join_attempts_per_window: int = Field(default=10, ge=1, le=1000)
     join_attempt_window_seconds: int = Field(default=600, ge=1, le=24 * 60 * 60)
 
+    # ── Real time (US-03, US-29) ──────────────────────────
+    # "redis": events fan out between API processes over Redis pub/sub (every deployment).
+    # "memory": in-process only — tests and a single `uvicorn` without Redis.
+    realtime_bus: Literal["redis", "memory"] = "redis"
+    # US-29: chat messages (posts, replies, edits) per user per minute.
+    messages_per_minute: int = Field(default=30, ge=1, le=1000)
+
     # ── HTTP ──────────────────────────────────────────────
     cors_allowed_origins: Annotated[list[str], NoDecode] = ["http://localhost:5173"]
 
@@ -106,7 +113,6 @@ class Settings(BaseSettings):
     llm_effort: Effort = "low"
     llm_timeout_seconds: float = Field(default=60.0, gt=0, le=600)
     llm_max_retries: int = Field(default=2, ge=0, le=6)  # transport retries (429, 5xx, network)
-    realtime_bus: Literal["redis", "memory"] = "redis"
 
     # ── Validators ────────────────────────────────────────
     @field_validator("database_url")
