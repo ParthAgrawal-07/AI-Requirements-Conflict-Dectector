@@ -35,6 +35,8 @@ EXPECTED_TABLES = {
     # Sprint 1 (0005_collaboration, join tables)
     "join_codes",
     "join_requests",
+    # Sprint 2 (0006b_drafts_posts)
+    "requirement_drafts",
 }
 
 

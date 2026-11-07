@@ -50,9 +50,11 @@ from app.ingestion.models import (
 )
 from app.ingestion.segmentation.rules import (
     BULLET_PATTERN,
+    LEAD_IN_PATTERN,
     NON_REQUIREMENT_SECTION_PATTERN,
     NUMBERED_HEADING_PATTERN,
     NUMBERED_LIST_PATTERN,
+    OVERVIEW_SECTION_PATTERN,
     REQUIREMENT_ID_PATTERN,
     STRONG_MODAL_PATTERN,
     TERMINAL_PUNCTUATION_PATTERN,
@@ -413,6 +415,10 @@ class Segmenter:
             return []
         if non_req_section:
             return "non_requirement_section"
+        if LEAD_IN_PATTERN.match(text):
+            return "lead_in"
+        if heading and OVERVIEW_SECTION_PATTERN.search(heading):
+            return "narrative"
         words = len(_WORD.findall(text))  # ignores table "|" separators and bullets
         if words < _MIN_STATEMENT_WORDS and not TERMINAL_PUNCTUATION_PATTERN.search(text):
             return "fragment"

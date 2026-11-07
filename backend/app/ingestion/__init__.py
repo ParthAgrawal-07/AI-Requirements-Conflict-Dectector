@@ -2,7 +2,6 @@
 Document Ingestion & Extraction module.
 
 Public API:
-    ingest(file_path) -> list[Requirement]
     ingest_document(file_path) -> SegmentationResult
 
 Models:
@@ -22,7 +21,7 @@ from app.ingestion.models import (
     Requirement,
     SegmentationResult,
 )
-from app.ingestion.pipeline import ingest, ingest_document
+from app.ingestion.pipeline import ingest_document
 
 __all__ = [
     "DocumentParseError",
@@ -31,6 +30,5 @@ __all__ = [
     "RawSegment",
     "Requirement",
     "SegmentationResult",
-    "ingest",
     "ingest_document",
 ]

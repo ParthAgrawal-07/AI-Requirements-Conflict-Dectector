@@ -3,18 +3,17 @@ Ingestion pipeline entry point.
 
 Provides the public interface for converting a document file into Requirements:
 
-    ingest(path)          -> list[Requirement]
-    ingest_document(path) -> SegmentationResult (requirements + excluded text)
+    ingest_document(path) -> SegmentationResult (requirements, excluded text, sections)
 
 Usage:
-    from app.ingestion.pipeline import ingest
-    requirements = ingest("/path/to/document.pdf")
+    from app.ingestion.pipeline import ingest_document
+    requirements = ingest_document("/path/to/document.pdf").requirements
 """
 
 import logging
 from pathlib import Path
 
-from app.ingestion.models import Requirement, SegmentationResult
+from app.ingestion.models import SegmentationResult
 from app.ingestion.parsers.base import Parser
 from app.ingestion.parsers.docx_parser import DOCXParser
 from app.ingestion.parsers.pdf_parser import PDFParser
@@ -35,11 +34,6 @@ _UNSUPPORTED_HINTS: dict[str, str] = {
     ".odt": "OpenDocument format is not supported. Please convert to .docx or .pdf.",
     ".rtf": "RTF format is not supported. Please convert to .docx or .pdf.",
 }
-
-
-def ingest(file_path: str) -> list[Requirement]:
-    """Parse a document and return its requirements. See ingest_document()."""
-    return ingest_document(file_path).requirements
 
 
 def ingest_document(file_path: str) -> SegmentationResult:
