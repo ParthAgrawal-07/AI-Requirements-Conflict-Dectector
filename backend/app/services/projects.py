@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import ConflictError
 from app.models import AuditAction, AuditLog, Project, ProjectMember, ProjectStatus, User
+from app.services.channels import create_general_channel
 
 # Fields a manager may change with PATCH /projects/{p}. ``status`` is deliberately absent: a
 # project is activated by confirming its context, never by editing a flag.
@@ -75,7 +76,7 @@ def create_project(
     description: str | None = None,
     settings: dict[str, Any] | None = None,
 ) -> Project:
-    """Create a project in ``setup`` and put its creator on the project team.
+    """Create a project in ``setup`` with its ``#general`` channel; the creator joins the team.
 
     ``settings`` may carry any of the optional tuning fields of :data:`UPDATABLE_FIELDS`;
     unset ones take the database defaults. Raises :class:`ConflictError` if the workspace already
@@ -98,6 +99,7 @@ def create_project(
         raise ConflictError("This workspace already has a project with this name") from None
 
     db.add(ProjectMember(project_id=project.id, user_id=creator.id))
+    create_general_channel(db, project_id=project.id, creator_id=creator.id)  # US-28
     db.add(
         AuditLog(
             workspace_id=workspace_id,

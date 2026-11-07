@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from app.models import Project
 from app.models.enums import ProjectStatus
+from app.schemas.auth import RoleRef
 
 
 def _clean_name(value: str) -> str:
@@ -97,3 +98,16 @@ class ProjectRead(BaseModel):
             chat_detection_enabled=project.chat_detection_enabled,
             created_at=project.created_at,
         )
+
+
+class ProjectMemberUpdate(BaseModel):
+    """``PUT /projects/{p}/members/{u}``: the project-level role, or null for the workspace role."""
+
+    role_override_id: uuid.UUID | None = None
+
+
+class ProjectMemberRead(BaseModel):
+    user_id: uuid.UUID
+    full_name: str
+    role_override: RoleRef | None
+    added_at: datetime
