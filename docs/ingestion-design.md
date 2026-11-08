@@ -116,7 +116,7 @@ Design rule: **when unsure, keep and flag** (US-02: low-confidence segmentation 
 While grouping, the segmenter also records sections: a DOCX heading style or a detected heading (§9.2) opens a new section, and every other line that is not part of the table of contents is added to it, verbatim, whether it became a requirement, was flagged or was excluded. A DOCX segment is one paragraph; in a PDF a blank line between blocks separates paragraphs.
 
 ## 10. Integration with orchestration
-Storing results and running the Celery task belong to Role 5 (Parth): `app.services.processing.process_document` (PR #7) calls `ingest(path)` and saves each returned `Requirement` (`source_req_id`, `raw_text`, `location`).
+Storing results and running the Celery task belong to Role 5 (Parth): `app.services.processing.process_document` (PR #7) calls `ingest_document(path)` and saves each `Requirement` in its `SegmentationResult.requirements` (`source_req_id`, `raw_text`, `location`).
 
 Handled by the pipeline, which `process_document` relies on:
 - every failure is a `ValueError` (`DocumentParseError` for corrupt or encrypted files);

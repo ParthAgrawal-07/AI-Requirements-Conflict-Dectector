@@ -379,6 +379,28 @@ class TestClassification:
         assert req.raw_text == "The following report should be emailed weekly."
         assert req.needs_review
 
+    def test_a_lead_in_with_list_items_is_kept_for_review(self):
+        result = Segmenter().run(
+            _pages(
+                "The following capabilities are available:\n\n• Export invoices\n\n• Delete invoices"
+            )
+        )
+        assert result.excluded == []
+        [req] = result.requirements
+        assert req.raw_text == (
+            "The following capabilities are available:\n• Export invoices\n• Delete invoices"
+        )
+        assert req.needs_review
+
+    def test_descriptive_will_in_product_functions_is_kept(self):
+        result = Segmenter().run(
+            _pages("2.2 Product Functions\n\nThe system will encrypt customer data at rest.")
+        )
+        assert result.excluded == []
+        [req] = result.requirements
+        assert req.raw_text == "The system will encrypt customer data at rest."
+        assert req.needs_review
+
     def test_descriptive_will_in_overview_excluded_but_other_modals_kept(self):
         result = Segmenter().run(
             _pages(

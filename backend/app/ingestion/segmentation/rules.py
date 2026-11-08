@@ -89,8 +89,9 @@ LEAD_IN_PATTERN = re.compile(
 
 # Overview-type sections of an IEEE 830 / ISO 29148 outline. They describe the product and
 # its users; descriptive "will" there is not a requirement (ingestion-design §12, step 4).
+# "Product Functions" is deliberately absent: it summarises capabilities, which are requirements.
 OVERVIEW_SECTION_PATTERN = re.compile(
-    r"\b(?:product\s+perspective|product\s+functions|user\s+(?:classes|characteristics)"
+    r"\b(?:product\s+perspective|user\s+(?:classes|characteristics)"
     r"|operating\s+environment|assumptions)\b",
     re.IGNORECASE,
 )

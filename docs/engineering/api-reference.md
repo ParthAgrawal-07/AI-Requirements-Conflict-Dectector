@@ -138,7 +138,7 @@ Contract: [`docs/contracts/composer-and-context.md`](../contracts/composer-and-c
 | `GET /me/drafts/{id}` | signed in, author only | One draft (`404` for anyone else) |
 | `PATCH /me/drafts/{id}` | signed in, author only | Autosave: replace `fields` |
 | `DELETE /me/drafts/{id}` | signed in, author only | `204` |
-| `POST /channels/{c}/requirement-posts` | `req.propose` | `{fields, draft_id?}` → `201 {message, requirement}`: a card plus a Proposed requirement; `409` if the channel is archived; rate-limited like messages |
+| `POST /channels/{c}/requirement-posts` | `req.propose` | `{fields, draft_id?}` → `201 {message, requirement}`: a card plus a Proposed requirement; `409` if the channel is archived, `409 project_in_setup` while the project is in setup; rate-limited like messages |
 
 ## 1. Endpoint Summary (10 planned)
 

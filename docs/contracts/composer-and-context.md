@@ -62,7 +62,8 @@ Drafts autosave every 5 s and are private to their author (FR-81).
   draft_id?}`. In one transaction: a `requirement_post` message whose body is the rendered statement (never
   editable), a **Proposed** requirement (`origin = post`, no document, version 1, owner, group, `req_type`,
   `priority`, `composer_fields`), an audit row with ids only; the draft is deleted. `draft_id` must be the author's
-  draft **in the same project** (else 404). `message.created` is published after the commit.
+  draft **in the same project** (else 404). A project in setup refuses posts with `409 project_in_setup` (§6).
+  `message.created` is published after the commit.
 
 ## 4. Project brief schema (with Keval — FR-103, US-60)
 

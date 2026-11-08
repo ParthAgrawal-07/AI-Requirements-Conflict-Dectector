@@ -18,6 +18,7 @@ from app.models import (
     MessageKind,
     Project,
     ProjectMember,
+    ProjectStatus,
     Requirement,
     RequirementVersion,
     Role,
@@ -235,6 +236,28 @@ class TestRequirementPosts:
                 self.url(channel), json={"fields": fields}, headers=headers_for(user)
             ).status_code
             == 422
+        )
+
+    def test_a_project_in_setup_refuses_posts(
+        self,
+        client: TestClient,
+        db_session: Session,
+        project: Project,
+        channel: Channel,
+        user: User,
+    ) -> None:
+        project.status = ProjectStatus.SETUP
+        db_session.commit()
+
+        response = client.post(
+            self.url(channel), json={"fields": EVENT_DRIVEN}, headers=headers_for(user)
+        )
+
+        assert response.status_code == 409
+        assert response.json()["error"]["code"] == "project_in_setup"
+        assert (
+            db_session.scalar(select(Requirement).where(Requirement.project_id == project.id))
+            is None
         )
 
     def test_a_compliance_reviewer_cannot_propose(

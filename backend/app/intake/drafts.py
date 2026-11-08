@@ -84,6 +84,9 @@ def create_draft(
     db: Session, user: User, *, project_id: uuid.UUID, fields: DraftFields
 ) -> RequirementDraft:
     _member_project(db, user, project_id)
+    # Autosaves from several tabs can race; lock the author's row (held until commit/rollback)
+    # so two creates cannot both pass the count below.
+    db.execute(select(User.id).where(User.id == user.id).with_for_update())
     count = db.scalar(
         select(func.count())
         .select_from(RequirementDraft)

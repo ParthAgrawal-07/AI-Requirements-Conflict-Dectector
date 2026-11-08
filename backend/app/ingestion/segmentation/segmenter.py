@@ -418,7 +418,9 @@ class Segmenter:
         # G3 (ingestion-design §12): a line with any modal verb is never dropped here, except
         # descriptive "will" in an overview section; otherwise a requirement disappears silently.
         weak_modals = {m.lower() for m in WEAK_MODAL_PATTERN.findall(text)}
-        if LEAD_IN_PATTERN.match(text) and not weak_modals:
+        # List items are joined to their lead-in with "\n"; a lead-in that carries items is kept
+        # for review with them (US-02), only a standalone one is excluded.
+        if LEAD_IN_PATTERN.match(text) and not weak_modals and "\n" not in text:
             return "lead_in"
         if heading and OVERVIEW_SECTION_PATTERN.search(heading) and weak_modals <= {"will"}:
             return "narrative"

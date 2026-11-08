@@ -20,6 +20,7 @@ import uuid
 
 from sqlalchemy.orm import Session
 
+from app.context.service import ensure_analysis_allowed
 from app.core.errors import NotFoundError
 from app.intake import drafts as draft_service
 from app.intake.schemas import ComposerFields
@@ -52,6 +53,7 @@ def post_requirement(
     project = db.get(Project, channel.project_id)
     if project is None:  # impossible through the FK; defensive
         raise NotFoundError("Channel not found")
+    ensure_analysis_allowed(db, project)  # 409 project_in_setup until the brief is confirmed
     owner_id = fields.owner_id or author.id
     if active_membership(db, owner_id, project.workspace_id) is None:
         raise NotFoundError("The chosen owner is not a member of this workspace")

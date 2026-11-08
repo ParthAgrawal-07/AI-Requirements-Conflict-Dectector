@@ -615,7 +615,7 @@ Existing ADR-01 to ADR-07 are in `decision-log.md`. These decisions were made du
 
 | To add… | Touch |
 |---|---|
-| A new input format (`.txt`, ReqIF) | A `Parser` subclass registered in `ingest()`'s `_PARSERS` plus an entry in `upload_validation.SUPPORTED_FORMATS` (a test enforces they match) |
+| A new input format (`.txt`, ReqIF) | A `Parser` subclass registered in the `_PARSERS` registry in `app/ingestion/pipeline.py` plus an entry in `upload_validation.SUPPORTED_FORMATS` (a test enforces they match) |
 | Another LLM provider | A transport implementing `send(system, user)` (object-design §6); selected by `LLM_PROVIDER` / `LLM_FALLBACK_PROVIDER` ([`ai-providers.md`](ai-providers.md)) |
 | Object storage | Another class with the same methods as `LocalFileStorage`; swap `get_storage()` |
 | SSO / LDAP | Replace the token-decoding step in `get_current_user`; roles and workspace still come from the database |

@@ -130,8 +130,9 @@ cascade), `fields` (jsonb, `DraftFields`), `created_at`, `updated_at`; index `(a
 but `CHECK (document_id IS NOT NULL OR origin <> 'document')` keeps it required for extracted ones;
 `origin_message_id` (FK messages, `SET NULL`; partial unique index, so one requirement per message); `req_type`
 (`functional` / `non_functional` / `constraint`), `priority` (`must` / `should` / `could` / `wont`), both nullable with
-CHECK constraints; `composer_fields` (jsonb, the composer input as submitted). Downgrade deletes posted requirements
-before restoring `document_id NOT NULL`.
+CHECK constraints; `composer_fields` (jsonb, the composer input as submitted). Downgrade refuses while posted
+requirements exist: each has an audit row, and `audit_log` is append-only with `RESTRICT` foreign keys, so they cannot
+be deleted to restore `document_id NOT NULL`.
 
 No context is backfilled: projects that `0004` created as `active` keep `context_version = 0` until their manager drafts a brief (`POST /projects/{p}/context/draft`).
 
