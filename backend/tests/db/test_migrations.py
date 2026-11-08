@@ -37,6 +37,11 @@ EXPECTED_TABLES = {
     "join_requests",
     # Sprint 2 (0006b_drafts_posts)
     "requirement_drafts",
+    # Sprint 2 (0005b_channels_messages)
+    "channels",
+    "channel_members",
+    "channel_reads",
+    "messages",
 }
 
 
