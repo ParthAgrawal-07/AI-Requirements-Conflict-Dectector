@@ -10,6 +10,7 @@ from app.models.base import Base
 from app.models.channel import Channel, ChannelMember, ChannelRead, Message
 from app.models.context import DocumentSection, ProjectContext
 from app.models.document import Document
+from app.models.draft import RequirementDraft
 from app.models.embedding import EMBEDDING_DIM, Embedding
 from app.models.enums import (
     AnalysisRunStatus,
@@ -74,6 +75,7 @@ __all__ = [
     "ProjectMember",
     "ProjectStatus",
     "Requirement",
+    "RequirementDraft",
     "RequirementOrigin",
     "RequirementState",
     "RequirementVersion",

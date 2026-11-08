@@ -131,6 +131,8 @@ class AuditAction(StrEnum):
     JOIN_REQUEST_CREATED = "join_request_created"
     JOIN_REQUEST_APPROVED = "join_request_approved"
     JOIN_REQUEST_DENIED = "join_request_denied"
+    # Requirement posts (US-30 groundwork). Requirement, message and channel ids only.
+    REQUIREMENT_POSTED = "requirement_posted"
     # Channels (US-28). Channel and user ids only — never names, topics or messages (CR-04).
     CHANNEL_CREATED = "channel_created"
     CHANNEL_UPDATED = "channel_updated"

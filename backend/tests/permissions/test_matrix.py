@@ -125,6 +125,19 @@ CASES = [
         "/api/v1/workspaces/{workspace_id}/join-requests/{join_request_id}/decision",
         lambda _: {"approve": False},
     ),
+    # Sprint 2 — requirement posts (US-30 backend)
+    Case(
+        "POST",
+        "/api/v1/channels/{channel_id}/requirement-posts",
+        lambda _: {
+            "fields": {
+                "template": "free_text",
+                "slots": {"statement": "The system shall keep audit logs for seven years."},
+                "type": "functional",
+                "priority": "must",
+            }
+        },
+    ),
     # Sprint 2 — channels (US-28)
     Case("POST", "/api/v1/projects/{project_id}/channels", lambda _: {"name": "new-one"}),
     Case("GET", "/api/v1/projects/{project_id}/channels"),

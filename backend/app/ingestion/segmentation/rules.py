@@ -76,3 +76,22 @@ NON_REQUIREMENT_SECTION_PATTERN = re.compile(
 
 # End of a sentence or a lead-in to a list.
 TERMINAL_PUNCTUATION_PATTERN = re.compile(r"[.!?:;]$")
+
+# Sentences that introduce or annotate other content rather than state a requirement
+# (ingestion-design §12, Sprint 2): "This section lists…", "The following table…",
+# "Note: …", document-control lines ("Version 2.0 …"). Excluded only when they carry no
+# modal verb and no printed ID; the text stays in its document section.
+LEAD_IN_PATTERN = re.compile(
+    r"^(?:note\s*:|version\s+\d|this\s+(?:section|chapter|document|table|list|specification)\b"
+    r"|the\s+following\b)",
+    re.IGNORECASE,
+)
+
+# Overview-type sections of an IEEE 830 / ISO 29148 outline. They describe the product and
+# its users; descriptive "will" there is not a requirement (ingestion-design §12, step 4).
+# "Product Functions" is deliberately absent: it summarises capabilities, which are requirements.
+OVERVIEW_SECTION_PATTERN = re.compile(
+    r"\b(?:product\s+perspective|user\s+(?:classes|characteristics)"
+    r"|operating\s+environment|assumptions)\b",
+    re.IGNORECASE,
+)
