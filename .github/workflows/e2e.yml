@@ -17,6 +17,7 @@ jobs:
       - name: Start the stack
         run: |
           cp .env.example .env
+          chmod -R a+rwX frontend
           docker compose up -d --build db redis migrate backend worker frontend
       - name: Wait for the API and the dev server
         run: |
