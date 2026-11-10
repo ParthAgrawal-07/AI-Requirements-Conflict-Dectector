@@ -248,7 +248,9 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         elif predicted != "None":
             scores.fp[predicted] += 1
 
-    result["llm_calls"] = llm.calls
+    # FakeTransport records calls; real transports do not
+    transport = getattr(llm, "_transport", None)
+    result["llm_calls"] = len(getattr(transport, "calls", []))
     result["failed_items"] = failures
     result["per_category"] = {c: scores.row(c) for c in (*PAIR_CATEGORIES, *SINGLE_CATEGORIES)}
     if recorder is not None and args.record is not None:
