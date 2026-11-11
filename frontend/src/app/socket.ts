@@ -1,19 +1,22 @@
-// The one WebSocket of the tab (Pranshu — US-03; protocol in docs/contracts/realtime.md).
+// The one WebSocket of the tab (Pranshu — US-03, US-29; protocol in docs/contracts/realtime.md).
 //
-// Components never open sockets: they call useProjectRealtime(projectId), and events update the
-// TanStack Query cache. Events are hints — after every (re)connect the cache is invalidated so
-// the screen re-reads over REST, because events missed while offline are never replayed.
+// Components never open sockets: they call useProjectRealtime(projectId) or
+// useChannelRealtime(channelId), and events update the TanStack Query cache. Events are hints —
+// after every (re)connect the cache is invalidated so the screen re-reads over REST, because
+// events missed while offline are never replayed.
 
 import { createContext, createElement, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import {
   API_BASE_URL,
+  apiFetch,
   getAccessToken,
   refreshAccessToken,
   triggerUnauthorized,
 } from "../api/client";
 import type { RealtimeEvent } from "../api/types";
+import { upsertMessage, type Message } from "../features/channels/api";
 
 export type EventHandler = (event: RealtimeEvent) => void;
 
@@ -50,6 +53,7 @@ export class RealtimeConnection {
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private readonly projects = new Map<string, number>(); // project id -> subscriber count
+  private readonly channels = new Map<string, number>(); // channel id -> subscriber count
   private readonly handlers = new Set<EventHandler>();
   private readonly resyncHandlers = new Set<() => void>();
   private readonly revokedHandlers = new Set<() => void>();
@@ -75,14 +79,29 @@ export class RealtimeConnection {
   /** Watch a project's events; returns the function that stops watching. */
   watchProject(projectId: string): () => void {
     this.projects.set(projectId, (this.projects.get(projectId) ?? 0) + 1);
-    this.sendSubscribe(projectId);
+    this.sendSubscribe(projectId, "project_id");
     return () => {
       const count = (this.projects.get(projectId) ?? 1) - 1;
       if (count <= 0) {
         this.projects.delete(projectId);
-        this.sendUnsubscribe(projectId);
+        this.sendUnsubscribe(projectId, "project_id");
       } else {
         this.projects.set(projectId, count);
+      }
+    };
+  }
+
+  /** Watch one channel (US-29): private channels' events only reach sockets subscribed by id. */
+  watchChannel(channelId: string): () => void {
+    this.channels.set(channelId, (this.channels.get(channelId) ?? 0) + 1);
+    this.sendSubscribe(channelId, "channel_id");
+    return () => {
+      const count = (this.channels.get(channelId) ?? 1) - 1;
+      if (count <= 0) {
+        this.channels.delete(channelId);
+        this.sendUnsubscribe(channelId, "channel_id");
+      } else {
+        this.channels.set(channelId, count);
       }
     };
   }
@@ -125,7 +144,8 @@ export class RealtimeConnection {
     if (frame.type === "ready") {
       this.attempts = 0;
       this.refreshedSinceReady = false;
-      for (const projectId of this.projects.keys()) this.sendSubscribe(projectId);
+      for (const projectId of this.projects.keys()) this.sendSubscribe(projectId, "project_id");
+      for (const channelId of this.channels.keys()) this.sendSubscribe(channelId, "channel_id");
       this.startPing();
       this.resyncHandlers.forEach((handler) => handler());
     } else if (frame.type === "event" && frame.event) {
@@ -164,15 +184,15 @@ export class RealtimeConnection {
     this.open();
   }
 
-  private sendSubscribe(projectId: string): void {
+  private sendSubscribe(id: string, field: "project_id" | "channel_id" = "project_id"): void {
     if (this.socket && this.socket.readyState === 1) {
-      this.socket.send(JSON.stringify({ type: "subscribe", project_id: projectId }));
+      this.socket.send(JSON.stringify({ type: "subscribe", [field]: id }));
     }
   }
 
-  private sendUnsubscribe(projectId: string): void {
+  private sendUnsubscribe(id: string, field: "project_id" | "channel_id" = "project_id"): void {
     if (this.socket && this.socket.readyState === 1) {
-      this.socket.send(JSON.stringify({ type: "unsubscribe", project_id: projectId }));
+      this.socket.send(JSON.stringify({ type: "unsubscribe", [field]: id }));
     }
   }
 
@@ -198,6 +218,21 @@ export function applyEvent(queryClient: QueryClient, event: RealtimeEvent): void
     if (event.data.status === "done") {
       void queryClient.invalidateQueries({ queryKey: ["requirements", event.project_id] });
     }
+  } else if (event.type === "analysis.completed" && event.project_id) {
+    void queryClient.invalidateQueries({ queryKey: ["findings", event.project_id] });
+  } else if (event.type.startsWith("message.") && event.entity_id) {
+    // Ids only in the event (CR-04): re-read the message, which re-checks access, then patch.
+    void apiFetch<Message>(`/messages/${event.entity_id}`)
+      .then((message) => upsertMessage(queryClient, message))
+      .catch(() => undefined);
+    if (event.type === "message.created" && event.project_id) {
+      void queryClient.invalidateQueries({ queryKey: ["channels", event.project_id] }); // unread
+    }
+  } else if (event.type.startsWith("channel.") && event.project_id) {
+    void queryClient.invalidateQueries({ queryKey: ["channels", event.project_id] });
+    if (event.channel_id) void queryClient.invalidateQueries({ queryKey: ["channel", event.channel_id] });
+  } else if (event.type === "membership.revoked") {
+    void queryClient.invalidateQueries({ queryKey: ["members", event.workspace_id] });
   }
 }
 
@@ -242,4 +277,13 @@ export function useProjectRealtime(projectId: string | undefined): void {
     if (!realtime || !projectId) return;
     return realtime.watchProject(projectId);
   }, [realtime, projectId]);
+}
+
+/** Keep this channel's events (including a private channel's) flowing while mounted. */
+export function useChannelRealtime(channelId: string | undefined): void {
+  const realtime = useContext(RealtimeContext);
+  useEffect(() => {
+    if (!realtime || !channelId) return;
+    return realtime.watchChannel(channelId);
+  }, [realtime, channelId]);
 }

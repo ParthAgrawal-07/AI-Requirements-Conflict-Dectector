@@ -4,6 +4,7 @@ import type { RouteObject } from "react-router-dom";
 import { Button } from "../components/Button";
 import { LoginPage } from "../features/auth/LoginPage";
 import { SignupWithCodePage } from "../features/auth/SignupWithCodePage";
+import { ChannelView } from "../features/channels/ChannelView";
 import { KitPage } from "../features/kit/KitPage";
 import { JoinPage } from "../features/members/JoinPage";
 import { MembersPage } from "../features/members/MembersPage";
@@ -90,7 +91,6 @@ const LATER: { path: string; title: string; sprint: string }[] = [
   { path: "changes", title: "Change requests", sprint: "Sprint 4 (US-33)" },
   { path: "baselines", title: "Baselines", sprint: "Sprint 5 (US-40)" },
   { path: "insights", title: "Insights", sprint: "Sprint 5 (US-13)" },
-  { path: "channels/:channel", title: "Channels", sprint: "Sprint 2 (US-28)" },
   { path: "requirements/new", title: "New requirement", sprint: "Sprint 3 (US-30)" },
 ];
 
@@ -119,6 +119,7 @@ export const routes: RouteObject[] = [
               { index: true, element: <ProjectHomePage /> },
               { path: "setup", element: <SetupWizard /> },
               { path: "requirements", element: <RequirementsPage /> },
+              { path: "channels/:channelId", element: <ChannelView /> },
               ...LATER.map((item) => ({
                 path: item.path,
                 element: <ComingSoon title={item.title} sprint={item.sprint} />,

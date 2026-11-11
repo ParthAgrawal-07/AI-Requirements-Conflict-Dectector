@@ -194,3 +194,44 @@
   .shell { grid-template-columns: 1fr; }
   .sidebar { display: none; }
 }
+
+/* ── Channels (US-28, US-29) ─────────────────────────────── */
+.nav-group-title { display: flex; align-items: center; justify-content: space-between; }
+.channel-link { display: flex; align-items: center; gap: var(--space-1); }
+.unread {
+  margin-left: auto; min-width: 20px; padding: 0 6px; border-radius: 10px;
+  background: var(--accent); color: #fff; font-size: 12px; text-align: center;
+}
+.channel-view { display: flex; flex-direction: column; height: calc(100vh - var(--topbar-height)); }
+.channel-header {
+  display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap;
+  padding: var(--space-4) var(--space-5); border-bottom: 1px solid var(--line);
+}
+.channel-header h1 { margin: 0; font-size: 20px; }
+.channel-topic { margin: 0; }
+.banner { margin: 0; padding: var(--space-2) var(--space-5); background: var(--proposed-soft); color: var(--proposed); }
+.message-list { flex: 1; overflow-y: auto; padding: var(--space-3) var(--space-5); }
+.message-list:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.message-list-more { text-align: center; padding: var(--space-2); }
+.message { padding: var(--space-2) 0; border-bottom: 1px solid var(--grid-line); }
+.message-requirement_post { border-left: 3px solid var(--proposed); padding-left: var(--space-3); background: var(--proposed-soft); }
+.message-header { display: flex; gap: var(--space-2); align-items: baseline; flex-wrap: wrap; font-size: 14px; }
+.message-body { margin: var(--space-1) 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.message-actions { display: flex; gap: var(--space-1); }
+.mention { color: var(--accent); background: var(--accent-soft); border-radius: var(--radius-sm); padding: 0 2px; }
+.composer { position: relative; padding: var(--space-3) var(--space-5); border-top: 1px solid var(--line); background: var(--paper-raised); }
+.composer textarea { width: 100%; resize: vertical; font: inherit; padding: var(--space-2); border: 1px solid var(--line-strong); border-radius: var(--radius); }
+.composer-actions { display: flex; justify-content: flex-end; align-items: center; gap: var(--space-2); margin-top: var(--space-2); }
+.mention-list {
+  position: absolute; bottom: 100%; left: var(--space-5); z-index: 5; min-width: 240px;
+  margin: 0; padding: var(--space-1); list-style: none; background: var(--paper-raised);
+  border: 1px solid var(--line-strong); border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.mention-option { padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); cursor: pointer; }
+.mention-option.active { background: var(--accent-soft); outline: 1px solid var(--accent); }
+.thread .message:first-child { background: var(--paper-sunken); padding: var(--space-2); border-radius: var(--radius); }
+.form-stack { display: grid; gap: var(--space-3); }
+.form-stack label { display: grid; gap: var(--space-1); }
+.form-stack .checkbox { display: flex; gap: var(--space-2); align-items: center; }
+.error-text { color: var(--danger); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

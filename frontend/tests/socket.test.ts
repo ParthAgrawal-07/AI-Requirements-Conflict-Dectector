@@ -80,6 +80,29 @@ describe("RealtimeConnection", () => {
     expect(socket.sent).toContainEqual({ type: "subscribe", project_id: "p" });
   });
 
+  it("subscribes to watched channels by id, and again after a reconnect (US-29)", () => {
+    const realtime = connection();
+    const stop = realtime.watchChannel("c1");
+    realtime.connect("jwt");
+    FakeSocket.all[0].open();
+    FakeSocket.all[0].receive({ type: "ready" });
+    expect(FakeSocket.all[0].sent).toContainEqual({ type: "subscribe", channel_id: "c1" });
+
+    FakeSocket.all[0].drop();
+    vi.advanceTimersByTime(1000);
+    const second = FakeSocket.all[1];
+    second.open();
+    second.receive({ type: "ready" });
+    expect(second.sent).toContainEqual({ type: "subscribe", channel_id: "c1" });
+
+    stop();
+    second.drop();
+    vi.advanceTimersByTime(2000);
+    FakeSocket.all[2].open();
+    FakeSocket.all[2].receive({ type: "ready" });
+    expect(FakeSocket.all[2].sent).not.toContainEqual({ type: "subscribe", channel_id: "c1" });
+  });
+
   it("delivers events to handlers", () => {
     const realtime = connection();
     const handler = vi.fn();
