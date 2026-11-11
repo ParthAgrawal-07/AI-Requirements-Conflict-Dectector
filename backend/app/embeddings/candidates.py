@@ -27,7 +27,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.embeddings.store import nearest_requirements
+from app.embeddings.store import configure_hnsw_scan, nearest_requirements
 from app.models import (
     CandidatePair,
     ClassificationStatus,
@@ -78,6 +78,13 @@ def generate_candidates(
     if requirement_ids is not None:
         query = query.where(Requirement.id.in_(requirement_ids))
     sources = db.execute(query).all()
+    if not sources:
+        return CandidateResult()
+
+    # Configure HNSW scan once for the entire candidate generation run instead of
+    # repeating SET LOCAL on every source requirement (reduces round-trips).
+    configure_hnsw_scan(db, ef_search=max(40, (k + 1) * 5, 100))
+
     eligible = set(
         db.scalars(
             select(Requirement.id).where(
@@ -103,6 +110,8 @@ def generate_candidates(
             k=k,
             min_similarity=min_similarity,
             exclude={requirement_id},
+            excluded_states=EXCLUDED_STATES,
+            configure_hnsw=False,
         ):
             if neighbour.requirement_id not in eligible:
                 continue
@@ -110,6 +119,9 @@ def generate_candidates(
             best[key] = max(best.get(key, -1.0), neighbour.similarity)
 
     result = CandidateResult()
+    if not best:
+        return result
+
     existing = {
         (pair.requirement_a_id, pair.requirement_b_id): pair
         for pair in db.scalars(
@@ -119,6 +131,10 @@ def generate_candidates(
         )
         if (pair.requirement_a_id, pair.requirement_b_id) in best
     }
+
+    new_pairs: list[CandidatePair] = []
+    pending_pairs: list[CandidatePair] = []
+
     for (a, b), similarity in best.items():
         similarity = min(1.0, max(-1.0, similarity))  # float noise on identical vectors
         pair = existing.get((a, b))
@@ -126,25 +142,34 @@ def generate_candidates(
             pair = CandidatePair(
                 requirement_a_id=a, requirement_b_id=b, similarity_score=similarity
             )
-            db.add(pair)
-            db.flush()
-            result.created += 1
-            result.pending.append(pair.id)
+            new_pairs.append(pair)
+            pending_pairs.append(pair)
             continue
         pair.similarity_score = similarity
         current = (versions.get(a), versions.get(b))
-        if (
-            pair.classification_status is ClassificationStatus.DONE
-            and (pair.a_version, pair.b_version) == current
-        ):
-            result.unchanged += 1
-            continue
+        if pair.classification_status is ClassificationStatus.DONE:
+            if (pair.a_version, pair.b_version) == current:
+                result.unchanged += 1
+                continue
+            if pair.a_version is None and pair.b_version is None:
+                # Pairs from Sprint 1 backfilled as done without versions: stamp
+                # current versions so they stay done and are not sent to the LLM again.
+                pair.a_version, pair.b_version = current
+                result.unchanged += 1
+                continue
         if pair.classification_status is not ClassificationStatus.PENDING:
             pair.classification_status = ClassificationStatus.PENDING
             pair.attempts = 0
             pair.last_error = None
             result.reopened += 1
-        result.pending.append(pair.id)
+        pending_pairs.append(pair)
+
+    if new_pairs:
+        db.add_all(new_pairs)
+        result.created = len(new_pairs)
+
+    db.flush()
+    result.pending = [p.id for p in pending_pairs]
     db.commit()
     logger.info(
         "Candidates for project %s: %d new, %d reopened, %d unchanged",

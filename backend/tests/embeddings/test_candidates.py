@@ -134,6 +134,48 @@ def test_rejected_and_deprecated_requirements_are_not_paired(
     assert generate_candidates(db_session, project.id, threshold=0.3).pending == []
 
 
+def test_deprecated_requirements_do_not_consume_top_k_slots(
+    db_session: Session, project: Project, add_document: Callable[..., list[Requirement]]
+) -> None:
+    # A is source. D1 and D2 are DEPRECATED near-identical requirements.
+    # B is an active requirement with lower similarity than D1/D2, but above threshold.
+    # With k=1, if D1/D2 consumed slots, B would never be paired.
+    # With SQL filtering of excluded states inside nearest_requirements,
+    # B is returned in the top-1 slot.
+    a, d1, d2, b = add_document(
+        project,
+        TIMEOUT_A,
+        TIMEOUT_A,
+        TIMEOUT_A,
+        TIMEOUT_B,
+    )
+    d1.state = RequirementState.DEPRECATED
+    d2.state = RequirementState.DEPRECATED
+    db_session.commit()
+
+    result = generate_candidates(db_session, project.id, requirement_ids=[a.id], k=1, threshold=0.3)
+    (pair,) = pairs(db_session)
+    assert {pair.requirement_a_id, pair.requirement_b_id} == {a.id, b.id}
+    assert result.pending == [pair.id]
+
+
+def test_legacy_done_pair_without_versions_stays_unchanged_and_stamps_versions(
+    db_session: Session, project: Project, add_document: Callable[..., list[Requirement]]
+) -> None:
+    a, b, _ = add_document(project, TIMEOUT_A, TIMEOUT_B, UNRELATED)
+    generate_candidates(db_session, project.id, threshold=0.3)
+    (pair,) = pairs(db_session)
+    pair.classification_status = ClassificationStatus.DONE
+    pair.a_version, pair.b_version = None, None
+    db_session.commit()
+
+    again = generate_candidates(db_session, project.id, threshold=0.3)
+    assert again.pending == [] and again.unchanged == 1
+    db_session.refresh(pair)
+    assert (pair.a_version, pair.b_version) == (a.current_version, b.current_version)
+    assert pair.classification_status is ClassificationStatus.DONE
+
+
 def test_pairs_never_cross_projects(
     db_session: Session,
     make_project: Callable[..., Project],

@@ -14,13 +14,14 @@ Setup — unlike classification, which the ContextGate holds back.
 
 import logging
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.embeddings.model import Embedder
-from app.models import Document, DocumentSection, Embedding, Requirement
+from app.models import Document, DocumentSection, Embedding, Requirement, RequirementState
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +89,7 @@ def _section_text(section: DocumentSection) -> str:
     return f"{section.heading}\n{section.body}" if section.heading else section.body
 
 
-def _configure_hnsw_scan(db: Session, ef_search: int = 100) -> None:
+def configure_hnsw_scan(db: Session, ef_search: int = 100) -> None:
     """Ensure filtered HNSW searches find enough candidates across multiple tenants.
 
     pgvector 0.8+ supports iterative scans with ``relaxed_order`` to scan the index until
@@ -108,6 +109,9 @@ def _configure_hnsw_scan(db: Session, ef_search: int = 100) -> None:
         db.execute(text(f"SET LOCAL hnsw.ef_search = {ef_search}"))
 
 
+_configure_hnsw_scan = configure_hnsw_scan
+
+
 def nearest_requirements(
     db: Session,
     project_id: uuid.UUID,
@@ -116,9 +120,12 @@ def nearest_requirements(
     k: int = 10,
     min_similarity: float | None = None,
     exclude: set[uuid.UUID] | None = None,
+    excluded_states: Sequence[RequirementState] | None = None,
+    configure_hnsw: bool = True,
 ) -> list[Neighbour]:
     """The ``k`` most similar requirements of ``project_id``, most similar first."""
-    _configure_hnsw_scan(db, ef_search=max(40, (k + len(exclude or ())) * 5, 100))
+    if configure_hnsw:
+        configure_hnsw_scan(db, ef_search=max(40, (k + len(exclude or ())) * 5, 100))
     distance = Embedding.vector.cosine_distance(vector)
     query = (
         select(Embedding.requirement_id, distance.label("distance"))
@@ -127,6 +134,8 @@ def nearest_requirements(
         .order_by(distance)
         .limit(k + len(exclude or ()))
     )
+    if excluded_states:
+        query = query.where(Requirement.state.not_in(excluded_states))
     if min_similarity is not None:
         query = query.where(distance <= 1 - min_similarity)
     neighbours = [
