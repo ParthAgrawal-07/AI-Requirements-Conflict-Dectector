@@ -32,6 +32,7 @@ def _pair_finding(
     db.add(pair)
     db.flush()
     finding = Finding(
+        project_id=a.project_id,
         document_id=a.document_id,
         candidate_pair_id=pair.id,
         category=category,
@@ -59,6 +60,7 @@ def test_requirements_are_nodes_and_findings_are_edges(
         db_session, r14, r31, FindingCategory.CONFLICTING, severity=Severity.HIGH
     )
     ambiguous = Finding(
+        project_id=vague.project_id,
         document_id=vague.document_id,
         requirement_id=vague.id,
         category=FindingCategory.AMBIGUOUS,

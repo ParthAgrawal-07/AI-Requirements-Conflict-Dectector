@@ -31,7 +31,12 @@ def _embedded_schema(system_prompt: str) -> dict[str, object]:
 def test_every_prompt_file_has_a_system_and_user_part() -> None:
     names = {p.stem for p in PROMPTS_DIR.glob("*.md")}
 
-    assert names == {"pair_v1_system", "pair_v1_user", "single_v1_system", "single_v1_user"}
+    assert names == {
+        f"{kind}_{version}_{part}"
+        for kind in ("pair", "single")
+        for version in ("v1", "v2")
+        for part in ("system", "user")
+    }
 
 
 def test_unknown_prompt_version_raises() -> None:

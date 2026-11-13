@@ -119,6 +119,8 @@ US-60 and US-02 (FR-103 to FR-105, ADR-28). `projects.status` and `projects.cont
 | order_index | int ≥ 0 | |
 | embedding | vector(384), nullable | NULL until the embedding stage fills it |
 
+**Migration 0006c (Sprint 2, Keval):** the new `findings` columns (see the `findings` table below), and `requirements.single_checked_version` — the version last checked for Ambiguous/Incomplete, so an unchanged requirement is never paid for twice.
+
 **Columns added:** `findings.context_version` (which context the classifier was given); `requirements.section_heading`, `needs_review` (default false), `review_reasons` (jsonb, default `[]`) — the segmenter's review flags (US-02).
 
 ## 2.0f Drafts and requirement posts (Sprint 2 — migration 0006b)
@@ -197,10 +199,17 @@ No context is backfilled: projects that `0004` created as `active` keep `context
 | Column | Type | Notes |
 |---|---|---|
 | id | UUID (PK) | |
-| candidate_pair_id | UUID (FK, nullable) | Null for single-requirement findings (e.g., Incomplete) |
+| project_id | UUID (FK) | Migration 0006c; backfilled from the document |
+| document_id | UUID (FK, nullable) | Nullable since 0006c: findings about posted requirements have no document |
+| analysis_run_id | UUID (FK, nullable) | The run that produced it (0006c) |
+| candidate_pair_id | UUID (FK, nullable) | Null for single-requirement findings (e.g., Incomplete); one live finding per pair (partial unique index `uq_findings_live_pair`, 0006c) |
 | category | enum | Conflicting / Duplicate / Ambiguous / Incomplete / Dependent |
 | confidence | float (0-1) | FR-13 |
 | rationale | text | Natural-language explanation — FR-14 |
+| explanation | text, nullable | Plain-language card text built from the model output — US-07 (0006c) |
+| evidence_spans | jsonb, default `[]` | Quoted clauses located in the requirement text — US-07 (0006c) |
+| prompt_version | varchar(16), nullable | Prompt that produced it (0006c) |
+| is_stale | bool, default false | Set when a requirement it is about changes; stale findings are history (0006c) |
 | status | varchar | flagged / confirmed / dismissed / merged / reclassified — FR-18 |
 | original_ai_output | jsonb | Preserved even after human correction — FR-20 |
 | severity | `low` / `medium` / `high`, nullable | US-08 (FR-42) — `critical` retired in migration 0003 |

@@ -70,6 +70,7 @@ lint, typecheck, migrations).
 | `REFRESH_COOKIE_SAMESITE` | `lax` (default: SPA and API on one site, e.g. localhost) or `none` when they are on different sites (e.g. Vercel + Render); `none` requires `Secure` |
 | `REFRESH_COOKIE_SECURE` | Unset = `Secure` everywhere except development/test |
 | `LLM_PROVIDER` / `LLM_FALLBACK_PROVIDER` | `gemini` / `groq` (ADR-31, [`ai-providers.md`](ai-providers.md) §5) |
+| `LLM_OUTPUT_RETRIES` | Re-asks after a reply fails schema validation before the pair is marked failed (US-05), default 3 |
 | `GEMINI_API_KEY`, `GEMINI_MODEL` | Google Gemini API key and model — never exposed client-side (NFR-12) |
 | `GROQ_API_KEY`, `GROQ_MODEL` | Groq API key and model, used only when Gemini is unavailable |
 | `EMBEDDING_MODEL` | `BAAI/bge-small-en-v1.5` (local; downloaded once per container) |

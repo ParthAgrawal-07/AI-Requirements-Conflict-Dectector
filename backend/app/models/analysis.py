@@ -94,14 +94,30 @@ class Finding(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         # requirement (Incomplete/Ambiguous) — exactly one of the two references is set.
         CheckConstraint("num_nonnulls(candidate_pair_id, requirement_id) = 1", name="subject"),
         CheckConstraint("confidence BETWEEN 0 AND 1", name="confidence_range"),
-        UniqueConstraint("candidate_pair_id", name="uq_findings_candidate_pair_id"),
         Index("ix_findings_document_id_status", "document_id", "status"),
         Index("ix_findings_document_id_category", "document_id", "category"),
+        Index("ix_findings_project_id_status", "project_id", "status"),
+        # Idempotent classification (migration 0006c): one live finding per pair. A finding made
+        # stale by an edit (S4) no longer counts. Single-requirement checks are kept idempotent
+        # by ``requirements.single_checked_version``.
+        Index(
+            "uq_findings_live_pair",
+            "candidate_pair_id",
+            unique=True,
+            postgresql_where=text("candidate_pair_id IS NOT NULL AND NOT is_stale"),
+        ),
     )
 
-    # Denormalised from the pair/requirement so "findings for a document" (FR-27) and
-    # workspace scoping (FR-38) don't need joins through three tables.
-    document_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    # Every finding belongs to the project of its requirements (migration 0006c).
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    # Denormalised from the pair/requirement so "findings for a document" (FR-27) needs no join.
+    # NULL when the requirements were posted rather than extracted (US-30).
+    document_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE")
+    )
+    analysis_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("analysis_runs.id", ondelete="SET NULL")
+    )
     candidate_pair_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("candidate_pairs.id", ondelete="CASCADE")
     )
@@ -113,6 +129,16 @@ class Finding(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     confidence: Mapped[float] = mapped_column(Float)
     rationale: Mapped[str] = mapped_column(Text)
+    # US-07: the plain-language explanation shown on the finding card (built by
+    # ``app.classification.explain`` from the model output), and the quoted clauses located in
+    # the requirement text: [{"requirement_id", "label", "quote", "start", "end"}].
+    explanation: Mapped[str | None] = mapped_column(Text)
+    evidence_spans: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, default=list, server_default=text("'[]'::jsonb")
+    )
+    prompt_version: Mapped[str | None] = mapped_column(String(16))
+    # Set when a requirement it is about changes (US-34, Sprint 4); stale findings are history.
+    is_stale: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
     status: Mapped[FindingStatus] = mapped_column(
         enum_column(FindingStatus, "finding_status"),
         default=FindingStatus.FLAGGED,

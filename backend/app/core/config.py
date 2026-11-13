@@ -116,6 +116,8 @@ class Settings(BaseSettings):
     llm_effort: Effort = "low"
     llm_timeout_seconds: float = Field(default=60.0, gt=0, le=600)
     llm_max_retries: int = Field(default=2, ge=0, le=6)  # transport retries (429, 5xx, network)
+    # US-05: re-asks when a reply does not validate against the schema; then the pair is failed.
+    llm_output_retries: int = Field(default=3, ge=0, le=5)
 
     # ── Validators ────────────────────────────────────────
     @field_validator("database_url")
