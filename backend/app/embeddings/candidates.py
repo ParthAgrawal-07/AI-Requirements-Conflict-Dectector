@@ -124,16 +124,14 @@ def generate_candidates(
         if (pair.requirement_a_id, pair.requirement_b_id) in best
     }
 
-    new_rows: list[dict[str, object]] = []
+    new_rows: list[tuple[uuid.UUID, uuid.UUID, float]] = []
     pending_keys: list[tuple[uuid.UUID, uuid.UUID]] = []
 
     for (a, b), similarity in best.items():
         similarity = min(1.0, max(-1.0, similarity))  # float noise on identical vectors
         pair = existing.get((a, b))
         if pair is None:
-            new_rows.append(
-                {"requirement_a_id": a, "requirement_b_id": b, "similarity_score": similarity}
-            )
+            new_rows.append((a, b, similarity))
             pending_keys.append((a, b))
             continue
         pair.similarity_score = similarity
@@ -166,19 +164,25 @@ def generate_candidates(
 
 
 def _insert_new_pairs(
-    db: Session, rows: list[dict[str, object]]
+    db: Session, rows: list[tuple[uuid.UUID, uuid.UUID, float]]
 ) -> dict[tuple[uuid.UUID, uuid.UUID], uuid.UUID]:
-    """Insert ``rows`` in one statement; return the ids of the pairs this call created.
+    """Insert ``(a, b, similarity)`` rows in one statement; return the ids this call created.
 
     Two documents of one project can be analysed at the same time, and both runs may find the
     same cross-document pair missing. ``ON CONFLICT DO NOTHING`` lets the second run skip it
-    instead of failing its whole batch on the unique constraint.
+    instead of failing its whole batch on the unique constraint. Rows go in key order so two
+    such runs take the unique-index locks in the same order and cannot deadlock.
     """
     if not rows:
         return {}
     statement = (
         pg_insert(CandidatePair)
-        .values(rows)
+        .values(
+            [
+                {"requirement_a_id": a, "requirement_b_id": b, "similarity_score": similarity}
+                for a, b, similarity in sorted(rows)
+            ]
+        )
         .on_conflict_do_nothing(index_elements=["requirement_a_id", "requirement_b_id"])
         .returning(CandidatePair.requirement_a_id, CandidatePair.requirement_b_id, CandidatePair.id)
     )

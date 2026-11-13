@@ -170,13 +170,7 @@ def test_a_pair_stored_by_a_concurrent_run_is_skipped_not_an_error(
     )
     db_session.commit()
 
-    inserted = _insert_new_pairs(
-        db_session,
-        [
-            {"requirement_a_id": k[0], "requirement_b_id": k[1], "similarity_score": 0.5}
-            for k in (taken, free)
-        ],
-    )
+    inserted = _insert_new_pairs(db_session, [(*free, 0.5), (*taken, 0.5)])
     db_session.commit()
 
     assert list(inserted) == [free]
