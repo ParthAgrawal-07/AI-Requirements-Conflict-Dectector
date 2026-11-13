@@ -144,7 +144,7 @@ ai-requirements-conflict-detector/
 │   │   ├── embeddings/            # Role 2 — embedding & similarity search
 │   │   │   ├── embed.py
 │   │   │   ├── vector_store.py
-│   │   │   └── candidate_filter.py
+│   │   │   └── candidates.py
 │   │   ├── classification/        # Role 3 — LLM classification pipeline
 │   │   │   ├── prompts/
 │   │   │   ├── classifier.py

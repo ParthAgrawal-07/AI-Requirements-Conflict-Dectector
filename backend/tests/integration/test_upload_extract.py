@@ -99,7 +99,8 @@ def test_the_expected_number_of_requirements_is_extracted(
     uploaded: list[dict[str, object]], source_ids: set[str]
 ) -> None:
     expected = len(source_ids)
-    # (keep your existing comment about flagged items here)
+    # Unsure prose is flagged for review instead of dropped (US-02); the count is over what
+    # extraction is confident about. Flagged items never carry a printed ID.
     confident = [item for item in uploaded if not item["needs_review"]]
     assert abs(len(confident) - expected) <= expected * TOLERANCE, len(confident)
     assert all(not item["source_req_id"] for item in uploaded if item["needs_review"])
@@ -135,11 +136,6 @@ def test_headings_and_introduction_prose_are_not_requirements(
     assert "This document specifies the requirements of SecureDocs" not in bodies  # 1.1 Purpose
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Bansil, Sprint 2: remove headings and prose from extraction (ingestion-design §12). "
-    "Until then descriptive prose is kept and flagged for review.",
-)
 def test_descriptive_prose_and_lead_ins_are_not_extracted(
     uploaded: list[dict[str, object]],
 ) -> None:

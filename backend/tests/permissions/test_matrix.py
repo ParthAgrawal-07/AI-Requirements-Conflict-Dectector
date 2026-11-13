@@ -28,9 +28,12 @@ from app.models import (
     Channel,
     Document,
     DocumentFormat,
+    Finding,
+    FindingCategory,
     JoinRequest,
     Message,
     Project,
+    Requirement,
     Role,
     RolePermission,
     User,
@@ -76,6 +79,7 @@ class World:
     target: User  # a Developer that member routes act on
     custom_role: Role  # an unused custom role ("Client reviewer")
     message: Message  # a chat message by the Owner in `channel`
+    finding: Finding  # an Ambiguous finding about a requirement of `document`
     db: Session
 
 
@@ -125,6 +129,19 @@ CASES = [
         "/api/v1/workspaces/{workspace_id}/join-requests/{join_request_id}/decision",
         lambda _: {"approve": False},
     ),
+    # Sprint 2 — requirement posts (US-30 backend)
+    Case(
+        "POST",
+        "/api/v1/channels/{channel_id}/requirement-posts",
+        lambda _: {
+            "fields": {
+                "template": "free_text",
+                "slots": {"statement": "The system shall keep audit logs for seven years."},
+                "type": "functional",
+                "priority": "must",
+            }
+        },
+    ),
     # Sprint 2 — channels (US-28)
     Case("POST", "/api/v1/projects/{project_id}/channels", lambda _: {"name": "new-one"}),
     Case("GET", "/api/v1/projects/{project_id}/channels"),
@@ -161,6 +178,9 @@ CASES = [
     Case("PATCH", "/api/v1/messages/{message_id}", lambda _: {"body": "edited"}, own_message=True),
     Case("DELETE", "/api/v1/messages/{message_id}", own_message=True),
     Case("GET", "/api/v1/projects/{project_id}/graph"),
+    # Sprint 2 — findings (US-07)
+    Case("GET", "/api/v1/projects/{project_id}/findings"),
+    Case("GET", "/api/v1/findings/{finding_id}"),
 ]
 
 
@@ -224,6 +244,20 @@ def world(
     message = Message(channel_id=channel.id, author_id=owner.id, body="hello")
     db_session.add(message)
     db_session.commit()
+    vague = Requirement(document_id=document.id, project_id=project.id, body="It shall be fast.")
+    db_session.add(vague)
+    db_session.flush()
+    finding = Finding(
+        project_id=project.id,
+        document_id=document.id,
+        requirement_id=vague.id,
+        category=FindingCategory.AMBIGUOUS,
+        confidence=0.8,
+        rationale="fast",
+        original_ai_output={},
+    )
+    db_session.add(finding)
+    db_session.commit()
     return World(
         workspace=workspace,
         project=project,
@@ -235,6 +269,7 @@ def world(
         target=target,
         custom_role=custom_role,
         message=message,
+        finding=finding,
         db=db_session,
     )
 
@@ -260,6 +295,7 @@ def _call(api: TestClient, case: Case, world: World, user: User) -> int:
         message_id = own.id
     path = case.path.format(
         message_id=message_id,
+        finding_id=world.finding.id,
         workspace_id=world.workspace.id,
         project_id=world.project.id,
         document_id=world.document.id,
@@ -305,6 +341,6 @@ def test_every_permission_route_is_in_the_matrix() -> None:
         (method, route.path)
         for method, route in _api_routes()
         if _declarations(route.dependant)[0].kind in ("permission", "any_permission")
-        and not route.path.startswith(("/api/v1/findings", "/api/v1/reports"))
+        and not route.path.startswith("/api/v1/reports")
     }
     assert declared <= covered, f"add these routes to CASES: {sorted(declared - covered)}"

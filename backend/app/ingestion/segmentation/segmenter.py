@@ -50,9 +50,11 @@ from app.ingestion.models import (
 )
 from app.ingestion.segmentation.rules import (
     BULLET_PATTERN,
+    LEAD_IN_PATTERN,
     NON_REQUIREMENT_SECTION_PATTERN,
     NUMBERED_HEADING_PATTERN,
     NUMBERED_LIST_PATTERN,
+    OVERVIEW_SECTION_PATTERN,
     REQUIREMENT_ID_PATTERN,
     STRONG_MODAL_PATTERN,
     TERMINAL_PUNCTUATION_PATTERN,
@@ -413,6 +415,15 @@ class Segmenter:
             return []
         if non_req_section:
             return "non_requirement_section"
+        # G3 (ingestion-design §12): a line with any modal verb is never dropped here, except
+        # descriptive "will" in an overview section; otherwise a requirement disappears silently.
+        weak_modals = {m.lower() for m in WEAK_MODAL_PATTERN.findall(text)}
+        # List items are joined to their lead-in with "\n"; a lead-in that carries items is kept
+        # for review with them (US-02), only a standalone one is excluded.
+        if LEAD_IN_PATTERN.match(text) and not weak_modals and "\n" not in text:
+            return "lead_in"
+        if heading and OVERVIEW_SECTION_PATTERN.search(heading) and weak_modals <= {"will"}:
+            return "narrative"
         words = len(_WORD.findall(text))  # ignores table "|" separators and bullets
         if words < _MIN_STATEMENT_WORDS and not TERMINAL_PUNCTUATION_PATTERN.search(text):
             return "fragment"

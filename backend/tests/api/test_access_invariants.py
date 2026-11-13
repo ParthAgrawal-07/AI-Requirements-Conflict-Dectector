@@ -34,6 +34,13 @@ AUTHENTICATED_ONLY = {
     ("POST", "/api/v1/workspaces"),
     ("GET", "/api/v1/composer/templates"),  # static EARS catalogue, no tenant data (FR-81)
     ("POST", "/api/v1/join"),  # a signed-in user entering a code: not yet a member (US-25)
+    # The composer's private drafts belong to their author (FR-81); the service requires that
+    # they may still view the draft's project.
+    ("GET", "/api/v1/me/drafts"),
+    ("POST", "/api/v1/me/drafts"),
+    ("GET", "/api/v1/me/drafts/{draft_id}"),
+    ("PATCH", "/api/v1/me/drafts/{draft_id}"),
+    ("DELETE", "/api/v1/me/drafts/{draft_id}"),
     ("GET", "/api/v1/permissions"),  # the static permission catalogue (US-49)
     # Any member may leave whatever their role; the handler requires the membership (US-26).
     ("POST", "/api/v1/workspaces/{workspace_id}/leave"),

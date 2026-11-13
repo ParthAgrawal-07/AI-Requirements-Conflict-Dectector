@@ -119,7 +119,22 @@ US-60 and US-02 (FR-103 to FR-105, ADR-28). `projects.status` and `projects.cont
 | order_index | int ≥ 0 | |
 | embedding | vector(384), nullable | NULL until the embedding stage fills it |
 
+**Migration 0006c (Sprint 2, Keval):** the new `findings` columns (see the `findings` table below), and `requirements.single_checked_version` — the version last checked for Ambiguous/Incomplete, so an unchanged requirement is never paid for twice.
+
 **Columns added:** `findings.context_version` (which context the classifier was given); `requirements.section_heading`, `needs_review` (default false), `review_reasons` (jsonb, default `[]`) — the segmenter's review flags (US-02).
+
+## 2.0f Drafts and requirement posts (Sprint 2 — migration 0006b)
+
+**New table `requirement_drafts`** (FR-81): `id`, `author_id` (FK users, cascade), `project_id` (FK projects,
+cascade), `fields` (jsonb, `DraftFields`), `created_at`, `updated_at`; index `(author_id, project_id)`.
+
+**`requirements` changes** (US-30 backend): `document_id` becomes nullable — a posted requirement has no document —
+but `CHECK (document_id IS NOT NULL OR origin <> 'document')` keeps it required for extracted ones;
+`origin_message_id` (FK messages, `SET NULL`; partial unique index, so one requirement per message); `req_type`
+(`functional` / `non_functional` / `constraint`), `priority` (`must` / `should` / `could` / `wont`), both nullable with
+CHECK constraints; `composer_fields` (jsonb, the composer input as submitted). Downgrade refuses while posted
+requirements exist: each has an audit row, and `audit_log` is append-only with `RESTRICT` foreign keys, so they cannot
+be deleted to restore `document_id NOT NULL`.
 
 No context is backfilled: projects that `0004` created as `active` keep `context_version = 0` until their manager drafts a brief (`POST /projects/{p}/context/draft`).
 
@@ -142,7 +157,7 @@ No context is backfilled: projects that `0004` created as `active` keep `context
 | Column | Type | Notes |
 |---|---|---|
 | id | UUID (PK) | |
-| document_id | UUID (FK) | |
+| document_id | UUID (FK), nullable | NULL for posted requirements (0006b) |
 | source_req_id | varchar, nullable | Preserves original REQ-ID if present — FR-04, DR-03 |
 | body | text | Extracted requirement statement |
 | stakeholder_group | varchar, nullable | Provenance — FR-05, DR-11 |
@@ -184,10 +199,17 @@ No context is backfilled: projects that `0004` created as `active` keep `context
 | Column | Type | Notes |
 |---|---|---|
 | id | UUID (PK) | |
-| candidate_pair_id | UUID (FK, nullable) | Null for single-requirement findings (e.g., Incomplete) |
+| project_id | UUID (FK) | Migration 0006c; backfilled from the document |
+| document_id | UUID (FK, nullable) | Nullable since 0006c: findings about posted requirements have no document |
+| analysis_run_id | UUID (FK, nullable) | The run that produced it (0006c) |
+| candidate_pair_id | UUID (FK, nullable) | Null for single-requirement findings (e.g., Incomplete); one live finding per pair (partial unique index `uq_findings_live_pair`, 0006c) |
 | category | enum | Conflicting / Duplicate / Ambiguous / Incomplete / Dependent |
 | confidence | float (0-1) | FR-13 |
 | rationale | text | Natural-language explanation — FR-14 |
+| explanation | text, nullable | Plain-language card text built from the model output — US-07 (0006c) |
+| evidence_spans | jsonb, default `[]` | Quoted clauses located in the requirement text — US-07 (0006c) |
+| prompt_version | varchar(16), nullable | Prompt that produced it (0006c) |
+| is_stale | bool, default false | Set when a requirement it is about changes; stale findings are history (0006c) |
 | status | varchar | flagged / confirmed / dismissed / merged / reclassified — FR-18 |
 | original_ai_output | jsonb | Preserved even after human correction — FR-20 |
 | severity | `low` / `medium` / `high`, nullable | US-08 (FR-42) — `critical` retired in migration 0003 |

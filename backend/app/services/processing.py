@@ -77,7 +77,7 @@ class ProcessingOutcome(StrEnum):
     SKIPPED = "skipped"
 
 
-Extractor = Callable[[str], SegmentationResult | list[ExtractedRequirement]]
+Extractor = Callable[[str], SegmentationResult]
 
 
 class _StageFailure(Exception):
@@ -151,8 +151,6 @@ def _extract(
             "The document could not be read. It may be corrupted, password-protected, or "
             "contain only scanned images.",
         ) from None
-    if isinstance(result, list):  # a bare requirements list, e.g. from ``ingest``
-        result = SegmentationResult(requirements=result)
     if not result.requirements:
         raise _StageFailure(
             Stage.EXTRACTION,

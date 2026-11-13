@@ -74,6 +74,14 @@ classDiagram
     +str stakeholder_group
     +bool is_protected
     +int current_version
+    +str req_type
+    +str priority
+  }
+  class RequirementDraft {
+    <<entity>>
+    +UUID id
+    +dict fields
+    +datetime updated_at
   }
   class RequirementVersion {
     <<entity>>
@@ -155,7 +163,8 @@ classDiagram
   Workspace "1" *-- "0..*" User : members
   Workspace "1" *-- "0..*" Document : owns
   User "1" --> "0..*" Document : uploaded_by
-  Document "1" *-- "0..*" Requirement : contains
+  Document "0..1" *-- "0..*" Requirement : contains (none when posted)
+  User "1" *-- "0..*" RequirementDraft : authors (private)
   Requirement "1" *-- "1..*" RequirementVersion : history
   Requirement "1" *-- "0..1" Embedding : has
   CandidatePair "0..*" --> "2" Requirement : compares
@@ -188,6 +197,8 @@ Each rule says where it is enforced. "DB" rules hold even if the application has
 | `Document` | A document is only ever read through its own workspace | every service query filters `workspace_id` |
 | `Requirement` | `body` is the verbatim source text; changes only through a new `RequirementVersion` | service rule (FR-26, DR-04) |
 | `Requirement` | `source_req_id` is an ID printed in the source document or `NULL`, never a generated one | `processing._to_row()` (DR-03) |
+| `Requirement` | Has a document unless it was posted (`origin = post`); at most one requirement per posting message | DB `CHECK (document_id IS NOT NULL OR origin <> 'document')` + partial unique `origin_message_id` |
+| `RequirementDraft` | Seen only by its author while they may `view` the project; at most 50 per author per project | `app/intake/drafts.py` (author row locked for the count) |
 | `RequirementVersion` | `(requirement_id, version_no)` unique; version ≥ 1 | DB unique + `CHECK` |
 | `Embedding` | Exactly 384 dimensions; at most one per requirement | `Vector(384)` + unique |
 | `CandidatePair` | `requirement_a_id < requirement_b_id`; each pair stored once; similarity in [-1, 1] | DB `CHECK` + unique; `ordered()` |
@@ -419,7 +430,7 @@ classDiagram
   }
   class Ingest {
     <<module: app.ingestion>>
-    +ingest(file_path) list
+    +ingest_document(file_path) SegmentationResult
   }
   class LocalFileStorage
 
@@ -431,7 +442,7 @@ classDiagram
   StageFailure --> Stage
 ```
 
-`extract` is a **parameter** with `ingest` as its default. Tests inject fakes (a failing extractor, a slow one), and a different pipeline could be swapped in without editing the service.
+`extract` is a **parameter** with `ingest_document` as its default. Tests inject fakes (a failing extractor, a slow one), and a different pipeline could be swapped in without editing the service.
 
 ### 3.5 Ingestion ✅ (Bansil)
 
@@ -470,7 +481,7 @@ classDiagram
   class IngestFunction {
     <<facade>>
     -dict _PARSERS
-    +ingest(file_path) list
+    +ingest_document(file_path) SegmentationResult
   }
 
   Parser <|-- PDFParser
@@ -745,9 +756,9 @@ sequenceDiagram
 
 | Pattern | Where | Why | Status |
 |---|---|---|---|
-| **Strategy** | `Parser` subclasses chosen by extension in `ingest()` | New formats are added without touching the pipeline (NFR-18) | ✅ |
+| **Strategy** | `Parser` subclasses chosen by extension in `ingest_document()` | New formats are added without touching the pipeline (NFR-18) | ✅ |
 | **Registry / Factory** | `_PARSERS` dict; `create_app()`; `get_storage()`; `get_db()` | One place decides which concrete object to build | ✅ |
-| **Facade** | `ingest()`; `DocumentService`; `process_document()` | One call hides a multi-step workflow | ✅ |
+| **Facade** | `ingest_document()`; `DocumentService`; `process_document()` | One call hides a multi-step workflow | ✅ |
 | **Dependency Injection** | FastAPI `Depends(...)`; `process_document(extract=…)`; dependency overrides in tests | Swap a database, storage or extractor without editing the caller | ✅ |
 | **Dependency factory / Decorator** | `require_roles(*roles)` | Adds an authorisation policy to a route declaratively | ✅ |
 | **Chain of Responsibility** | Middleware stack: request-context → CORS → body-size guard → router | Each layer handles one concern and passes the request on | ✅ |
@@ -766,8 +777,8 @@ sequenceDiagram
 | Principle | Example in this codebase |
 |---|---|
 | **Single Responsibility** | Middleware guards size; router maps HTTP; service owns the transaction; `UploadValidation` only judges content; `LocalFileStorage` only moves bytes |
-| **Open/Closed** | Add a parser or an LLM provider by adding a class and registering it; `ingest()` and `Classifier` do not change |
-| **Liskov Substitution** | Every `Parser` returns `list[RawSegment]` and raises on bad input, so `ingest()` treats them identically; any `LLMClient` returns one response shape |
+| **Open/Closed** | Add a parser or an LLM provider by adding a class and registering it; `ingest_document()` and `Classifier` do not change |
+| **Liskov Substitution** | Every `Parser` returns `list[RawSegment]` and raises on bad input, so `ingest_document()` treats them identically; any `LLMClient` returns one response shape |
 | **Interface Segregation** | `LLMClient` has one method; `LocalFileStorage` exposes stage/commit/discard/resolve/delete, not a general filesystem |
 | **Dependency Inversion** | High-level services take their collaborators as parameters (`storage`, `extract`, `db`) instead of constructing them |
 | **Separation of concerns** | HTTP, business rules, persistence and AI integration live in different packages with one-way dependencies |
@@ -833,6 +844,6 @@ sequenceDiagram
 |---|---|
 | **Keval, Madhav, Heet** | Confirm or amend the §4 contracts before Sprint 2 starts, so `AnalysisPipeline` can be wired against them |
 | **Keval + Parth** | Add per-pair classification status/error (system design G1) in the Sprint 2 migration |
-| **Bansil** | Exclude non-requirement content in `ingest()` (US-02); keep `Requirement` DTO field names stable, since `processing._to_row()` maps from them |
+| **Bansil** | Exclude non-requirement content in `ingest_document()` (US-02); keep `Requirement` DTO field names stable, since `processing._to_row()` maps from them |
 | **Parth** | Move `done` to the last pipeline stage when stages are chained (G2); add `reprocess` (G5) |
 | **Everyone** | Never return ORM entities from routes; always go through a schema's `from_model()` |

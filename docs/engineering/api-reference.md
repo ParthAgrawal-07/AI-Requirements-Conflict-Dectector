@@ -124,7 +124,21 @@ Brief schema, field states and drafting rules: [`docs/contracts/composer-and-con
 reason). `409` if the project is archived.
 
 `GET /projects/{p}/requirements` items also carry `section_heading`, `needs_review` and `review_reasons` (US-02: items
-segmentation was unsure about are surfaced, never dropped).
+segmentation was unsure about are surfaced, never dropped). `document_id` is null for a requirement that was posted
+rather than extracted.
+
+### Drafts and requirement posts  *(FR-81, US-30 backend — Sprint 2)*
+
+Contract: [`docs/contracts/composer-and-context.md`](../contracts/composer-and-context.md) §3.
+
+| Method & path | Permission | Purpose |
+|---|---|---|
+| `GET /me/drafts?project=` | signed in (must still `view` the project) | Your drafts, newest first |
+| `POST /me/drafts` | signed in (must still `view` the project) | `{project_id, fields}` → `201`; `409 too_many_drafts` after 50 in a project |
+| `GET /me/drafts/{id}` | signed in, author only | One draft (`404` for anyone else) |
+| `PATCH /me/drafts/{id}` | signed in, author only | Autosave: replace `fields` |
+| `DELETE /me/drafts/{id}` | signed in, author only | `204` |
+| `POST /channels/{c}/requirement-posts` | `req.propose` | `{fields, draft_id?}` → `201 {message, requirement}`: a card plus a Proposed requirement; `409` if the channel is archived, `409 project_in_setup` while the project is in setup; rate-limited like messages |
 
 ## 1. Endpoint Summary (10 planned)
 
@@ -135,7 +149,7 @@ segmentation was unsure about are surfaced, never dropped).
 | 3 | `GET /documents/{id}` | Get document status/progress | US-03 |
 | 4 | `GET /projects/{p}/requirements` | List requirements (implemented — see section 0) | FR-04, US-04 |
 | 5 | `PATCH /requirements/{id}` | Correct extraction/segmentation, or edit text (triggers impact analysis) | FR-06, FR-24 |
-| 6 | `GET /documents/{id}/findings` | List classified findings for a document | FR-27, FR-28 |
+| 6 | `GET /projects/{p}/findings`, `GET /findings/{id}` | List or read classified findings (implemented — US-07) | FR-13, FR-14, FR-27 |
 | 7 | `PATCH /findings/{id}` | Confirm / dismiss / merge / reclassify a finding | FR-18, FR-20 |
 | 8 | `GET /findings/{id}/clarification` | Get or generate the clarification question | FR-22, FR-23 |
 | 9 | `GET /requirements/{id}/impact` | Get change-impact analysis for a requirement | FR-24, FR-25 |
@@ -225,23 +239,28 @@ default 50), `offset`. Response: `{ "items": [...], "total", "limit", "offset" }
 An empty list is a normal response: check the document's `status` / `error_message` to explain it. The "issue
 badges" of the US-04 card arrive with the issues tables (Sprint 4).
 
-### `GET /documents/{id}/findings`
+### `GET /projects/{p}/findings` and `GET /findings/{id}`  *(implemented — US-07)*
 
-Returns classified findings with confidence and rationale (FR-13, FR-14).
+Both need `view`; a non-member gets 404. The list is paginated (`limit` ≤ 200, `offset`) and filters on
+`category`, `status`, `requirement` (findings about one requirement) and `low_confidence`. Stale findings
+(a requirement changed since) are left out. Every finding is AI output (`source: "AI"`, NFR-17).
 
 ```
-Response 200:
+Response 200 (list):
 {
-  "findings": [
+  "items": [
     {
-      "id": "uuid",
-      "category": "Conflicting",
-      "confidence": 0.87,
-      "rationale": "REQ-014 requires X within 2s; REQ-041 requires X within 10s.",
-      "requirement_ids": ["REQ-014", "REQ-041"],
-      "status": "flagged"
+      "id": "uuid", "project_id": "uuid", "source": "AI",
+      "category": "Conflicting", "status": "flagged", "severity": null,
+      "confidence": 0.87, "confidence_percent": 87, "low_confidence": false,
+      "explanation": "REQ-014 requires a reply within 2 s; REQ-041 allows 10 s.",
+      "evidence_spans": [{"requirement_id": "uuid", "label": "REQ-014", "quote": "within 2 seconds", "start": 31, "end": 47}],
+      "requirements": [{"id": "uuid", "label": "REQ-014", "body": "...", "state": "approved", "is_protected": false, ...}],
+      "dependency_direction": null, "vague_terms": [], "missing_information": [],
+      "context_version": 3, "prompt_version": "v2", "analysis_run_id": "uuid", "created_at": "..."
     }
-  ]
+  ],
+  "total": 1, "limit": 50, "offset": 0
 }
 ```
 
