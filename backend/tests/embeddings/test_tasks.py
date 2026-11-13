@@ -1,4 +1,4 @@
-"""The embedding stage is chained after extraction and consumed by the default worker."""
+"""The embedding stage is chained after extraction and runs on the analysis queue."""
 
 import uuid
 
@@ -9,14 +9,15 @@ from app.core.celery_app import celery_app
 from app.embeddings.tasks import embed_document_task
 
 
-def test_the_task_has_a_stable_name_and_default_routing() -> None:
+def test_the_task_has_a_stable_name_and_goes_to_the_analysis_queue() -> None:
     assert embed_document_task.name == "embeddings.embed_document"
     route = celery_app.amqp.router.route({}, "embeddings.embed_document")
-    # Sprint 1 routes embedding tasks to the dedicated analysis queue.
     assert route["queue"].name == "analysis"
 
 
-def test_a_done_document_queues_its_embedding(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_done_document_queues_its_analysis_which_embeds_first(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     sent: list[tuple[str, list[str]]] = []
 
     def record(name: str, args: list[str], **_: object) -> None:
@@ -25,18 +26,18 @@ def test_a_done_document_queues_its_embedding(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(celery_app, "send_task", record)
     document_id = str(uuid.uuid4())
 
-    tasks.dispatch_embedding(document_id)
+    tasks.dispatch_analysis(document_id)
 
-    assert sent == [("embeddings.embed_document", [document_id])]
+    assert sent == [("analysis.run_document", [document_id])]
 
 
-def test_a_failed_document_does_not_queue_embedding(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A failed extraction must not trigger the embedding stage."""
+def test_a_failed_document_does_not_queue_analysis(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A failed extraction must not trigger the analysis."""
     from app.core.tasks import process_document_task
     from app.services.processing import ProcessingOutcome
 
     dispatched: list[str] = []
-    monkeypatch.setattr(tasks, "dispatch_embedding", dispatched.append)
+    monkeypatch.setattr(tasks, "dispatch_analysis", dispatched.append)
 
     class FakeSessionScope:
         def __enter__(self) -> object:
@@ -58,13 +59,13 @@ def test_a_failed_document_does_not_queue_embedding(monkeypatch: pytest.MonkeyPa
     assert dispatched == []
 
 
-def test_a_skipped_document_does_not_queue_embedding(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A skipped extraction (e.g. duplicate hash) must not trigger the embedding stage."""
+def test_a_skipped_document_does_not_queue_analysis(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A skipped extraction (e.g. duplicate hash) must not trigger the analysis."""
     from app.core.tasks import process_document_task
     from app.services.processing import ProcessingOutcome
 
     dispatched: list[str] = []
-    monkeypatch.setattr(tasks, "dispatch_embedding", dispatched.append)
+    monkeypatch.setattr(tasks, "dispatch_analysis", dispatched.append)
 
     class FakeSessionScope:
         def __enter__(self) -> object:
@@ -94,4 +95,4 @@ def test_a_broker_outage_does_not_fail_the_extraction_task(
 
     monkeypatch.setattr(celery_app, "send_task", down)
 
-    tasks.dispatch_embedding(str(uuid.uuid4()))  # logs, does not raise
+    tasks.dispatch_analysis(str(uuid.uuid4()))  # logs, does not raise

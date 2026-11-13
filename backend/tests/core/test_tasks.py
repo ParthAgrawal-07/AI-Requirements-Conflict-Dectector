@@ -76,11 +76,11 @@ def test_task_parses_the_id_runs_the_service_and_returns_the_outcome(
     assert calls == [(db_session, document_id)]
 
 
-def test_task_does_not_dispatch_embedding_when_outcome_is_failed(
+def test_task_does_not_dispatch_analysis_when_outcome_is_failed(
     worker_uses_test_session: None, monkeypatch: pytest.MonkeyPatch, db_session: Session
 ) -> None:
     dispatched: list[str] = []
-    monkeypatch.setattr(tasks, "dispatch_embedding", dispatched.append)
+    monkeypatch.setattr(tasks, "dispatch_analysis", dispatched.append)
 
     def fake_process(db: Session, document_id: uuid.UUID) -> ProcessingOutcome:
         return ProcessingOutcome.FAILED
