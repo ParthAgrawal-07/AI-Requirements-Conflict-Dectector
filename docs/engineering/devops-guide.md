@@ -74,6 +74,7 @@ lint, typecheck, migrations).
 | `GROQ_API_KEY`, `GROQ_MODEL` | Groq API key and model, used only when Gemini is unavailable |
 | `EMBEDDING_MODEL` | `BAAI/bge-small-en-v1.5` (local; downloaded once per container) |
 | `SIMILARITY_THRESHOLD_DEFAULT` | Default embedding pre-filter threshold (FR-10), overridable per workspace |
+| `CANDIDATE_TOP_K` | Nearest neighbours per requirement kept as candidate pairs (US-05), default 10, range 1–50 |
 | `CORS_ALLOWED_ORIGINS` | Comma-separated frontend origin(s) allowed to call the API |
 | `MAX_UPLOAD_SIZE_MB` | Upload size cap enforced at the API (FR-02), default 25 |
 
