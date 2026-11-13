@@ -24,6 +24,7 @@ import uuid
 from dataclasses import dataclass, field
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -85,13 +86,6 @@ def generate_candidates(
     # repeating SET LOCAL on every source requirement (reduces round-trips).
     configure_hnsw_scan(db, ef_search=max(40, (k + 1) * 5, 100))
 
-    eligible = set(
-        db.scalars(
-            select(Requirement.id).where(
-                Requirement.project_id == project_id, Requirement.state.not_in(EXCLUDED_STATES)
-            )
-        )
-    )
     versions = {
         row.id: row.current_version
         for row in db.execute(
@@ -113,8 +107,6 @@ def generate_candidates(
             excluded_states=EXCLUDED_STATES,
             configure_hnsw=False,
         ):
-            if neighbour.requirement_id not in eligible:
-                continue
             key = CandidatePair.ordered(requirement_id, neighbour.requirement_id)
             best[key] = max(best.get(key, -1.0), neighbour.similarity)
 
@@ -126,50 +118,42 @@ def generate_candidates(
         (pair.requirement_a_id, pair.requirement_b_id): pair
         for pair in db.scalars(
             select(CandidatePair).where(
-                CandidatePair.requirement_a_id.in_([a for a, _ in best]),
+                CandidatePair.requirement_a_id.in_({a for a, _ in best}),
             )
         )
         if (pair.requirement_a_id, pair.requirement_b_id) in best
     }
 
-    new_pairs: list[CandidatePair] = []
-    pending_pairs: list[CandidatePair] = []
+    new_rows: list[dict[str, object]] = []
+    pending_keys: list[tuple[uuid.UUID, uuid.UUID]] = []
 
     for (a, b), similarity in best.items():
         similarity = min(1.0, max(-1.0, similarity))  # float noise on identical vectors
         pair = existing.get((a, b))
         if pair is None:
-            pair = CandidatePair(
-                requirement_a_id=a, requirement_b_id=b, similarity_score=similarity
+            new_rows.append(
+                {"requirement_a_id": a, "requirement_b_id": b, "similarity_score": similarity}
             )
-            new_pairs.append(pair)
-            pending_pairs.append(pair)
+            pending_keys.append((a, b))
             continue
         pair.similarity_score = similarity
+        classified = (pair.a_version, pair.b_version)
         current = (versions.get(a), versions.get(b))
-        if pair.classification_status is ClassificationStatus.DONE:
-            if (pair.a_version, pair.b_version) == current:
-                result.unchanged += 1
-                continue
-            if pair.a_version is None and pair.b_version is None:
-                # Pairs from Sprint 1 backfilled as done without versions: stamp
-                # current versions so they stay done and are not sent to the LLM again.
-                pair.a_version, pair.b_version = current
-                result.unchanged += 1
-                continue
+        if pair.classification_status is ClassificationStatus.DONE and classified == current:
+            result.unchanged += 1
+            continue
         if pair.classification_status is not ClassificationStatus.PENDING:
             pair.classification_status = ClassificationStatus.PENDING
             pair.attempts = 0
             pair.last_error = None
             result.reopened += 1
-        pending_pairs.append(pair)
+        pending_keys.append((a, b))
 
-    if new_pairs:
-        db.add_all(new_pairs)
-        result.created = len(new_pairs)
-
-    db.flush()
-    result.pending = [p.id for p in pending_pairs]
+    inserted = _insert_new_pairs(db, new_rows)
+    result.created = len(inserted)
+    ids = {key: pair.id for key, pair in existing.items()} | inserted
+    # A pair missing from ``ids`` was stored by a concurrent run, which classifies it.
+    result.pending = [ids[key] for key in pending_keys if key in ids]
     db.commit()
     logger.info(
         "Candidates for project %s: %d new, %d reopened, %d unchanged",
@@ -179,3 +163,23 @@ def generate_candidates(
         result.unchanged,
     )
     return result
+
+
+def _insert_new_pairs(
+    db: Session, rows: list[dict[str, object]]
+) -> dict[tuple[uuid.UUID, uuid.UUID], uuid.UUID]:
+    """Insert ``rows`` in one statement; return the ids of the pairs this call created.
+
+    Two documents of one project can be analysed at the same time, and both runs may find the
+    same cross-document pair missing. ``ON CONFLICT DO NOTHING`` lets the second run skip it
+    instead of failing its whole batch on the unique constraint.
+    """
+    if not rows:
+        return {}
+    statement = (
+        pg_insert(CandidatePair)
+        .values(rows)
+        .on_conflict_do_nothing(index_elements=["requirement_a_id", "requirement_b_id"])
+        .returning(CandidatePair.requirement_a_id, CandidatePair.requirement_b_id, CandidatePair.id)
+    )
+    return {(row.requirement_a_id, row.requirement_b_id): row.id for row in db.execute(statement)}

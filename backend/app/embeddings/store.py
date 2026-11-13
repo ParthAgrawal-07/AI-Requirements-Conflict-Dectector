@@ -109,9 +109,6 @@ def configure_hnsw_scan(db: Session, ef_search: int = 100) -> None:
         db.execute(text(f"SET LOCAL hnsw.ef_search = {ef_search}"))
 
 
-_configure_hnsw_scan = configure_hnsw_scan
-
-
 def nearest_requirements(
     db: Session,
     project_id: uuid.UUID,
@@ -150,7 +147,7 @@ def nearest_sections(
     db: Session, project_id: uuid.UUID, vector: list[float], *, k: int = 3
 ) -> list[DocumentSection]:
     """The ``k`` sections of the project's documents closest to ``vector`` (context pack)."""
-    _configure_hnsw_scan(db, ef_search=max(40, k * 5, 100))
+    configure_hnsw_scan(db, ef_search=max(40, k * 5, 100))
     distance = DocumentSection.embedding.cosine_distance(vector)
     return list(
         db.scalars(

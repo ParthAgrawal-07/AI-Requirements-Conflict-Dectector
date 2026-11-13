@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.celery_app import celery_app
-from app.embeddings.candidates import generate_candidates
+from app.embeddings.candidates import _insert_new_pairs, generate_candidates
 from app.embeddings.model import HashingEmbedder
 from app.embeddings.store import embed_document
 from app.embeddings.tasks import generate_candidates_task
@@ -159,21 +159,28 @@ def test_deprecated_requirements_do_not_consume_top_k_slots(
     assert result.pending == [pair.id]
 
 
-def test_legacy_done_pair_without_versions_stays_unchanged_and_stamps_versions(
+def test_a_pair_stored_by_a_concurrent_run_is_skipped_not_an_error(
     db_session: Session, project: Project, add_document: Callable[..., list[Requirement]]
 ) -> None:
-    a, b, _ = add_document(project, TIMEOUT_A, TIMEOUT_B, UNRELATED)
-    generate_candidates(db_session, project.id, threshold=0.3)
-    (pair,) = pairs(db_session)
-    pair.classification_status = ClassificationStatus.DONE
-    pair.a_version, pair.b_version = None, None
+    a, b, c = add_document(project, TIMEOUT_A, TIMEOUT_B, UNRELATED)
+    taken = CandidatePair.ordered(a.id, b.id)
+    free = CandidatePair.ordered(a.id, c.id)
+    db_session.add(
+        CandidatePair(requirement_a_id=taken[0], requirement_b_id=taken[1], similarity_score=0.9)
+    )
     db_session.commit()
 
-    again = generate_candidates(db_session, project.id, threshold=0.3)
-    assert again.pending == [] and again.unchanged == 1
-    db_session.refresh(pair)
-    assert (pair.a_version, pair.b_version) == (a.current_version, b.current_version)
-    assert pair.classification_status is ClassificationStatus.DONE
+    inserted = _insert_new_pairs(
+        db_session,
+        [
+            {"requirement_a_id": k[0], "requirement_b_id": k[1], "similarity_score": 0.5}
+            for k in (taken, free)
+        ],
+    )
+    db_session.commit()
+
+    assert list(inserted) == [free]
+    assert len(pairs(db_session)) == 2
 
 
 def test_pairs_never_cross_projects(
