@@ -127,7 +127,9 @@ def classify_candidate_pair(
         db.commit()
         return None
     except BudgetExceededError:
-        pair.last_error = "budget_exhausted"  # stays pending
+        # A failed pair being retried, or a done pair whose text changed, is pending again.
+        pair.classification_status = ClassificationStatus.PENDING
+        pair.last_error = "budget_exhausted"
         db.commit()
         raise
 

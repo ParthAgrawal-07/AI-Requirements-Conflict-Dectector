@@ -182,3 +182,16 @@ def test_another_workspaces_finding_is_a_404(
         client.get(f"/api/v1/findings/{conflict.id}", headers=headers_for(stranger)).status_code
         == 404
     )
+
+
+def test_another_workspaces_project_findings_are_a_404(
+    client: TestClient,
+    conflict: Finding,
+    make_user: Callable[..., User],
+    make_workspace: Callable[..., Workspace],
+) -> None:
+    stranger = make_user(role=DefaultRole.OWNER, workspace=make_workspace())
+    response = client.get(
+        f"/api/v1/projects/{conflict.project_id}/findings", headers=headers_for(stranger)
+    )
+    assert response.status_code == 404

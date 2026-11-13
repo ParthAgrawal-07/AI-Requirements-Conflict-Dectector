@@ -8,7 +8,8 @@ Sprint 2 (Keval — US-05, US-07; design update §4.1 ``FINDING``, §4.3 ``0006_
 * one *live* finding per pair, so a pair task delivered twice can never store a duplicate;
 * ``requirements.single_checked_version`` — the version last checked for Ambiguous/Incomplete.
 
-Downgrade deletes findings without a document before restoring NOT NULL.
+Downgrade deletes findings without a document before restoring NOT NULL, and keeps one finding
+per pair (the live one) before restoring the unique constraint.
 
 Revision ID: 0006c
 Revises: 0006b
@@ -83,6 +84,20 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_column("requirements", "single_checked_version")
     op.drop_index("uq_findings_live_pair", table_name="findings")
+    # 0006c allows stale findings next to the live one for a pair; the restored constraint allows
+    # one. Keep the live (else newest) finding per pair, as the pre-0006c schema would have.
+    op.execute(
+        """
+        DELETE FROM findings WHERE id IN (
+            SELECT id FROM (
+                SELECT id, row_number() OVER (
+                    PARTITION BY candidate_pair_id ORDER BY is_stale, created_at DESC, id
+                ) AS n
+                FROM findings WHERE candidate_pair_id IS NOT NULL
+            ) ranked WHERE n > 1
+        )
+        """
+    )
     for column in ("is_stale", "prompt_version", "evidence_spans", "explanation"):
         op.drop_column("findings", column)
     op.drop_constraint(
