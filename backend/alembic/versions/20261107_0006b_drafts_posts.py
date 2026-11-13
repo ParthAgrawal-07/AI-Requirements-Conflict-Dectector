@@ -10,7 +10,8 @@ Sprint 2 (Bansil; design update §4.1, §4.3 ``0006_lifecycle_runs``; composer c
   requirement per message), and ``req_type``, ``priority`` and ``composer_fields`` keep the
   composer's input (FR-55).
 
-Downgrade deletes posted requirements (they have no document) before restoring NOT NULL.
+Downgrade refuses while posted requirements exist: they have no document, and their audit rows
+(append-only, ``RESTRICT``) mean they cannot be deleted to restore ``document_id NOT NULL``.
 
 Revision ID: 0006b
 Revises: 0006
@@ -103,6 +104,16 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    posted = op.get_bind().scalar(
+        sa.text("SELECT count(*) FROM requirements WHERE document_id IS NULL")
+    )
+    if posted:
+        # Each post has an audit row, and audit_log is append-only with RESTRICT foreign keys
+        # (FR-19, NFR-13): the requirement cannot be deleted, so document_id cannot be NOT NULL.
+        raise RuntimeError(
+            f"Cannot downgrade 0006b: {posted} posted requirement(s) have no document "
+            "and are referenced by the append-only audit log."
+        )
     for name in (
         "document_origin_has_document",
         "priority_values",
@@ -115,7 +126,6 @@ def downgrade() -> None:
     )
     for column in ("composer_fields", "priority", "req_type", "origin_message_id"):
         op.drop_column("requirements", column)
-    op.execute("DELETE FROM requirements WHERE document_id IS NULL")
     op.alter_column("requirements", "document_id", existing_type=sa.Uuid(), nullable=False)
 
     op.drop_index("ix_requirement_drafts_author_id_project_id", table_name="requirement_drafts")

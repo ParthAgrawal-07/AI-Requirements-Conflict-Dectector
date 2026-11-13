@@ -12,8 +12,8 @@ from app.embeddings.tasks import embed_document_task
 def test_the_task_has_a_stable_name_and_default_routing() -> None:
     assert embed_document_task.name == "embeddings.embed_document"
     route = celery_app.amqp.router.route({}, "embeddings.embed_document")
-    # Consumed by the default worker queue until a dedicated analysis worker is added.
-    assert route["queue"].name == "celery"
+    # Sprint 1 routes embedding tasks to the dedicated analysis queue.
+    assert route["queue"].name == "analysis"
 
 
 def test_a_done_document_queues_its_embedding(monkeypatch: pytest.MonkeyPatch) -> None:

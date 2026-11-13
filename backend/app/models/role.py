@@ -2,8 +2,8 @@
 
 A role is a named set of permissions. The nine default roles (``is_default``) are platform-wide
 (``workspace_id IS NULL``), seeded by migration 0004 and immutable; custom roles (US-49, Sprint 2)
-belong to one workspace. Authorisation checks permission *names* from the catalogue in
-``app.core.permissions`` — never role names.
+belong to one workspace and are deleted softly (``deleted_at``). Authorisation checks permission
+*names* from the catalogue in ``app.core.permissions`` — never role names.
 """
 
 from __future__ import annotations

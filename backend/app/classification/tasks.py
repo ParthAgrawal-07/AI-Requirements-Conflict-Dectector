@@ -44,6 +44,7 @@ from app.classification.prompting import PROMPT_VERSION
 from app.context import service as context_service
 from app.core.celery_app import celery_app
 from app.core.database import session_scope
+from app.core.errors import AppError
 from app.models import (
     CandidatePair,
     ClassificationStatus,
@@ -108,7 +109,10 @@ def classify_candidate_pair(
         return None
     context_service.ensure_analysis_allowed(db, project)  # 409 project_in_setup in Setup
 
-    pack = ContextPackBuilder(db).build(project, query_text=f"{a.body}\n{b.body}")
+    vector = a.embedding.vector if a.embedding else (b.embedding.vector if b.embedding else None)
+    pack = ContextPackBuilder(db).build(
+        project, query_text=f"{a.body}\n{b.body}", query_vector=vector
+    )
     try:
         output = Classifier(llm).classify_pair(
             as_input(a), as_input(b), pack=pack, project_id=project.id
@@ -171,7 +175,8 @@ def classify_requirement(
         return None
     context_service.ensure_analysis_allowed(db, project)
 
-    pack = ContextPackBuilder(db).build(project, query_text=requirement.body)
+    vector = requirement.embedding.vector if requirement.embedding else None
+    pack = ContextPackBuilder(db).build(project, query_text=requirement.body, query_vector=vector)
     try:
         output = Classifier(llm).classify_single(
             as_input(requirement), pack=pack, project_id=project.id
@@ -225,7 +230,7 @@ def classify_pair_task(self: object, pair_id: str, run_id: str | None = None) ->
             )
         except LLMUnavailableError:
             raise
-        except (LLMError, BudgetExceededError) as exc:
+        except (LLMError, BudgetExceededError, AppError) as exc:
             logger.warning("Pair %s not classified: %s", pair_id, exc)
             return None
         return str(finding.id) if finding else None
@@ -249,7 +254,7 @@ def classify_requirement_task(requirement_id: str, run_id: str | None = None) ->
             )
         except LLMUnavailableError:
             raise
-        except (LLMError, BudgetExceededError) as exc:
+        except (LLMError, BudgetExceededError, AppError) as exc:
             logger.warning("Requirement %s not checked: %s", requirement_id, exc)
             return None
         return str(finding.id) if finding else None

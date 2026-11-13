@@ -76,6 +76,39 @@ PERMISSIONS: Mapping[str, str] = MappingProxyType(
     }
 )
 
+# ── How the role editor groups the catalogue (interface design §4.3) ───────────────────────
+PERMISSION_GROUPS: Mapping[str, str] = MappingProxyType(
+    {
+        "workspace.manage": "Workspace",
+        "roles.manage": "Workspace",
+        "members.manage": "Workspace",
+        "joincode.manage": "Workspace",
+        "project.manage": "Workspace",
+        "project.context": "Workspace",
+        "channel.manage": "Workspace",
+        "view": "Workspace",
+        "message.post": "Requirements",
+        "req.propose": "Requirements",
+        "req.comment": "Requirements",
+        "req.vote": "Requirements",
+        "req.link": "Requirements",
+        "doc.upload": "Requirements",
+        "issue.open": "Requirements",
+        "rcr.open": "Requirements",
+        "rcr.review": "Review",
+        "rcr.merge": "Review",
+        "finding.review": "Review",
+        "issue.manage": "Review",
+        "req.implement": "Review",
+        "srs.generate": "Review",
+        "baseline.manage": "Governance",
+        "srs.publish": "Governance",
+        "req.protect": "Governance",
+        "protected.signoff": "Governance",
+        "audit.export": "Governance",
+    }
+)
+
 # ── Who holds what (one row per permission, same order as the spec table) ──────────────────
 _ALL_BUT_VIEWER = (
     _R.OWNER,
@@ -206,10 +239,11 @@ def holders_of(permission: str) -> tuple[DefaultRole, ...]:
 
 def _self_check() -> None:
     """Fail at import time if the tables above are inconsistent (a typo here is a security bug)."""
-    missing = set(PERMISSIONS) - set(_GRANTS)
-    extra = set(_GRANTS) - set(PERMISSIONS)
-    if missing or extra:
-        raise RuntimeError(f"permission tables disagree: missing={missing} extra={extra}")
+    for table in (_GRANTS, PERMISSION_GROUPS):
+        missing = set(PERMISSIONS) - set(table)
+        extra = set(table) - set(PERMISSIONS)
+        if missing or extra:
+            raise RuntimeError(f"permission tables disagree: missing={missing} extra={extra}")
     for role, permission in _PROTECTED_ONLY:
         if permission not in DEFAULT_ROLE_PERMISSIONS[role]:
             raise RuntimeError(f"{role} is protected-only for {permission} but does not hold it")
@@ -228,3 +262,19 @@ def _self_check() -> None:
 
 
 _self_check()
+
+
+def may_assign(held_by_caller: frozenset[str], role_permissions: frozenset[str]) -> bool:
+    """May someone holding ``held_by_caller`` give out (or take away) a role holding
+    ``role_permissions``? The rule behind every role change (US-26, US-49):
+
+    * a role with ``workspace.manage`` (Owner) only by someone who holds it themselves;
+    * otherwise anything, for holders of ``roles.manage`` (Owner, Admin);
+    * otherwise only a role that holds nothing the caller lacks — a Project Manager can never
+      hand out more than they have, inside a project included.
+    """
+    if "workspace.manage" in role_permissions:
+        return "workspace.manage" in held_by_caller
+    if "roles.manage" in held_by_caller:
+        return True
+    return role_permissions <= held_by_caller

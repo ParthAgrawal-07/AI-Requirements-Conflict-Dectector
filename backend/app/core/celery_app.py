@@ -37,6 +37,15 @@ celery_app.conf.update(
     task_track_started=True,  # exposes the STARTED state for progress polling (US-03)
     broker_connection_retry_on_startup=True,
     worker_hijack_root_logger=False,
+    # Queues (US-03): document extraction and LLM/embedding analysis never wait behind each
+    # other, and can be scaled separately (`celery worker -Q analysis`). Anything not routed
+    # goes to the default "celery" queue (ping, beat jobs).
+    task_routes={
+        "documents.*": {"queue": "documents"},
+        "embeddings.*": {"queue": "analysis"},
+        "classification.*": {"queue": "analysis"},
+        "analysis.*": {"queue": "analysis"},
+    },
     # Periodic jobs, run by `celery -A app.core.celery_app beat`. Tasks are named by string so this
     # module never imports their code.
     beat_schedule={

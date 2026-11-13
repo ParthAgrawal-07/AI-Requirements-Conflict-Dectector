@@ -116,14 +116,14 @@ Design rule: **when unsure, keep and flag** (US-02: low-confidence segmentation 
 While grouping, the segmenter also records sections: a DOCX heading style or a detected heading (§9.2) opens a new section, and every other line that is not part of the table of contents is added to it, verbatim, whether it became a requirement, was flagged or was excluded. A DOCX segment is one paragraph; in a PDF a blank line between blocks separates paragraphs.
 
 ## 10. Integration with orchestration
-Storing results and running the Celery task belong to Role 5 (Parth): `app.services.processing.process_document` (PR #7) calls `ingest(path)` and saves each returned `Requirement` (`source_req_id`, `raw_text`, `location`).
+Storing results and running the Celery task belong to Role 5 (Parth): `app.services.processing.process_document` (PR #7) calls `ingest_document(path)` and saves each `Requirement` in its `SegmentationResult.requirements` (`source_req_id`, `raw_text`, `location`).
 
 Handled by the pipeline, which `process_document` relies on:
 - every failure is a `ValueError` (`DocumentParseError` for corrupt or encrypted files);
 - an empty list means no requirements were found;
 - `source_req_id` is the printed ID or `None`; the `UNKNOWN-…` fallback lives only in `id`.
 
-**Follow-up (US-60 branch, migration `0011_project_context`):** add `requirements.section_heading`, `needs_review` and `review_reasons`, and the `document_sections` table; have `process_document` save them. Until then, review flags and sections are computed but not stored.
+Since migration `0011_project_context` (PR #27), `process_document` also stores `requirements.section_heading`, `needs_review` and `review_reasons`, and the document's sections in `document_sections`.
 
 ## 11. Known Limitations
 - Multi-column PDFs: blocks are read top-to-bottom, so two columns can interleave.
@@ -132,11 +132,13 @@ Handled by the pipeline, which `process_document` relies on:
 - No OCR: scanned PDFs fail with a clear message.
 - Purely numeric numbering (`3.2.1 The system shall…`) is treated as list or heading numbering, not as a printed ID.
 - `.txt` and ReqIF (listed in US-01) are not supported yet.
-- FR-06 (user corrects segmentation errors) is not implemented. The `needs_review` flags are what that UI should show first, once they are stored (see §10).
+- FR-06 (user corrects segmentation errors) is not implemented. The stored `needs_review` flags are what that UI should show first (see §10).
 
-## 12. Plan: Filtering Headings and Prose out of Extraction (Sprint 0 → Sprint 2)
+## 12. G3 Plan: Filtering Headings and Prose out of Extraction (Sprint 0 → Sprint 2)
 
-Sprint 0 deliverable; the work is the Sprint 2 task "remove headings and prose from extraction". Goal: a requirements list with no headings, TOC entries, page furniture or narrative, while never silently losing a requirement (US-02, FR-03).
+This is the **G3 plan**, Bansil's Sprint 0 deliverable for gap G3 (`docs/engineering/system-design.md`, "`ingest()` returns every non-empty line as a requirement"). The work itself is the Sprint 2 enabler "G3 cleanup". Goal: a requirements list with no headings, TOC entries, page furniture or narrative, while never silently losing a requirement (US-02, FR-03).
+
+**Status (Sprint 2 start).** Sprint 1 already removes most non-requirement content (table below) and step 1 is done. Steps 2–5 are open. Descriptive prose without a printed ID is still extracted, flagged for review.
 
 **Already in place (Sprint 1).**
 
@@ -151,10 +153,12 @@ Sprint 0 deliverable; the work is the Sprint 2 task "remove headings and prose f
 
 **Sprint 2 steps, in order (each measured on the planted-conflict benchmark and the realistic fixtures before the next).**
 
-1. **Store the decisions.** Persist `needs_review`, `review_reasons` and `section_heading` (migration `0011`), so the requirements list can show flagged items first and the FR-06 correction UI has something to work with. Store `excluded` as `document_sections` text, never as requirements.
+1. **Store the decisions** ✅ (migration `0011`, PR #27). Persist `needs_review`, `review_reasons` and `section_heading` (migration `0011`), so the requirements list can show flagged items first and the FR-06 correction UI has something to work with. Store `excluded` as `document_sections` text, never as requirements.
 2. **Font-based PDF headings.** Read span size and weight from PyMuPDF and treat a block whose font is larger or bolder than the page's body text as a heading. Removes the main source of headings kept as requirements in PDFs (today detection is text-only).
 3. **Section-aware prose rule.** Inside a requirements section (heading matches `requirement|feature|function|interface|constraint|quality` or chapter 3 of an IEEE 830 / ISO 29148 outline), modal-less prose stays flagged; outside one, modal-less prose of two or more sentences is excluded as `narrative`. Single lines with a modal verb are always kept.
 4. **Descriptive "will".** "The system will be used by…" in an overview section is description, not a requirement. Exclude `will` sentences in overview-type sections (`product perspective`, `user classes`, `operating environment`, `assumptions`); everywhere else keep them flagged as today.
 5. **Numbered headings above list items.** Distinguish `3.2 Login` (heading) from `3.2 The user shall log in` (a numbered requirement) using the modal test already in `_is_heading`, extended to the block-start case that is currently left alone.
 
 **Guardrails.** Anything with a printed ID or `shall`/`must` is never excluded by these rules. Every exclusion keeps a reason and stays in its section, so the context pack still sees it. Accept a step only if requirement recall on the benchmark does not drop; report precision (fewer non-requirements) per step.
+
+**Done when.** `test_descriptive_prose_and_lead_ins_are_not_extracted` in `backend/tests/integration/test_upload_extract.py` passes on the planted SRS and its `xfail` marker is removed; the other checks in that file (expected count within 5%, every labelled ID extracted) still pass; G3 is marked resolved in `system-design.md`.

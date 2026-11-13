@@ -23,6 +23,8 @@ from app.services.access import SCOPE_RESOLVERS
 PUBLIC = {
     ("POST", "/api/v1/auth/login"),
     ("POST", "/api/v1/auth/signup"),
+    ("POST", "/api/v1/auth/refresh"),  # the access token may have expired: the cookie authenticates
+    ("POST", "/api/v1/auth/logout"),
 }
 # Any signed-in user, no workspace involved. Keep this list short and think before extending it.
 AUTHENTICATED_ONLY = {
@@ -32,6 +34,16 @@ AUTHENTICATED_ONLY = {
     ("POST", "/api/v1/workspaces"),
     ("GET", "/api/v1/composer/templates"),  # static EARS catalogue, no tenant data (FR-81)
     ("POST", "/api/v1/join"),  # a signed-in user entering a code: not yet a member (US-25)
+    # The composer's private drafts belong to their author (FR-81); the service requires that
+    # they may still view the draft's project.
+    ("GET", "/api/v1/me/drafts"),
+    ("POST", "/api/v1/me/drafts"),
+    ("GET", "/api/v1/me/drafts/{draft_id}"),
+    ("PATCH", "/api/v1/me/drafts/{draft_id}"),
+    ("DELETE", "/api/v1/me/drafts/{draft_id}"),
+    ("GET", "/api/v1/permissions"),  # the static permission catalogue (US-49)
+    # Any member may leave whatever their role; the handler requires the membership (US-26).
+    ("POST", "/api/v1/workspaces/{workspace_id}/leave"),
 }
 
 
@@ -140,11 +152,19 @@ def test_only_listed_routes_admit_protected_only_grants() -> None:
     )
 
 
+# Writes that only touch the caller's *own* per-person state (a read marker), never shared data,
+# so every member who may read may make them. Keep this list short.
+OWN_STATE_WITH_VIEW = {
+    ("POST", "/api/v1/channels/{channel_id}/read"),  # unread counts (US-28)
+}
+
+
 def test_state_changing_routes_need_more_than_view() -> None:
     weak = [
         f"{method} {route.path}"
         for method, route in _api_routes()
         if method in {"POST", "PUT", "PATCH", "DELETE"}
+        and (method, route.path) not in OWN_STATE_WITH_VIEW
         and (declaration := _declarations(route.dependant)[0]).kind
         in ("permission", "any_permission")
         and set(declaration.permissions) == {"view"}

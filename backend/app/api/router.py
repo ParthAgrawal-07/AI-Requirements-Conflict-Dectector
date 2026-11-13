@@ -15,18 +15,23 @@ from fastapi import APIRouter, Depends
 
 from app.api import (
     auth,
+    channels,
     context,
     documents,
+    drafts,
     findings,
     intake,
     join_codes,
     me,
+    messages,
     projects,
     reports,
     requirements,
+    roles,
     workspaces,
 )
 from app.core.auth import get_current_user
+from app.graph import api as graph_api
 from app.schemas.common import ErrorResponse
 
 api_router = APIRouter(prefix="/api/v1")
@@ -39,12 +44,17 @@ _unauthorized: dict[int | str, dict[str, Any]] = {401: {"model": ErrorResponse}}
 for _router in (
     me.router,
     workspaces.router,
+    roles.router,
     projects.router,
     context.router,
     documents.router,
     requirements.router,
     intake.router,
+    drafts.router,
     join_codes.router,
+    channels.router,
+    messages.router,
+    graph_api.router,
     findings.router,
 ):
     api_router.include_router(_router, dependencies=_authenticated, responses=_unauthorized)

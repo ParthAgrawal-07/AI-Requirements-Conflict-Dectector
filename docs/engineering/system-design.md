@@ -509,6 +509,7 @@ flowchart LR
 | Credential theft / guessing | Argon2id hashing; min 12-character passphrases; one generic login error; constant-time-ish path for unknown emails | ✅ |
 | Token forgery | JWT pinned to HS256 (no `alg=none`/algorithm confusion); issuer, audience, expiry, type and `jti` required | ✅ |
 | Stale privileges | Role and active flag re-read from the database on every request | ✅ |
+| Session theft | Access token in memory only; refresh token in an HttpOnly cookie scoped to `/api/v1/auth`, single-use and rotated, a replay revokes the whole session; logout revokes it; refresh/logout need a custom header (CSRF) | ✅ |
 | Cross-tenant access | Workspace filter in every query; 404 for foreign rows; an invariant test fails if any `/api/v1` route lacks authentication | ✅ |
 | Privilege escalation | `require_roles()` per route; no public sign-up, accounts are provisioned via CLI | ✅ |
 | Malicious uploads | Extension allow-list, **content sniffing** (never the client `Content-Type`), PDF end-marker check, DOCX structure and zip-bomb limits, sanitised filename used for display only, files stored under generated keys, storage keys cannot escape the root | ✅ |
@@ -599,7 +600,7 @@ Existing ADR-01 to ADR-07 are in `decision-log.md`. These decisions were made du
 |---|---|---|---|
 | **G1** | No place to record a **failed classification** per pair: `candidate_pairs` has no status column, yet NFR-07 and `api-reference.md` say failures must not be silently dropped | A pair that fails 3 retries would vanish | Add `classification_status` (pending/classified/failed) and `error` to `candidate_pairs` in the Sprint 2 migration (owners: Keval + Parth) |
 | **G2** | `done` is currently set when *extraction* finishes | Wrong once embedding/classification are chained | Move `done` to the last stage; extraction ends at progress 25 |
-| **G3** | `ingest()` returns every non-empty line as a "requirement" | Headings and prose will be sent to the classifier, wasting cost and adding noise (US-02 requires excluding them) | Bansil's US-02 filtering; the processing glue stores whatever `ingest()` returns |
+| **G3** | `ingest()` returns every non-empty line as a "requirement" | Headings and prose will be sent to the classifier, wasting cost and adding noise (US-02 requires excluding them) | Bansil: plan in `docs/ingestion-design.md` §12. Sprint 1 excludes TOC, headers/footers, headings, fragments and intro-section prose; the remaining prose is flagged for review. Sprint 2 "G3 cleanup" removes it |
 | **G4** | Upload accepts only `.pdf` and `.docx`; the backlog also lists `.txt` and ReqIF | Spec gap | Add parsers; a test fails if the parser registry and the upload allow-list drift apart |
 | **G5** | `failed` documents have no retry endpoint | Users must re-upload | Add `POST /documents/{id}/reprocess` (small, idempotent) |
 | **Q1** | LLM cost and latency are unmeasured | May threaten the 5-minute NFR-01 target | Measure on the benchmark at Checkpoint 1; cache by pair hash |
@@ -614,7 +615,7 @@ Existing ADR-01 to ADR-07 are in `decision-log.md`. These decisions were made du
 
 | To add… | Touch |
 |---|---|
-| A new input format (`.txt`, ReqIF) | A `Parser` subclass registered in `ingest()`'s `_PARSERS` plus an entry in `upload_validation.SUPPORTED_FORMATS` (a test enforces they match) |
+| A new input format (`.txt`, ReqIF) | A `Parser` subclass registered in the `_PARSERS` registry in `app/ingestion/pipeline.py` plus an entry in `upload_validation.SUPPORTED_FORMATS` (a test enforces they match) |
 | Another LLM provider | A transport implementing `send(system, user)` (object-design §6); selected by `LLM_PROVIDER` / `LLM_FALLBACK_PROVIDER` ([`ai-providers.md`](ai-providers.md)) |
 | Object storage | Another class with the same methods as `LocalFileStorage`; swap `get_storage()` |
 | SSO / LDAP | Replace the token-decoding step in `get_current_user`; roles and workspace still come from the database |

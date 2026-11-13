@@ -113,6 +113,13 @@ class AuditAction(StrEnum):
     MEMBER_ADDED = "member_added"
     DOCUMENT_UPLOADED = "document_uploaded"
     PROJECT_MEMBER_SET = "project_member_set"  # added to a project team / its role changed
+    # Members and roles (US-26, US-49). Ids only.
+    MEMBER_ROLE_CHANGED = "member_role_changed"
+    MEMBER_REMOVED = "member_removed"
+    MEMBER_LEFT = "member_left"
+    ROLE_CREATED = "role_created"
+    ROLE_UPDATED = "role_updated"
+    ROLE_DELETED = "role_deleted"
     # Project context (US-60). Version numbers and field names only — never brief text.
     CONTEXT_DRAFTED = "context_drafted"
     CONTEXT_UPDATED = "context_updated"
@@ -124,6 +131,24 @@ class AuditAction(StrEnum):
     JOIN_REQUEST_CREATED = "join_request_created"
     JOIN_REQUEST_APPROVED = "join_request_approved"
     JOIN_REQUEST_DENIED = "join_request_denied"
+    # Requirement posts (US-30 groundwork). Requirement, message and channel ids only.
+    REQUIREMENT_POSTED = "requirement_posted"
+    # Channels (US-28). Channel and user ids only — never names, topics or messages (CR-04).
+    CHANNEL_CREATED = "channel_created"
+    CHANNEL_UPDATED = "channel_updated"
+    CHANNEL_ARCHIVED = "channel_archived"
+    CHANNEL_MEMBER_ADDED = "channel_member_added"
+    CHANNEL_MEMBER_REMOVED = "channel_member_removed"
+
+
+class MessageKind(StrEnum):
+    """What a channel message is (design update §4.1). Cards are distinct kinds, not chat text."""
+
+    CHAT = "chat"
+    REQUIREMENT_POST = "requirement_post"  # creates a Proposed requirement (US-30)
+    CHANGE_REQUEST = "change_request"  # card for an opened change request (US-33)
+    ANALYSIS_CARD = "analysis_card"  # result of live analysis (US-31)
+    SYSTEM = "system"  # "Riya joined", "channel renamed"…
 
 
 class JoinCodeStatus(StrEnum):
@@ -170,9 +195,3 @@ class AnalysisScope(StrEnum):
     DOCUMENT = "document"  # a whole uploaded document (Sprint 2)
     REQUIREMENT = "requirement"  # one posted requirement against the baseline (US-31, S3)
     CHANGE_REQUEST = "change_request"  # consequence checks (US-34, S4)
-
-
-class MessageKind(StrEnum):
-    CHAT = "chat"
-    REQUIREMENT_POST = "requirement_post"
-    CARD = "card"

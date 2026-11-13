@@ -4,10 +4,12 @@ on:
   push:
     paths:
       - "backend/**"
+      - "docker-compose.yml"
       - ".github/workflows/backend-ci.yml"
   pull_request:
     paths:
       - "backend/**"
+      - "docker-compose.yml"
       - ".github/workflows/backend-ci.yml"
 
 defaults:
@@ -120,3 +122,6 @@ jobs:
       - name: Build backend Docker image (build check only, not pushed)
         working-directory: .
         run: docker build -t backend-ci-check ./backend
+      - name: Validate docker-compose.yml (services, queues, beat)
+        working-directory: .
+        run: cp .env.example .env && docker compose config --quiet

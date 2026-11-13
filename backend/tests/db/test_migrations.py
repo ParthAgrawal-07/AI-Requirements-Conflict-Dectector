@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import pytest
 from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
@@ -35,6 +36,13 @@ EXPECTED_TABLES = {
     # Sprint 1 (0005_collaboration, join tables)
     "join_codes",
     "join_requests",
+    # Sprint 2 (0006b_drafts_posts)
+    "requirement_drafts",
+    # Sprint 2 (0005b_channels_messages)
+    "channels",
+    "channel_members",
+    "channel_reads",
+    "messages",
 }
 
 
@@ -97,3 +105,35 @@ def test_downgrade_to_base_and_back(scratch_engine: Engine) -> None:
         config.attributes["connection"] = conn
         command.upgrade(config, "head")
     assert set(inspect(scratch_engine).get_table_names()) >= EXPECTED_TABLES
+
+
+def test_downgrade_of_0006b_refuses_while_posted_requirements_exist(
+    scratch_engine: Engine,
+) -> None:
+    config = _config()
+    with scratch_engine.begin() as conn:
+        config.attributes["connection"] = conn
+        command.upgrade(config, "head")
+        workspace_id = conn.scalar(text("INSERT INTO workspaces (name) VALUES ('W') RETURNING id"))
+        project_id = conn.scalar(
+            text("INSERT INTO projects (workspace_id, name) VALUES (:w, 'P') RETURNING id"),
+            {"w": workspace_id},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO requirements (project_id, document_id, origin, body)"
+                " VALUES (:p, NULL, 'post', 'The system shall log out idle users.')"
+            ),
+            {"p": project_id},
+        )
+        head = conn.scalar(text("SELECT version_num FROM alembic_version"))
+
+    with (
+        pytest.raises(RuntimeError, match="posted requirement"),
+        scratch_engine.begin() as conn,
+    ):
+        config.attributes["connection"] = conn
+        command.downgrade(config, "0006")
+    with scratch_engine.connect() as conn:
+        # The refused downgrade rolls back whole, including the revisions above 0006b.
+        assert conn.scalar(text("SELECT version_num FROM alembic_version")) == head

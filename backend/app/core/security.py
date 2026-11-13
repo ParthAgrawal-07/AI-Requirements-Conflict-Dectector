@@ -17,6 +17,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
+from typing import Any
 
 import jwt
 from argon2 import PasswordHasher
@@ -28,6 +29,7 @@ JWT_ALGORITHM = "HS256"
 JWT_ISSUER = "ai-requirements-conflict-detector"
 JWT_AUDIENCE = "rcd-api"
 TOKEN_TYPE_ACCESS = "access"  # noqa: S105 — a claim value, not a credential
+TOKEN_TYPE_REFRESH = "refresh"  # noqa: S105 — a claim value, not a credential
 _CLOCK_SKEW_LEEWAY_SECONDS = 10
 
 MIN_PASSWORD_LENGTH = 12
@@ -50,6 +52,16 @@ class TokenPayload:
     expires_at: datetime
 
 
+@dataclass(frozen=True)
+class RefreshPayload:
+    subject: uuid.UUID
+    jti: str
+    # One sign-in = one session. Every rotated token keeps it, so a whole session can be revoked
+    # (logout, or a stolen token replayed) without tracking each token.
+    session_id: str
+    expires_at: datetime
+
+
 # ── Passwords ────────────────────────────────────────────────────────────────
 _hasher = PasswordHasher()
 
@@ -63,18 +75,18 @@ def validate_password_strength(password: str) -> None:
 
 
 def hash_password(password: str) -> str:
-    return str(_hasher.hash(password))
+    return _hasher.hash(password)
 
 
 def verify_password(password: str, password_hash: str) -> bool:
     try:
-        return bool(_hasher.verify(password_hash, password))
+        return _hasher.verify(password_hash, password)
     except (VerificationError, InvalidHashError):
         return False
 
 
 def password_needs_rehash(password_hash: str) -> bool:
-    return bool(_hasher.check_needs_rehash(password_hash))
+    return _hasher.check_needs_rehash(password_hash)
 
 
 @lru_cache
@@ -84,7 +96,7 @@ def dummy_password_hash() -> str:
     Verifying against it when the email is unknown keeps login timing the same as for a real
     account, so response time can't be used to discover which emails are registered.
     """
-    return str(_hasher.hash(uuid.uuid4().hex))
+    return _hasher.hash(uuid.uuid4().hex)
 
 
 # ── JWT ──────────────────────────────────────────────────────────────────────
@@ -113,21 +125,69 @@ def create_access_token(
     return token, expires_at
 
 
+def create_refresh_token(
+    subject: uuid.UUID,
+    *,
+    session_id: str | None = None,
+    now: datetime | None = None,
+) -> tuple[str, RefreshPayload]:
+    """Create a refresh token, in a new session unless ``session_id`` continues one."""
+    settings = get_settings()
+    issued_at = now or datetime.now(UTC)
+    payload = RefreshPayload(
+        subject=subject,
+        jti=uuid.uuid4().hex,
+        session_id=session_id or uuid.uuid4().hex,
+        expires_at=issued_at + timedelta(days=settings.refresh_token_expire_days),
+    )
+    claims = {
+        "sub": str(subject),
+        "iss": JWT_ISSUER,
+        "aud": JWT_AUDIENCE,
+        "iat": issued_at,
+        "exp": payload.expires_at,
+        "jti": payload.jti,
+        "sid": payload.session_id,
+        "typ": TOKEN_TYPE_REFRESH,
+    }
+    token = jwt.encode(claims, settings.jwt_secret.get_secret_value(), algorithm=JWT_ALGORITHM)
+    return token, payload
+
+
+def _decode(token: str, token_type: str, extra_required: list[str]) -> dict[str, Any]:
+    settings = get_settings()
+    claims: dict[str, Any] = jwt.decode(
+        token,
+        settings.jwt_secret.get_secret_value(),
+        algorithms=[JWT_ALGORITHM],
+        audience=JWT_AUDIENCE,
+        issuer=JWT_ISSUER,
+        leeway=_CLOCK_SKEW_LEEWAY_SECONDS,
+        options={"require": ["exp", "iat", "sub", "jti", "iss", "aud", *extra_required]},
+    )
+    if claims.get("typ") != token_type:
+        raise TokenError("Unexpected token type")
+    return claims
+
+
+def decode_refresh_token(token: str) -> RefreshPayload:
+    """Validate a refresh token like an access token, and that it *is* a refresh token."""
+    try:
+        claims = _decode(token, TOKEN_TYPE_REFRESH, ["sid"])
+        return RefreshPayload(
+            subject=uuid.UUID(claims["sub"]),
+            jti=str(claims["jti"]),
+            session_id=str(claims["sid"]),
+            expires_at=datetime.fromtimestamp(claims["exp"], tz=UTC),
+        )
+    except (jwt.PyJWTError, ValueError, KeyError) as exc:
+        raise TokenError("Invalid or expired token") from exc
+
+
 def decode_access_token(token: str) -> TokenPayload:
     """Validate signature, expiry, issuer, audience and type. Raises :class:`TokenError`."""
-    settings = get_settings()
     try:
-        claims = jwt.decode(
-            token,
-            settings.jwt_secret.get_secret_value(),
-            algorithms=[JWT_ALGORITHM],
-            audience=JWT_AUDIENCE,
-            issuer=JWT_ISSUER,
-            leeway=_CLOCK_SKEW_LEEWAY_SECONDS,
-            options={"require": ["exp", "iat", "sub", "jti", "iss", "aud"]},
-        )
-        if claims.get("typ") != TOKEN_TYPE_ACCESS:
-            raise TokenError("Unexpected token type")
+        claims = _decode(token, TOKEN_TYPE_ACCESS, [])
         return TokenPayload(
             subject=uuid.UUID(claims["sub"]),
             jti=str(claims["jti"]),
