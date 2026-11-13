@@ -7,6 +7,10 @@ on:
     branches: [main]
   pull_request:
 
+# Checkout and the report upload need nothing more; keep the token read-only on PR builds.
+permissions:
+  contents: read
+
 jobs:
   playwright:
     runs-on: ubuntu-latest
