@@ -30,6 +30,7 @@ from app.schemas.context import (
     ContextVersionRead,
     ProjectContextRead,
 )
+from app.services import analysis_orchestrator
 from app.services import projects as project_service
 from app.services.access import AccessContext
 
@@ -102,6 +103,8 @@ def put_context(
     )
     project = _project(db, project_id)
     db.refresh(project)
+    if result.activated:  # leaving Setup: analyse what was uploaded meanwhile (FR-103)
+        analysis_orchestrator.analyse_project(db, project.id)
     return ContextSaveResult(
         context=_read(db, project),
         created=result.created,

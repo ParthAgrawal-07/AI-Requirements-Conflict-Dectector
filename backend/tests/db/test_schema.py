@@ -38,9 +38,10 @@ from app.models.embedding import EMBEDDING_DIM
 AI_OUTPUT = {"category": "Conflicting", "confidence": 0.9}
 
 
-def _finding(document_id: uuid.UUID, **overrides: object) -> Finding:
+def _finding(requirement: Requirement, **overrides: object) -> Finding:
     values: dict[str, object] = {
-        "document_id": document_id,
+        "document_id": requirement.document_id,
+        "project_id": requirement.project_id,
         "category": FindingCategory.CONFLICTING,
         "confidence": 0.9,
         "rationale": "REQ-1 and REQ-2 disagree on the timeout.",
@@ -277,7 +278,7 @@ class TestSeverityAndLifecycleColumns:
         for level in ("low", "medium", "high"):
             db_session.add(
                 _finding(
-                    requirement.document_id,
+                    requirement,
                     requirement_id=requirement.id,
                     severity=Severity(level),
                 )
@@ -412,7 +413,7 @@ class TestFindings:
     ) -> None:
         requirement = make_requirement()
         finding = _finding(
-            requirement.document_id,
+            requirement,
             requirement_id=requirement.id,
             category=FindingCategory.INCOMPLETE,
         )
@@ -437,16 +438,14 @@ class TestFindings:
         db_session.commit()
 
         for bad in (
-            _finding(first.document_id),  # neither
-            _finding(first.document_id, candidate_pair_id=pair.id, requirement_id=first.id),  # both
+            _finding(first),  # neither
+            _finding(first, candidate_pair_id=pair.id, requirement_id=first.id),  # both
         ):
             with pytest.raises(IntegrityError), db_session.begin_nested():
                 db_session.add(bad)
                 db_session.flush()
 
-        db_session.add(
-            _finding(first.document_id, candidate_pair_id=pair.id)
-        )  # a pair alone is fine
+        db_session.add(_finding(first, candidate_pair_id=pair.id))  # a pair alone is fine
         db_session.commit()
 
     @pytest.mark.parametrize("confidence", [-0.01, 1.01])
@@ -456,9 +455,7 @@ class TestFindings:
         requirement = make_requirement()
         with pytest.raises(IntegrityError), db_session.begin_nested():
             db_session.add(
-                _finding(
-                    requirement.document_id, requirement_id=requirement.id, confidence=confidence
-                )
+                _finding(requirement, requirement_id=requirement.id, confidence=confidence)
             )
             db_session.flush()
 

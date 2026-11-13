@@ -1,0 +1,11 @@
+## Ambiguous
+
+The wording allows more than one reasonable interpretation of what must be built or verified,
+because of a specific vague word or phrase.
+
+- Point at the word: "The system shall respond promptly" ("promptly" has no measurable bound).
+- List every vague term in `vague_terms`, quoted exactly as written in the requirement.
+- The message may list wording that matched the project's lint patterns (`<pattern_matches>`).
+  A match is a hint, not a verdict: "fast" in "fast-track approval" names a process, not a speed.
+  Decide from the whole sentence.
+- Domain terms defined in the project glossary are not vague.
