@@ -20,6 +20,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 ANALYSIS_PROGRESS = "analysis.progress"  # a document moved to a new stage or percentage (US-03)
+ANALYSIS_COMPLETED = "analysis.completed"  # an analysis run finished or is waiting for budget
 MEMBERSHIP_REVOKED = "membership.revoked"  # the gateway closes the member's sockets (US-26, S2)
 GRAPH_DELTA = "graph.delta"  # nodes/edges changed on the live map (US-14, S3)
 # Channels (US-28, Madhav). ``data.private`` is true for a private channel: the gateway then
@@ -35,6 +36,7 @@ MESSAGE_DELETED = "message.deleted"
 EVENT_TYPES = frozenset(
     {
         ANALYSIS_PROGRESS,
+        ANALYSIS_COMPLETED,
         MEMBERSHIP_REVOKED,
         GRAPH_DELTA,
         CHANNEL_CREATED,
@@ -139,5 +141,35 @@ def message_event(
             "author_id": str(author_id),
             "mentions": mentions,
             "private": private,
+        },
+    )
+
+
+def analysis_completed(
+    *,
+    workspace_id: uuid.UUID,
+    project_id: uuid.UUID,
+    run_id: uuid.UUID,
+    subject_id: uuid.UUID,
+    status: str,
+    pairs_total: int,
+    pairs_failed: int,
+    checks_total: int,
+    checks_failed: int,
+) -> Event:
+    """An analysis run ended (or is parked for budget). Counts only; findings are read over REST."""
+    return Event(
+        type=ANALYSIS_COMPLETED,
+        workspace_id=workspace_id,
+        project_id=project_id,
+        entity_id=run_id,
+        data={
+            "run_id": str(run_id),
+            "subject_id": str(subject_id),
+            "status": status,
+            "pairs_total": pairs_total,
+            "pairs_failed": pairs_failed,
+            "checks_total": checks_total,
+            "checks_failed": checks_failed,
         },
     )
