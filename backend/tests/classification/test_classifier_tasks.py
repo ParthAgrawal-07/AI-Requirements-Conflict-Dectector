@@ -78,7 +78,16 @@ def test_no_issue_stores_nothing_and_a_second_run_does_not_duplicate(
 ) -> None:
     no_issue = LLMClient(FakeTransport([_reply("None")]))
     assert classify_candidate_pair(db_session, pair.id, no_issue) is None
-    classify_candidate_pair(db_session, pair.id, LLMClient(FakeTransport([_reply("Duplicate")])))
+    # G1 (Sprint 2): the pair is "done" for these versions, so it is never sent again.
+    again = FakeTransport([_reply("Duplicate")])
+    assert classify_candidate_pair(db_session, pair.id, LLMClient(again)) is None
+    assert again.calls == []
+    assert db_session.scalars(select(Finding)).all() == []
+
+
+def test_a_stored_finding_is_never_duplicated(db_session: Session, pair: CandidatePair) -> None:
+    first = LLMClient(FakeTransport([_reply("Duplicate")]))
+    assert classify_candidate_pair(db_session, pair.id, first) is not None
     again = FakeTransport([_reply("Duplicate")])
 
     assert classify_candidate_pair(db_session, pair.id, LLMClient(again)) is None

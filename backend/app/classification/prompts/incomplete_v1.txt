@@ -1,0 +1,13 @@
+## Incomplete
+
+Every word is clear, but the requirement omits a fact a developer or tester needs, so it cannot
+be implemented or verified as written.
+
+- Example: "The system shall maintain 99.9% uptime" — the measurement window is missing.
+- Typical missing facts: the actor, the trigger, a limit or unit, the error behaviour, the data
+  affected. List each one in `missing_information`, as a short noun phrase a person can answer
+  ("the measurement period for the 99.9% figure").
+- Do not ask for implementation detail the requirement is right to leave open (technology,
+  design). Missing *rationale* is not incompleteness.
+- If a vague word causes the problem, the category is Ambiguous instead (mention the missing fact
+  in the rationale).

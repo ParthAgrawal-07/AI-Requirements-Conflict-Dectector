@@ -1,0 +1,10 @@
+## Duplicate
+
+A and B express the same behaviour in different words: either one could be removed without
+losing any information.
+
+- Duplicate means fully equivalent. If one adds a meaningful constraint the other lacks ("log
+  failed logins" vs. "log failed logins with the source IP"), it is not a Duplicate; apply the
+  dependency test, else answer None.
+- Same words with a different subject, actor or number are not duplicates.
+- Copy-paste with a changed ID is a Duplicate.

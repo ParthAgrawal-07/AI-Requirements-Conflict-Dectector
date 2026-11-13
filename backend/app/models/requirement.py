@@ -102,6 +102,8 @@ class Requirement(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # Compliance-critical: never auto-resolved, all access audited (FR-21, DR-05, NFR-13).
     is_protected: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
     current_version: Mapped[int] = mapped_column(default=1, server_default=text("1"))
+    # The version last checked for Ambiguous/Incomplete (US-05, 0006c): never paid for twice.
+    single_checked_version: Mapped[int | None]
     # Requirement posts (US-30, migration 0006b): the channel message that created it, the
     # composer's type and priority, and the composer fields as submitted (template, slots,
     # acceptance criteria, tags, rationale) so the statement can always be traced to its input.

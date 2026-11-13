@@ -17,6 +17,7 @@ from app.models import (
     Embedding,
     Project,
     Requirement,
+    RequirementState,
     User,
     Workspace,
 )
@@ -153,6 +154,28 @@ def test_nearest_can_exclude_and_threshold(
 
     assert [n.requirement_id for n in excluded] == [second.id]
     assert [n.requirement_id for n in close_only] == [first.id]
+
+
+def test_nearest_requirements_filters_excluded_states(
+    db_session: Session, project: Project, make_document: MakeDocument, embedder: HashingEmbedder
+) -> None:
+    doc, (first, second, third) = make_document(
+        project, "alpha beta gamma 1", "alpha beta gamma 2", "alpha beta gamma 3"
+    )
+    first.state = RequirementState.DEPRECATED
+    second.state = RequirementState.REJECTED
+    db_session.commit()
+    embed_document(db_session, doc.id, embedder)
+
+    query = embedder.embed(["alpha beta gamma"])[0]
+    found = nearest_requirements(
+        db_session,
+        project.id,
+        query,
+        k=5,
+        excluded_states=(RequirementState.DEPRECATED, RequirementState.REJECTED),
+    )
+    assert [n.requirement_id for n in found] == [third.id]
 
 
 def test_nearest_sections_returns_embedded_sections_of_the_project(

@@ -102,6 +102,9 @@ class Settings(BaseSettings):
         # .env.example historically used SIMILARITY_THRESHOLD; docs use *_DEFAULT. Accept both.
         validation_alias=AliasChoices("SIMILARITY_THRESHOLD_DEFAULT", "SIMILARITY_THRESHOLD"),
     )
+    # Heet (US-05): neighbours per requirement sent to the classifier. Recall over cost: raise it
+    # before lowering the similarity threshold.
+    candidate_top_k: int = Field(default=10, ge=1, le=50)
     llm_provider: Literal["gemini", "groq", "anthropic", "openai"] = "gemini"
     llm_fallback_provider: Literal["groq", "none"] | None = "groq"
     gemini_api_key: SecretStr | None = None
@@ -113,6 +116,8 @@ class Settings(BaseSettings):
     llm_effort: Effort = "low"
     llm_timeout_seconds: float = Field(default=60.0, gt=0, le=600)
     llm_max_retries: int = Field(default=2, ge=0, le=6)  # transport retries (429, 5xx, network)
+    # US-05: re-asks when a reply does not validate against the schema; then the pair is failed.
+    llm_output_retries: int = Field(default=3, ge=0, le=5)
 
     # ── Validators ────────────────────────────────────────
     @field_validator("database_url")

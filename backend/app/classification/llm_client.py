@@ -259,10 +259,12 @@ class LLMClient:
     def __init__(self, transport: LLMTransport, budget: BudgetGuard | None = None) -> None:
         self._transport = transport
         self._budget = budget or UnlimitedBudget()
+        self.calls = 0  # requests sent, for analysis-run accounting (llm_calls)
 
     def complete_text(self, system: str, user: str, *, project_id: uuid.UUID | None = None) -> str:
         """A plain-text reply (the brief drafter validates its own JSON)."""
         self._budget.reserve(project_id)
+        self.calls += 1
         return self._transport.send(system, user)
 
     def complete_json(
@@ -272,22 +274,25 @@ class LLMClient:
         output: type[T],
         *,
         project_id: uuid.UUID | None = None,
+        retries: int = 1,
     ) -> T:
-        """A reply validated into ``output``; re-asks once with the validation error."""
-        reply = self.complete_text(system, user, project_id=project_id)
-        try:
-            return _parse(reply, output)
-        except (ValueError, ValidationError) as first:
-            logger.info("LLM reply did not validate (%s); asking again", type(first).__name__)
-            retry_user = (
-                f"{user}\n\nYour previous reply was not valid: {_short(first)}\n"
-                "Reply again with only the JSON object that matches the schema."
-            )
-            reply = self.complete_text(system, retry_user, project_id=project_id)
+        """A reply validated into ``output``. An invalid reply is re-asked with the validation
+        error, up to ``retries`` times (the classifier uses 3, US-05); after that
+        :class:`LLMOutputError`."""
+        prompt = user
+        while True:
+            reply = self.complete_text(system, prompt, project_id=project_id)
             try:
                 return _parse(reply, output)
-            except (ValueError, ValidationError) as second:
-                raise LLMOutputError(f"Invalid model output: {_short(second)}") from second
+            except (ValueError, ValidationError) as error:
+                if retries <= 0:
+                    raise LLMOutputError(f"Invalid model output: {_short(error)}") from error
+                retries -= 1
+                logger.info("LLM reply did not validate (%s); asking again", type(error).__name__)
+                prompt = (
+                    f"{user}\n\nYour previous reply was not valid: {_short(error)}\n"
+                    "Reply again with only the JSON object that matches the schema."
+                )
 
     def as_draft_llm(self, project_id: uuid.UUID | None = None) -> Callable[[str, str], str]:
         """The ``(system, user) -> text`` callable ``app.context.drafter.BriefDrafter`` takes."""

@@ -1,0 +1,10 @@
+## Dependent
+
+One requirement relies on the other to be satisfiable, without restating it: if the
+depended-upon requirement were removed or violated, the other could not be satisfied.
+
+- Test: could one requirement still be satisfied if the other were deleted? If not, it is
+  Dependent. Set `dependency_direction` to `A_depends_on_B` or `B_depends_on_A`.
+- A mere cross-reference ("as specified in REQ-012") is not a dependency by itself.
+- Requirements where one simply triggers or complements the other ("log failed logins" and
+  "alert after five failed logins") are None.
