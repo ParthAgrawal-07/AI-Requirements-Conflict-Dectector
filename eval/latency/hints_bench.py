@@ -31,11 +31,12 @@ for candidate in [
         sys.path.insert(0, str(candidate))
         break
 
+from sqlalchemy.orm import Session
+
 from app.core.database import get_engine
 from app.embeddings.model import SentenceTransformerEmbedder
 from app.embeddings.store import embed_document, nearest_requirements
 from app.models import Document, DocumentFormat, Project, Requirement, User, Workspace
-from sqlalchemy.orm import Session
 
 ACTORS = ["user", "admin", "customer", "teller", "auditor", "mobile app", "system"]
 ACTIONS = [
@@ -50,7 +51,7 @@ ACTIONS = [
 
 
 def synthetic_requirements(count: int, seed: int) -> list[str]:
-    rng = random.Random(seed)
+    rng = random.Random(seed)  # noqa: S311 — test data, not security
     return [
         f"REQ-{i:03d}: The {rng.choice(ACTORS)} shall "
         + rng.choice(ACTIONS).format(n=rng.choice([2, 5, 10, 30, 60, 1000]))

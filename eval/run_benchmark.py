@@ -16,8 +16,8 @@ Runs the detection engine on the planted-conflict SRS and scores it against ``la
 Usage (from the repository root)::
 
     python eval/run_benchmark.py --embedder minilm --llm none           # candidates only, free
-    python eval/run_benchmark.py --embedder minilm --llm anthropic \\
-        --record eval/reports/s2_replies.json                          # real run, LLM_API_KEY set
+    python eval/run_benchmark.py --embedder minilm --llm live \\
+        --record eval/reports/s2_replies.json             # real run: GEMINI_API_KEY (Groq backup)
     python eval/run_benchmark.py --embedder minilm --llm replay:eval/reports/s2_replies.json
 
 ``--record`` stores every model reply keyed by a hash of the prompt, so a run can be replayed and
@@ -130,12 +130,12 @@ def make_llm(spec: str, record: Path | None) -> tuple[LLMClient | None, Recordin
     if spec.startswith("replay:"):
         replies = json.loads(Path(spec.removeprefix("replay:")).read_text(encoding="utf-8"))
         return LLMClient(ReplayTransport(replies)), None
-    if spec == "anthropic":
+    if spec == "live":  # the configured provider: Gemini, Groq as backup (ADR-31)
         from app.classification.llm_client import get_llm_client
 
         client = get_llm_client()
         if client is None:
-            raise SystemExit("--llm anthropic needs LLM_API_KEY")
+            raise SystemExit("--llm live needs GEMINI_API_KEY or GROQ_API_KEY")
         if record is None:
             return client, None
         recorder = RecordingTransport(client._transport)
@@ -248,9 +248,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         elif predicted != "None":
             scores.fp[predicted] += 1
 
-    # FakeTransport records calls; real transports do not
-    transport = getattr(llm, "_transport", None)
-    result["llm_calls"] = len(getattr(transport, "calls", []))
+    result["llm_calls"] = llm.calls
     result["failed_items"] = failures
     result["per_category"] = {c: scores.row(c) for c in (*PAIR_CATEGORIES, *SINGLE_CATEGORIES)}
     if recorder is not None and args.record is not None:
@@ -259,13 +257,15 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--srs", type=Path, default=BENCHMARK / "srs_planted.docx")
     parser.add_argument("--labels", type=Path, default=BENCHMARK / "labels.csv")
     parser.add_argument("--split", choices=["dev", "heldout"], default=None)
     parser.add_argument("--embedder", choices=["minilm", "hashing"], default="minilm")
-    parser.add_argument("--llm", default="none", help="none | anthropic | replay:<file>")
-    parser.add_argument("--record", type=Path, default=None, help="save replies (with anthropic)")
+    parser.add_argument("--llm", default="none", help="none | live | replay:<file>")
+    parser.add_argument("--record", type=Path, default=None, help="save replies (with live)")
     parser.add_argument("--k", type=int, default=10)
     parser.add_argument("--threshold", type=float, default=0.75)
     parser.add_argument("--json", type=Path, default=None, help="write the result here")
