@@ -69,3 +69,54 @@ not listed gets `not_found`). A project subscription never receives a private ch
 
 `documents.*` → `documents`; `embeddings.*`, `classification.*`, `analysis.*` → `analysis`; everything else →
 `celery`. Compose runs one worker on all three and one `beat` (periodic jobs: join-code expiry; later the budget reset).
+
+## 6. Graph revisions and deltas (US-14, S3)
+
+The live map is updated through `graph.delta` events. Each delta describes the changes between two consecutive graph revisions.
+
+A `GraphDelta` contains:
+
+- `project_id`: the affected project.
+- `from_revision`: the graph revision the client currently has.
+- `to_revision`: the new graph revision.
+- `actor_id` and `actor_name`: the user responsible for the change, when applicable.
+- `added`: nodes and edges added to the graph.
+- `changed`: nodes and edges whose properties changed.
+- `removed`: node and edge identifiers removed from the graph.
+- `sentences`: short, human-readable explanations of the changes.
+
+### Revision handling
+
+- `projects.graph_revision` increments once for each graph delta.
+- Clients apply a delta only when their current revision matches `from_revision`.
+- If the revisions do not match, the client must fetch the latest graph instead of applying the delta.
+- If the graph has not changed, the graph endpoint may return `304 Not Modified`.
+- Producers commit changes before publishing the event.
+- Deltas are read back from the database after the commit so that removed, dismissed or merged finding edges are not included as active graph edges.
+
+### When graph deltas are produced
+
+Graph deltas are produced after:
+
+- A requirement is posted.
+- An analysis run finishes.
+- A review is submitted.
+- A requirement's state or owner changes.
+- Graph node positions are updated through the graph positions endpoint.
+
+Position updates are layout-only changes and do not generate narrator sentences. Updating positions does not trigger an analysis run.
+
+### Narrator sentences
+
+Narrator sentences explain graph changes using templates, requirement IDs and people's names.
+
+- They must not contain requirement text.
+- They do not use an LLM.
+- A clean result may say that no issues were detected, but this does not mean that every possible conflict has been verified.
+- Narrator output is explanatory, not a verification guarantee.
+
+### Client update behaviour
+
+- Clients coalesce incoming graph updates within a 250 ms window.
+- The target is to update the map within 2 seconds.
+- When a delta cannot be applied because the client's revision is stale, the client fetches the latest graph.

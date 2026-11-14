@@ -19,6 +19,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app.graph.schemas import GraphDelta
+
 ANALYSIS_PROGRESS = "analysis.progress"  # a document moved to a new stage or percentage (US-03)
 ANALYSIS_COMPLETED = "analysis.completed"  # an analysis run finished or is waiting for budget
 MEMBERSHIP_REVOKED = "membership.revoked"  # the gateway closes the member's sockets (US-26, S2)
@@ -124,7 +126,7 @@ def message_event(
     private: bool,
     message_id: uuid.UUID,
     parent_id: uuid.UUID | None,
-    author_id: uuid.UUID,
+    author_id: uuid.UUID | None,
     mentions: list[str],
 ) -> Event:
     """A message was posted, edited or deleted (``message.*``). Never the body (CR-04)."""
@@ -138,10 +140,21 @@ def message_event(
             "message_id": str(message_id),
             "channel_id": str(channel_id),
             "parent_id": str(parent_id) if parent_id else None,
-            "author_id": str(author_id),
+            "author_id": str(author_id) if author_id else None,  # None: a system card
             "mentions": mentions,
             "private": private,
         },
+    )
+
+
+def graph_delta(*, workspace_id: uuid.UUID, delta: GraphDelta) -> Event:
+    """The live map changed (US-14). ``data`` is the :class:`~app.graph.schemas.GraphDelta`:
+    ids, states, labels and sentences naming requirements by ID — never requirement text."""
+    return Event(
+        type=GRAPH_DELTA,
+        workspace_id=workspace_id,
+        project_id=delta.project_id,
+        data=delta.model_dump(mode="json"),
     )
 
 
@@ -152,6 +165,7 @@ def analysis_completed(
     run_id: uuid.UUID,
     subject_id: uuid.UUID,
     status: str,
+    scope: str = "document",
     pairs_total: int,
     pairs_failed: int,
     checks_total: int,
@@ -166,6 +180,7 @@ def analysis_completed(
         data={
             "run_id": str(run_id),
             "subject_id": str(subject_id),
+            "scope": scope,  # document, requirement (a post, US-31) or change_request
             "status": status,
             "pairs_total": pairs_total,
             "pairs_failed": pairs_failed,

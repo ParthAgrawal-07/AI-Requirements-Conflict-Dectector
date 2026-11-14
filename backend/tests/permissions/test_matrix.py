@@ -178,6 +178,14 @@ CASES = [
     Case("PATCH", "/api/v1/messages/{message_id}", lambda _: {"body": "edited"}, own_message=True),
     Case("DELETE", "/api/v1/messages/{message_id}", own_message=True),
     Case("GET", "/api/v1/projects/{project_id}/graph"),
+    # Sprint 3 — live map shared layout (US-14)
+    Case(
+        "PUT",
+        "/api/v1/projects/{project_id}/graph/positions",
+        lambda w: {
+            "positions": [{"requirement_id": str(w.finding.requirement_id), "x": 1, "y": 2}]
+        },
+    ),
     # Sprint 2 — findings (US-07)
     Case("GET", "/api/v1/projects/{project_id}/findings"),
     Case("GET", "/api/v1/findings/{finding_id}"),

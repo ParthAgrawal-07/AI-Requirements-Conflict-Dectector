@@ -126,6 +126,10 @@ class Message(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         CheckConstraint(
             "deleted_at IS NOT NULL OR char_length(body) BETWEEN 1 AND 4000", name="body_length"
         ),
+        # A result card is written by the analysis, not a member (US-31, migration 0006d).
+        CheckConstraint(
+            "author_id IS NOT NULL OR kind IN ('analysis_card', 'system')", name="author_or_system"
+        ),
         # History pages (cursor = created_at, id) and thread replies.
         Index("ix_messages_channel_id_created_at_id", "channel_id", "created_at", "id"),
         Index("ix_messages_parent_id_created_at", "parent_id", "created_at"),
@@ -134,7 +138,8 @@ class Message(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 
     channel_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("channels.id", ondelete="CASCADE"))
     # RESTRICT: users are deactivated, never deleted, and their messages stay (FR-45).
-    author_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    # NULL only for system messages (result cards, "Riya joined").
+    author_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
     parent_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("messages.id", ondelete="CASCADE")
     )
@@ -152,10 +157,13 @@ class Message(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     search: Mapped[Any] = mapped_column(
         TSVECTOR, Computed("to_tsvector('simple', coalesce(body, ''))", persisted=True)
     )
+    # A card's structured part (e.g. ``{"run_id": ..., "requirement_id": ...}``): ids and states
+    # only. The client reads the details over REST, which re-checks access.
+    payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
-    author: Mapped[User] = relationship(foreign_keys=[author_id])
+    author: Mapped[User | None] = relationship(foreign_keys=[author_id])
 
     @property
     def is_deleted(self) -> bool:

@@ -3,6 +3,7 @@ HTML (no injection), turning ``<@user-id>`` tokens into ``@Name``."""
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -32,7 +33,9 @@ class MessageRead(BaseModel):
     parent_id: uuid.UUID | None
     kind: MessageKind
     body: str  # "" once deleted
-    author: MessageAuthor
+    author: MessageAuthor | None  # None: a system message (a result card), shown as the app
+    # A card's ids (``run_id``, ``requirement_id``…); the client fetches the details over REST.
+    payload: dict[str, Any] | None = None
     mentions: list[uuid.UUID]
     created_at: datetime
     edited_at: datetime | None
@@ -51,11 +54,14 @@ class MessageRead(BaseModel):
             parent_id=message.parent_id,
             kind=message.kind,
             body=message.body,
-            author=MessageAuthor(
-                id=message.author_id,
+            author=None
+            if message.author is None
+            else MessageAuthor(
+                id=message.author.id,
                 full_name=message.author.full_name,
                 is_member=view.author_is_member,
             ),
+            payload=message.payload,
             mentions=[uuid.UUID(user_id) for user_id in message.mentions],
             created_at=message.created_at,
             edited_at=message.edited_at,
