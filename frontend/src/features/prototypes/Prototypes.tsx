@@ -38,6 +38,9 @@ export function PrototypeIndex() {
           <Link to="/prototypes/composer">Write a requirement (composer)</Link>
         </li>
         <li>
+          <Link to="/prototypes/findings">Findings: confidence and evidence (US-07)</Link>
+        </li>
+        <li>
           <Link to="/prototypes/issue">Issue with AI suggestions</Link>
         </li>
         <li>

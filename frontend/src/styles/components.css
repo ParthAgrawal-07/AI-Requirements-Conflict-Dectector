@@ -235,3 +235,32 @@
 .form-stack .checkbox { display: flex; gap: var(--space-2); align-items: center; }
 .error-text { color: var(--danger); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ── Findings (US-07) ────────────────────────────────────── */
+.filters { display: flex; gap: var(--space-4); align-items: center; margin-bottom: var(--space-4); }
+.finding-list { display: grid; gap: var(--space-3); }
+.finding-card { padding: var(--space-4); }
+.finding-header { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
+.confidence { font-weight: 600; }
+.low-confidence { margin: var(--space-2) 0 0; color: var(--proposed); }
+.finding-ids { margin: var(--space-2) 0 0; }
+.finding-explanation { margin: var(--space-1) 0 var(--space-2); }
+.finding-sides { display: grid; gap: var(--space-3); }
+.finding-sides.two { grid-template-columns: 1fr 1fr; }
+.finding-side { border: 1px solid var(--line); border-radius: var(--radius); padding: var(--space-3); background: var(--paper-raised); }
+.finding-side h3 { margin: 0 0 var(--space-2); font-size: 15px; }
+.finding-text mark { background: var(--conflict-soft); color: inherit; outline: 1px solid var(--conflict); border-radius: 2px; }
+.pager { display: flex; gap: var(--space-3); align-items: center; margin-top: var(--space-4); }
+.small { font-size: 13px; }
+@media (max-width: 720px) { .finding-sides.two { grid-template-columns: 1fr; } }
+
+/* ── Members and roles (US-26, US-49) ────────────────────── */
+.row-actions { display: flex; gap: var(--space-1); justify-content: flex-end; flex-wrap: wrap; }
+.reassign { margin-top: var(--space-5); padding: var(--space-4); }
+.role-list { list-style: none; padding: 0; display: grid; gap: var(--space-3); }
+.role-card { padding: var(--space-4); }
+.role-actions { display: flex; gap: var(--space-2); margin-top: var(--space-2); }
+.role-sentence { margin: var(--space-2) 0; padding: var(--space-2) var(--space-3); background: var(--accent-soft); border-radius: var(--radius); }
+.permission-group { border: 1px solid var(--line); border-radius: var(--radius); padding: var(--space-3); display: grid; gap: var(--space-2); }
+.permission-group legend { font-weight: 600; padding: 0 var(--space-1); }
+.project-role { display: grid; gap: var(--space-1); margin-bottom: var(--space-3); }

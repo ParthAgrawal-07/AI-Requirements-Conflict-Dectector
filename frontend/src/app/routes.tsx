@@ -5,6 +5,7 @@ import { Button } from "../components/Button";
 import { LoginPage } from "../features/auth/LoginPage";
 import { SignupWithCodePage } from "../features/auth/SignupWithCodePage";
 import { ChannelView } from "../features/channels/ChannelView";
+import { FindingsPage } from "../features/findings/FindingsPage";
 import { KitPage } from "../features/kit/KitPage";
 import { JoinPage } from "../features/members/JoinPage";
 import { MembersPage } from "../features/members/MembersPage";
@@ -120,6 +121,7 @@ export const routes: RouteObject[] = [
               { path: "setup", element: <SetupWizard /> },
               { path: "requirements", element: <RequirementsPage /> },
               { path: "channels/:channelId", element: <ChannelView /> },
+              { path: "findings", element: <FindingsPage /> },
               ...LATER.map((item) => ({
                 path: item.path,
                 element: <ComingSoon title={item.title} sprint={item.sprint} />,

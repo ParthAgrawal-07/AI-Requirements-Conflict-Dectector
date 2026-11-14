@@ -11,6 +11,7 @@ const PROJECT_NAV = [
   { to: "", label: "Home", end: true },
   { to: "map", label: "Map" },
   { to: "requirements", label: "Requirements" },
+  { to: "findings", label: "Findings" },
   { to: "issues", label: "Issues" },
   { to: "changes", label: "Change requests" },
   { to: "baselines", label: "Baselines" },
