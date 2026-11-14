@@ -94,6 +94,9 @@ class Finding(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         # requirement (Incomplete/Ambiguous) — exactly one of the two references is set.
         CheckConstraint("num_nonnulls(candidate_pair_id, requirement_id) = 1", name="subject"),
         CheckConstraint("confidence BETWEEN 0 AND 1", name="confidence_range"),
+        CheckConstraint(
+            "merged_into_id IS NULL OR merged_into_id <> id", name="not_merged_into_itself"
+        ),
         Index("ix_findings_document_id_status", "document_id", "status"),
         Index("ix_findings_document_id_category", "document_id", "category"),
         Index("ix_findings_project_id_status", "project_id", "status"),
@@ -137,6 +140,8 @@ class Finding(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         JSONB, default=list, server_default=text("'[]'::jsonb")
     )
     prompt_version: Mapped[str | None] = mapped_column(String(16))
+    # "<provider>/<model>" that produced it (ADR-31, migration 0006g); NULL before Sprint 3.
+    llm_model: Mapped[str | None] = mapped_column(String(80))
     # Set when a requirement it is about changes (US-34, Sprint 4); stale findings are history.
     is_stale: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
     status: Mapped[FindingStatus] = mapped_column(
@@ -151,6 +156,10 @@ class Finding(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("users.id", ondelete="SET NULL")
     )
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # A merged finding was folded into this one (US-10, FR-18); its history is in finding_reviews.
+    merged_into_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("findings.id", ondelete="SET NULL")
+    )
     # The project context version the classifier was given (FR-105, migration 0011).
     context_version: Mapped[int | None]
 
@@ -170,6 +179,14 @@ class Clarification(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         ForeignKey("findings.id", ondelete="CASCADE"), unique=True
     )
     question: Mapped[str] = mapped_column(Text)
+    # Sprint 3 (US-09, migration 0006h): "owner" or "stakeholders", and how it was written.
+    addressed_to: Mapped[str | None] = mapped_column(String(16))
+    prompt_version: Mapped[str | None] = mapped_column(String(16))
+    llm_model: Mapped[str | None] = mapped_column(String(80))
+    # The thread reply it was posted as (posted requirements only).
+    message_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("messages.id", ondelete="SET NULL")
+    )
     resolution: Mapped[str | None] = mapped_column(Text)
     resolved_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL")
