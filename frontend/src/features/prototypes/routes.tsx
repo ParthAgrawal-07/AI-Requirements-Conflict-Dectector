@@ -1,4 +1,5 @@
 import type { RouteObject } from "react-router-dom";
+import { FindingsPrototype } from "./FindingsPrototype";
 import { MapSpike } from "./MapSpike";
 import {
   ChangeRequestPrototype,
@@ -13,6 +14,7 @@ export const prototypeRoutes: RouteObject[] = [
   { path: "/prototypes", element: <PrototypeIndex /> },
   { path: "/prototypes/join", element: <JoinPrototype /> },
   { path: "/prototypes/composer", element: <ComposerPrototype /> },
+  { path: "/prototypes/findings", element: <FindingsPrototype /> },
   { path: "/prototypes/issue", element: <IssuePrototype /> },
   { path: "/prototypes/change-request", element: <ChangeRequestPrototype /> },
   { path: "/prototypes/map-spike", element: <MapSpike /> },

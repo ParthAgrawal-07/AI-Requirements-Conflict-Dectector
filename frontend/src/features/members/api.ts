@@ -133,3 +133,134 @@ export function useCreateWorkspace() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["workspaces"] }),
   });
 }
+
+// ── Members, custom roles and project roles (US-26, US-49; API by Parth) ──────────────────────
+export { useMembers, type Member } from "../channels/api";
+
+export interface PermissionInfo {
+  name: string;
+  description: string;
+  group: "Workspace" | "Requirements" | "Review" | "Governance";
+}
+
+export interface ReassignmentItem {
+  kind: "requirement";
+  id: UUID;
+  project_id: UUID;
+  label: string | null;
+  former_owner_id: UUID;
+  former_owner_name: string;
+}
+
+export interface RoleInput {
+  name: string;
+  description: string | null;
+  permissions: string[];
+}
+
+export function usePermissionCatalogue() {
+  return useQuery({
+    queryKey: ["permission-catalogue"],
+    queryFn: () => apiFetch<PermissionInfo[]>("/permissions"),
+    staleTime: Infinity, // changes only with a deployment
+  });
+}
+
+export function useNeedsReassignment(workspaceId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["needs-reassignment", workspaceId],
+    enabled,
+    queryFn: () => apiFetch<ReassignmentItem[]>(`/workspaces/${workspaceId}/needs-reassignment`),
+  });
+}
+
+function useWorkspaceMutation<TInput, TResult>(
+  workspaceId: string,
+  request: (input: TInput) => Promise<TResult>,
+  keys: string[],
+) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: request,
+    onSuccess: () =>
+      Promise.all(keys.map((key) => queryClient.invalidateQueries({ queryKey: [key, workspaceId] }))),
+  });
+}
+
+export function useChangeRole(workspaceId: string) {
+  return useWorkspaceMutation(
+    workspaceId,
+    ({ userId, roleId }: { userId: UUID; roleId: UUID }) =>
+      apiFetch(`/workspaces/${workspaceId}/members/${userId}`, { method: "PATCH", json: { role_id: roleId } }),
+    ["members"],
+  );
+}
+
+export function useRemoveMember(workspaceId: string) {
+  return useWorkspaceMutation(
+    workspaceId,
+    (userId: UUID) => apiFetch<void>(`/workspaces/${workspaceId}/members/${userId}`, { method: "DELETE" }),
+    ["members", "needs-reassignment"],
+  );
+}
+
+export function useLeaveWorkspace(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiFetch<void>(`/workspaces/${workspaceId}/leave`, { method: "POST" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["workspaces"] }),
+  });
+}
+
+export function useCreateRole(workspaceId: string) {
+  return useWorkspaceMutation(
+    workspaceId,
+    (input: RoleInput) => apiFetch<RoleRead>(`/workspaces/${workspaceId}/roles`, { method: "POST", json: input }),
+    ["roles"],
+  );
+}
+
+export function useUpdateRole(workspaceId: string) {
+  return useWorkspaceMutation(
+    workspaceId,
+    ({ id, ...input }: RoleInput & { id: UUID }) =>
+      apiFetch<RoleRead>(`/roles/${id}`, { method: "PATCH", json: input }),
+    ["roles"],
+  );
+}
+
+export function useDeleteRole(workspaceId: string) {
+  return useWorkspaceMutation(
+    workspaceId,
+    (id: UUID) => apiFetch<void>(`/roles/${id}`, { method: "DELETE" }),
+    ["roles"],
+  );
+}
+
+export interface ProjectMember {
+  user_id: UUID;
+  full_name: string;
+  role_override: RoleRef | null;
+  added_at: string;
+}
+
+export function useProjectMembers(projectId: string | null) {
+  return useQuery({
+    queryKey: ["project-members", projectId],
+    enabled: Boolean(projectId),
+    queryFn: () => apiFetch<ProjectMember[]>(`/projects/${projectId}/members`),
+  });
+}
+
+/** PUT /projects/{p}/members/{u}: the project-level role, or null for the workspace role. */
+export function useSetProjectRole(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, roleId }: { userId: UUID; roleId: UUID | null }) =>
+      apiFetch<ProjectMember>(`/projects/${projectId}/members/${userId}`, {
+        method: "PUT",
+        json: { role_override_id: roleId },
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["project-members", projectId] }),
+  });
+}
