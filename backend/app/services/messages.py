@@ -21,6 +21,7 @@ import uuid
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import ColumnElement, and_, func, or_, select
 from sqlalchemy.orm import Session
@@ -231,6 +232,67 @@ def post_message(
     return message
 
 
+SYSTEM_KINDS = (MessageKind.ANALYSIS_CARD, MessageKind.SYSTEM)
+
+
+def post_system_message(
+    db: Session,
+    *,
+    channel: Channel,
+    body: str,
+    kind: MessageKind,
+    parent_id: uuid.UUID | None = None,
+    payload: dict[str, Any] | None = None,
+) -> Message:
+    """Post a message written by the app, not a member — a result card (US-31) or a notice.
+
+    Mentions in the body are parsed as for a member's message, so an @mentioned owner is notified.
+    Posts even in an archived channel: the card belongs to a requirement posted before archiving.
+    Commits and announces ``message.created``.
+    """
+    if kind not in SYSTEM_KINDS:
+        raise ValueError(f"{kind} is not a system message kind")
+    project = _project(db, channel)
+    text = _clean_body(body)
+    message = Message(
+        channel_id=channel.id,
+        author_id=None,
+        parent_id=parent_id,
+        kind=kind,
+        body=text,
+        mentions=parse_mentions(db, channel, project.workspace_id, text),
+        payload=payload,
+        created_at=func.clock_timestamp(),
+    )
+    db.add(message)
+    db.commit()
+    db.refresh(message)
+    announce(MESSAGE_CREATED, project, channel, message)
+    return message
+
+
+def update_system_message(
+    db: Session, *, message: Message, body: str, payload: dict[str, Any] | None
+) -> Message:
+    """Rewrite a system card (e.g. "waiting for budget" → the results). Announces
+    ``message.updated``; members' own messages never go through here."""
+    if message.kind not in SYSTEM_KINDS or message.author_id is not None:
+        raise ValueError("Only system messages are updated by the app")
+    channel = db.get(Channel, message.channel_id)
+    if channel is None:
+        raise NotFoundError("Channel not found")
+    project = _project(db, channel)
+    text = _clean_body(body)
+    message.body = text
+    message.mentions = parse_mentions(db, channel, project.workspace_id, text)
+    message.payload = payload
+    message.edited_at = datetime.now(UTC)
+    db.commit()
+    db.refresh(message)
+    announce(MESSAGE_UPDATED, project, channel, message)
+    return message
+
+
 def _own_chat_message(message: Message, user: User) -> None:
     if message.author_id != user.id:
         raise ForbiddenError("You can only change your own messages")
@@ -313,7 +375,7 @@ def _views(
     if not messages:
         return []
     project = _project(db, channel)
-    authors = {message.author_id for message in messages}
+    authors = {message.author_id for message in messages if message.author_id is not None}
     members = set(
         db.scalars(
             select(Membership.user_id).where(

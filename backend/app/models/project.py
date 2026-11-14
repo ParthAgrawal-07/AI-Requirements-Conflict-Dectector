@@ -5,7 +5,7 @@ budget and approval settings. A project starts in ``setup`` and becomes ``active
 its context is confirmed (FR-103, US-60); no analysis may run before that (ContextGate,
 ``app.services.projects.ensure_project_active``).
 
-Columns added by later migrations: ``graph_revision`` (0006), ``baseline_revision`` (0007),
+Columns added by later migrations: ``graph_revision`` (0006d), ``baseline_revision`` (0007),
 ``use_feedback_examples`` (0010b). The context itself lives in ``project_contexts`` (0011,
 Bansil, ``app.models.context``).
 """
@@ -44,6 +44,7 @@ class Project(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         CheckConstraint("llm_budget_monthly_calls >= 0", name="llm_budget_non_negative"),
         CheckConstraint("required_approvals BETWEEN 1 AND 3", name="required_approvals_range"),
         CheckConstraint("context_version >= 0", name="context_version_non_negative"),
+        CheckConstraint("graph_revision >= 0", name="graph_revision_non_negative"),
         Index("ix_projects_workspace_id_status", "workspace_id", "status"),
     )
 
@@ -75,6 +76,8 @@ class Project(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         default=False, server_default=text("false")
     )  # SX-04, NFR-30: chat text goes to the LLM only if a manager switches this on
     required_approvals: Mapped[int] = mapped_column(default=1, server_default=text("1"))
+    # Live map (US-14, ADR-21): +1 per ``graph.delta``, owned by ``app.graph.deltas`` (Dhavni).
+    graph_revision: Mapped[int] = mapped_column(default=0, server_default=text("0"))
 
     # Users are deactivated, never deleted, so SET NULL only matters for odd cleanup scripts.
     created_by: Mapped[uuid.UUID | None] = mapped_column(

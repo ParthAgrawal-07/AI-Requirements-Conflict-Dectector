@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -17,6 +18,8 @@ from app.models import (
     User,
     Workspace,
 )
+from app.realtime import bus
+from app.realtime.events import GRAPH_DELTA
 from tests.api.conftest import headers_for
 
 
@@ -138,3 +141,116 @@ def test_another_workspaces_graph_is_a_404(
     stranger = make_user(role=DefaultRole.OWNER, workspace=make_workspace())
     response = client.get(f"/api/v1/projects/{project.id}/graph", headers=headers_for(stranger))
     assert response.status_code == 404
+
+
+# ── Sprint 3: revisions, hidden edges, positions (US-14) ───────────────────────────────────
+def test_a_client_holding_the_current_revision_gets_304(
+    client: TestClient, db_session: Session, project: Project, user: User
+) -> None:
+    project.graph_revision = 7
+    db_session.commit()
+    url = f"/api/v1/projects/{project.id}/graph"
+
+    current = client.get(url, params={"revision": 7}, headers=headers_for(user))
+    behind = client.get(url, params={"revision": 6}, headers=headers_for(user))
+
+    assert current.status_code == 304 and current.content == b""
+    assert behind.status_code == 200 and behind.json()["revision"] == 7
+
+
+def test_stale_and_merged_findings_are_not_on_the_map(
+    client: TestClient,
+    db_session: Session,
+    project: Project,
+    user: User,
+    make_requirement: Callable[..., Requirement],
+) -> None:
+    a, b, c = make_requirement("A"), make_requirement("B"), make_requirement("C")
+    _pair_finding(db_session, a, b, FindingCategory.DUPLICATE, is_stale=True)
+    _pair_finding(db_session, a, c, FindingCategory.DUPLICATE, status=FindingStatus.MERGED)
+    url = f"/api/v1/projects/{project.id}/graph"
+
+    shown = client.get(url, params={"include_dismissed": True}, headers=headers_for(user))
+
+    assert shown.json()["edges"] == []
+
+
+def test_saved_positions_come_back_in_the_snapshot_and_reach_other_maps(
+    client: TestClient,
+    db_session: Session,
+    project: Project,
+    make_user: Callable[..., User],
+    make_requirement: Callable[..., Requirement],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    test_bus = bus.InProcessEventBus()
+    monkeypatch.setattr(bus, "get_bus", lambda: test_bus)
+    requirement = make_requirement("A", source_req_id="REQ-001")
+    developer = make_user(role=DefaultRole.DEVELOPER)
+
+    saved = client.put(
+        f"/api/v1/projects/{project.id}/graph/positions",
+        json={"positions": [{"requirement_id": str(requirement.id), "x": 12.5, "y": -40}]},
+        headers=headers_for(developer),
+    )
+
+    assert saved.status_code == 204
+    (node,) = client.get(
+        f"/api/v1/projects/{project.id}/graph", headers=headers_for(developer)
+    ).json()["nodes"]
+    assert (node["x"], node["y"]) == (12.5, -40)
+    (event,) = [e for e in test_bus.published if e.type == GRAPH_DELTA]
+    assert event.data["sentences"] == []  # layout only: nothing to say in the feed
+    assert event.data["changed"]["nodes"][0]["x"] == 12.5
+
+
+def test_a_viewer_cannot_rearrange_the_shared_layout(
+    client: TestClient,
+    project: Project,
+    make_user: Callable[..., User],
+    make_requirement: Callable[..., Requirement],
+) -> None:
+    requirement = make_requirement("A")
+
+    response = client.put(
+        f"/api/v1/projects/{project.id}/graph/positions",
+        json={"positions": [{"requirement_id": str(requirement.id), "x": 1, "y": 1}]},
+        headers=headers_for(make_user(role=DefaultRole.VIEWER)),
+    )
+
+    assert response.status_code == 403
+
+
+def test_positions_for_another_projects_requirements_are_refused(
+    client: TestClient,
+    db_session: Session,
+    project: Project,
+    user: User,
+    make_project: Callable[..., Project],
+    make_requirement: Callable[..., Requirement],
+) -> None:
+    other = make_project()
+    requirement = make_requirement("A")
+
+    response = client.put(
+        f"/api/v1/projects/{other.id}/graph/positions",
+        json={"positions": [{"requirement_id": str(requirement.id), "x": 1, "y": 1}]},
+        headers=headers_for(user),
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "unknown_requirement"
+
+
+def test_positions_must_be_finite(
+    client: TestClient, project: Project, user: User, make_requirement: Callable[..., Requirement]
+) -> None:
+    requirement = make_requirement("A")
+
+    response = client.put(
+        f"/api/v1/projects/{project.id}/graph/positions",
+        json={"positions": [{"requirement_id": str(requirement.id), "x": 1e12, "y": 1}]},
+        headers=headers_for(user),
+    )
+
+    assert response.status_code == 422
