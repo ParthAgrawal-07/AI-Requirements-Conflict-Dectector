@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.core import security
 from app.core.permissions import DEFAULT_ROLE_PERMISSIONS, PERMISSIONS, DefaultRole
+from app.embeddings.model import HashingEmbedder, get_embedder
 from app.models import (
     Channel,
     Document,
@@ -42,7 +43,7 @@ from app.models import (
 from app.services import documents as document_service
 from app.services import join_codes as join_code_service
 from app.services.access import Scope, build_access_context
-from app.services.membership import get_default_role
+from app.services.membership import add_member, get_default_role
 from app.services.storage import LocalFileStorage, get_storage
 from app.services.users import create_user
 from tests.api.test_access_invariants import _api_routes, _declarations
@@ -189,6 +190,8 @@ CASES = [
     # Sprint 2 — findings (US-07)
     Case("GET", "/api/v1/projects/{project_id}/findings"),
     Case("GET", "/api/v1/findings/{finding_id}"),
+    # Sprint 3 — similar-requirement hints (Heet, FR-83)
+    Case("POST", "/api/v1/projects/{project_id}/similar", lambda _: {"text": "audit logs"}),
 ]
 
 
@@ -290,8 +293,10 @@ def api(
 
     monkeypatch.setattr(document_service, "dispatch_processing", lambda _id: "task-1")
     app.dependency_overrides[get_storage] = lambda: LocalFileStorage(tmp_path / "uploads")
+    app.dependency_overrides[get_embedder] = HashingEmbedder
     yield client
     app.dependency_overrides.pop(get_storage, None)
+    app.dependency_overrides.pop(get_embedder, None)
 
 
 def _call(api: TestClient, case: Case, world: World, user: User) -> int:
@@ -352,3 +357,51 @@ def test_every_permission_route_is_in_the_matrix() -> None:
         and not route.path.startswith("/api/v1/reports")
     }
     assert declared <= covered, f"add these routes to CASES: {sorted(declared - covered)}"
+
+
+# ── 3. Custom roles × routes (US-49) ────────────────────────────────────────────────────────
+CUSTOM_ROLES = {
+    # The Sprint 2 exit criterion: reviews change requests but never proposes.
+    "External reviewer": frozenset({"view", "message.post", "req.comment", "rcr.review"}),
+    "Channel steward": frozenset({"view", "message.post", "channel.manage"}),
+    "Read only": frozenset({"view"}),
+}
+
+
+@pytest.mark.parametrize("name", list(CUSTOM_ROLES))
+@pytest.mark.parametrize("case", CASES, ids=lambda case: f"{case.method} {case.path}")
+def test_a_custom_role_gets_exactly_its_permissions(
+    api: TestClient,
+    db_session: Session,
+    world: World,
+    make_user: Callable[..., User],
+    case: Case,
+    name: str,
+) -> None:
+    held = CUSTOM_ROLES[name]
+    role = Role(
+        workspace_id=world.workspace.id,
+        name=name,
+        permissions=[RolePermission(permission=p) for p in sorted(held)],
+    )
+    db_session.add(role)
+    db_session.commit()
+    member = make_user(role=None)
+    add_member(db_session, workspace_id=world.workspace.id, user_id=member.id, role_id=role.id)
+    needed = case.needs or _declared_permission(case.method, case.path)[0]
+
+    status = _call(api, case, world, member)
+
+    if needed in held:
+        assert status not in (401, 403, 404), f"{name} should pass, got {status}"
+    else:
+        assert status == 403, f"{name} should be refused, got {status}"
+
+
+def test_a_client_reviewer_cannot_propose_but_can_comment() -> None:
+    """The exit criterion in one line, read from the routes' own declarations."""
+    reviewer = CUSTOM_ROLES["External reviewer"]
+    propose = _declared_permission("POST", "/api/v1/channels/{channel_id}/requirement-posts")
+    post_message = _declared_permission("POST", "/api/v1/channels/{channel_id}/messages")
+    assert propose[0] not in reviewer
+    assert post_message[0] in reviewer
