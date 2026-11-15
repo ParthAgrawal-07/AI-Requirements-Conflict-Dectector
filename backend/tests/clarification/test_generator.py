@@ -9,6 +9,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.clarification import tasks as clarification_tasks
 from app.clarification.generator import (
     MAX_GENERIC_RETRIES,
     PROMPT_VERSION,
@@ -287,3 +288,15 @@ def test_an_exhausted_budget_stops_the_batch(
     )
 
     assert created == [] and db_session.scalar(select(Clarification)) is None
+
+
+def test_automatic_questions_per_run_are_capped(
+    db_session: Session, posted_run: tuple[AnalysisRun, User], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run, _ = posted_run
+    monkeypatch.setattr(clarification_tasks, "MAX_AUTO_QUESTIONS_PER_RUN", 0)
+    transport = FakeTransport([reply()])
+
+    created = questions_for_run(db_session, run.id, LLMClient(transport))
+
+    assert created == [] and transport.calls == []

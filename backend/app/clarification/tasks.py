@@ -7,9 +7,10 @@ reply in its thread, @mentioning the owners of the requirements involved (US-36)
 card is rewritten to show it (US-31). Findings about extracted requirements have no thread: the
 question shows on the finding card; for a conflict issue it becomes the first comment (S4).
 
-An exhausted budget stops the batch (the rest wait for the next run or a manual request); a
-model that keeps answering invalid or generic output skips that finding. An unavailable provider
-retries the task with backoff. ``clarifications.generate_for_finding`` does the same for one
+At most :data:`MAX_AUTO_QUESTIONS_PER_RUN` questions are generated per run, most confident
+finding first. An exhausted budget stops the batch (the rest wait for the next run or a manual
+request); a model that keeps answering invalid or generic output skips that finding. An
+unavailable provider retries the task with backoff. ``clarifications.generate_for_finding`` does the same for one
 finding on request (``POST /findings/{id}/clarification``).
 """
 
@@ -47,6 +48,10 @@ logger = logging.getLogger(__name__)
 
 GENERATE_FOR_RUN = "clarifications.generate_for_run"
 GENERATE_FOR_FINDING = "clarifications.generate_for_finding"
+# Each question can take several LLM calls (generic and invalid replies are re-asked), so a run
+# over a whole document would otherwise spend the project's monthly budget on questions alone
+# (NFR-28). The most confident findings are asked first; the rest on request from the finding.
+MAX_AUTO_QUESTIONS_PER_RUN = 20
 
 
 def questions_for_run(db: Session, run_id: uuid.UUID, llm: LLMClient) -> list[Clarification]:
@@ -60,8 +65,8 @@ def questions_for_run(db: Session, run_id: uuid.UUID, llm: LLMClient) -> list[Cl
             .where(Finding.analysis_run_id == run.id)
             .order_by(Finding.confidence.desc(), Finding.created_at)
         )
-        if needs_question(f)
-    ]
+        if needs_question(f) and f.clarification is None
+    ][:MAX_AUTO_QUESTIONS_PER_RUN]
     created: list[Clarification] = []
     for finding in findings:
         try:
