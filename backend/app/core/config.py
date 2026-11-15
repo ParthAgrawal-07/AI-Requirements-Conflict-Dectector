@@ -105,6 +105,10 @@ class Settings(BaseSettings):
     # Heet (US-05): neighbours per requirement sent to the classifier. Recall over cost: raise it
     # before lowering the similarity threshold.
     candidate_top_k: int = Field(default=10, ge=1, le=50)
+    # Heet (US-51, FR-83): the composer's "similar requirements" panel. Lower than the candidate
+    # threshold on purpose — a hint is cheap to ignore, a missed duplicate is not.
+    similar_hint_min_similarity: float = Field(default=0.5, ge=0, le=1)
+    similar_requests_per_minute: int = Field(default=60, ge=1, le=1000)
     llm_provider: Literal["gemini", "groq", "anthropic", "openai"] = "gemini"
     llm_fallback_provider: Literal["groq", "none"] | None = "groq"
     gemini_api_key: SecretStr | None = None
