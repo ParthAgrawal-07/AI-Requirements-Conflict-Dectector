@@ -98,6 +98,17 @@ def _fast_password_hashing(monkeypatch: pytest.MonkeyPatch) -> None:
     security.dummy_password_hash.cache_clear()
 
 
+@pytest.fixture(autouse=True)
+def followups(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, list[str]]]:
+    """Tasks the orchestrator queues by name after a run (``analysis.after_run``), recorded
+    instead of sent: unit tests have no worker. A test runs them itself when it cares."""
+    from app.services import analysis_orchestrator
+
+    sent: list[tuple[str, list[str]]] = []
+    monkeypatch.setattr(analysis_orchestrator, "send", lambda name, args: sent.append((name, args)))
+    return sent
+
+
 # ── Database ─────────────────────────────────────────────────────────────────
 def _ensure_database(url_str: str) -> None:
     """Create the target database if it does not exist yet."""

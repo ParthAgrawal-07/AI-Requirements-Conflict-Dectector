@@ -43,14 +43,18 @@ export function MessageItem({ message, members, canPost, onOpenThread }: Message
   const edit = useEditMessage();
   const remove = useDeleteMessage();
   const names = new Map(members.map((m) => [m.user.id, m.user.full_name]));
-  const mine = user?.id === message.author.id;
+  const author = message.author;
+  const mine = author !== null && user?.id === author.id;
   const editable = mine && canPost && message.kind === "chat" && !message.deleted;
 
   return (
-    <article className={`message message-${message.kind}`} aria-label={`Message from ${message.author.full_name}`}>
+    <article
+      className={`message message-${message.kind}`}
+      aria-label={author ? `Message from ${author.full_name}` : "Message from the app"}
+    >
       <header className="message-header">
-        <strong>{message.author.full_name}</strong>
-        {!message.author.is_member && <span className="muted"> (former member)</span>}{" "}
+        <strong>{author ? author.full_name : "RCD"}</strong>
+        {author && !author.is_member && <span className="muted"> (former member)</span>}{" "}
         <time className="muted" dateTime={message.created_at}>
           {time(message.created_at)}
         </time>
