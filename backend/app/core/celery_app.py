@@ -50,6 +50,8 @@ celery_app.conf.update(
     # module never imports their code.
     beat_schedule={
         "expire-join-codes": {"task": "join_codes.expire", "schedule": 15 * 60},  # US-25
+        # US-31, NFR-28: runs parked for budget resume when the project has calls left again.
+        "resume-waiting-runs": {"task": "analysis.resume_waiting", "schedule": 10 * 60},
     },
 )
 
