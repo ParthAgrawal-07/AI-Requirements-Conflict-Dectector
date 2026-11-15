@@ -139,7 +139,9 @@ def test_the_event_names_requirements_by_id_and_never_carries_their_text(
     assert event.project_id == project.id and event.workspace_id == project.workspace_id
     assert event.data["actor_name"] == "Test User"
     assert event.data["added"]["nodes"][0]["label"] == "REQ-031"
-    assert "4711" not in event.model_dump_json()
+    # Words, not the digits: "4711" can occur in a random UUID's hex and fail by chance.
+    payload = event.model_dump_json()
+    assert "vault code" not in payload and "leave the building" not in payload
 
 
 def test_a_finished_post_run_adds_its_edges_places_its_node_and_says_so(
