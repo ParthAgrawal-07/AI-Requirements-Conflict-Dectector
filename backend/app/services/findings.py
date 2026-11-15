@@ -110,6 +110,12 @@ def list_findings(
     return views, total
 
 
+def views_of(db: Session, project: Project, findings: list[Finding]) -> list[FindingView]:
+    """Finding cards for findings already loaded (e.g. one run's, US-31)."""
+    involved = _involved(db, findings)
+    return [FindingView(f, involved[f.id], project.confidence_threshold) for f in findings]
+
+
 def get_finding(
     db: Session, finding_id: uuid.UUID, viewer: User, workspace_id: uuid.UUID
 ) -> FindingView:

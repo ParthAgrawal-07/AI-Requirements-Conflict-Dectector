@@ -25,6 +25,9 @@ from sqlalchemy.orm import Session
 from app.core import security
 from app.core.permissions import DEFAULT_ROLE_PERMISSIONS, PERMISSIONS, DefaultRole
 from app.models import (
+    AnalysisRun,
+    AnalysisRunStatus,
+    AnalysisScope,
     Channel,
     Document,
     DocumentFormat,
@@ -80,6 +83,7 @@ class World:
     custom_role: Role  # an unused custom role ("Client reviewer")
     message: Message  # a chat message by the Owner in `channel`
     finding: Finding  # an Ambiguous finding about a requirement of `document`
+    run: AnalysisRun  # a finished analysis of `document`
     db: Session
 
 
@@ -181,6 +185,8 @@ CASES = [
     # Sprint 2 — findings (US-07)
     Case("GET", "/api/v1/projects/{project_id}/findings"),
     Case("GET", "/api/v1/findings/{finding_id}"),
+    # Sprint 3 — a run's results, behind the result card (Keval, US-31)
+    Case("GET", "/api/v1/analysis-runs/{analysis_run_id}"),
 ]
 
 
@@ -257,6 +263,13 @@ def world(
         original_ai_output={},
     )
     db_session.add(finding)
+    run = AnalysisRun(
+        project_id=project.id,
+        scope=AnalysisScope.DOCUMENT,
+        subject_id=document.id,
+        status=AnalysisRunStatus.DONE,
+    )
+    db_session.add(run)
     db_session.commit()
     return World(
         workspace=workspace,
@@ -270,6 +283,7 @@ def world(
         custom_role=custom_role,
         message=message,
         finding=finding,
+        run=run,
         db=db_session,
     )
 
@@ -304,6 +318,7 @@ def _call(api: TestClient, case: Case, world: World, user: User) -> int:
         channel_id=world.channel.id,
         user_id=world.target.id,
         role_id=world.custom_role.id,
+        analysis_run_id=world.run.id,
     )
     headers = {"Authorization": f"Bearer {security.create_access_token(user.id)[0]}"}
     body = case.body(world)

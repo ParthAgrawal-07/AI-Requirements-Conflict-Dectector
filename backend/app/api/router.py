@@ -14,6 +14,7 @@ from typing import Any
 from fastapi import APIRouter, Depends
 
 from app.api import (
+    analysis_runs,
     auth,
     channels,
     context,
@@ -56,6 +57,7 @@ for _router in (
     messages.router,
     graph_api.router,
     findings.router,
+    analysis_runs.router,
 ):
     api_router.include_router(_router, dependencies=_authenticated, responses=_unauthorized)
 
