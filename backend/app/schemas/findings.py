@@ -1,13 +1,23 @@
-"""Finding schemas (Keval with Abhijeet — US-07). AI output is labelled ``source = "AI"``."""
+"""Finding schemas (Keval with Abhijeet — US-07; Parth — US-10 review). AI output is labelled
+``source = "AI"``; after a human review the AI's own category stays visible as ``ai_category``
+(FR-20)."""
 
 import uuid
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
-from app.models import FindingCategory, FindingStatus, RequirementOrigin, RequirementState, Severity
+from app.models import (
+    FindingCategory,
+    FindingReview,
+    FindingStatus,
+    RequirementOrigin,
+    RequirementState,
+    Severity,
+)
 from app.services.findings import FindingView
+from app.services.review_state import ReviewAction
 
 
 class FindingRequirement(BaseModel):
@@ -54,6 +64,11 @@ class FindingRead(BaseModel):
     prompt_version: str | None
     analysis_run_id: uuid.UUID | None
     created_at: datetime
+    # US-10: the category the model gave (unchanged by a reclassification) and the last review.
+    ai_category: FindingCategory | None = None
+    merged_into_id: uuid.UUID | None = None
+    reviewed_by: uuid.UUID | None = None
+    reviewed_at: datetime | None = None
 
     @classmethod
     def from_view(cls, view: FindingView) -> "FindingRead":
@@ -92,4 +107,54 @@ class FindingRead(BaseModel):
             prompt_version=finding.prompt_version,
             analysis_run_id=finding.analysis_run_id,
             created_at=finding.created_at,
+            ai_category=_category(output.get("category")),
+            merged_into_id=finding.merged_into_id,
+            reviewed_by=finding.reviewed_by,
+            reviewed_at=finding.reviewed_at,
+        )
+
+
+def _category(value: object) -> FindingCategory | None:
+    try:
+        return FindingCategory(str(value))
+    except ValueError:  # "None" or a value from an older prompt
+        return None
+
+
+class ReviewRequest(BaseModel):
+    """``POST /findings/{id}/review`` (US-10)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    action: ReviewAction
+    reason: str | None = Field(default=None, max_length=2000)  # required to dismiss
+    category: FindingCategory | None = None  # reclassify
+    merge_into: uuid.UUID | None = None  # merge
+
+
+class FindingReviewRead(BaseModel):
+    id: uuid.UUID
+    action: ReviewAction
+    actor_id: uuid.UUID
+    from_status: FindingStatus
+    to_status: FindingStatus
+    from_category: FindingCategory
+    to_category: FindingCategory
+    reason: str | None
+    merged_into_id: uuid.UUID | None
+    created_at: datetime
+
+    @classmethod
+    def from_model(cls, row: FindingReview) -> "FindingReviewRead":
+        return cls(
+            id=row.id,
+            action=cast(ReviewAction, row.action),  # the CHECK constraint keeps it in range
+            actor_id=row.actor_id,
+            from_status=row.from_status,
+            to_status=row.to_status,
+            from_category=row.from_category,
+            to_category=row.to_category,
+            reason=row.reason,
+            merged_into_id=row.merged_into_id,
+            created_at=row.created_at,
         )
