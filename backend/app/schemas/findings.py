@@ -17,12 +17,8 @@ from app.models import (
 )
 from app.services.findings import FindingView
 
-try:
-    from app.models import FindingReview
-    from app.services.review_state import ReviewAction
-except ImportError:
-    FindingReview = Any  # type: ignore[assignment, misc]
-    ReviewAction = str  # type: ignore[assignment, misc]
+ReviewAction = str
+FindingReview = Any
 
 
 class FindingRequirement(BaseModel):

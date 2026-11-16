@@ -124,7 +124,7 @@ def message_event(
     private: bool,
     message_id: uuid.UUID,
     parent_id: uuid.UUID | None,
-    author_id: uuid.UUID,
+    author_id: uuid.UUID | None,
     mentions: list[str],
 ) -> Event:
     """A message was posted, edited or deleted (``message.*``). Never the body (CR-04)."""
@@ -138,7 +138,7 @@ def message_event(
             "message_id": str(message_id),
             "channel_id": str(channel_id),
             "parent_id": str(parent_id) if parent_id else None,
-            "author_id": str(author_id),
+            "author_id": str(author_id) if author_id else None,
             "mentions": mentions,
             "private": private,
         },
@@ -152,6 +152,7 @@ def analysis_completed(
     run_id: uuid.UUID,
     subject_id: uuid.UUID,
     status: str,
+    scope: str = "document",
     pairs_total: int,
     pairs_failed: int,
     checks_total: int,
@@ -166,6 +167,7 @@ def analysis_completed(
         data={
             "run_id": str(run_id),
             "subject_id": str(subject_id),
+            "scope": scope,
             "status": status,
             "pairs_total": pairs_total,
             "pairs_failed": pairs_failed,
