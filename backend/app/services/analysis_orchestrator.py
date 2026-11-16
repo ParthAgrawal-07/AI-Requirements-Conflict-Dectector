@@ -54,6 +54,7 @@ Dispatch = Callable[[str, list[str]], None]
 Outcome = Literal["done", "failed", "budget"]
 
 RUN_DOCUMENT = "analysis.run_document"
+RUN_REQUIREMENT = "analysis.run_requirement"
 CLASSIFY_PAIR = "analysis.classify_pair"
 CHECK_REQUIREMENT = "analysis.check_requirement"
 NOT_ANALYSED = (RequirementState.REJECTED, RequirementState.DEPRECATED)
@@ -70,6 +71,25 @@ def send(name: str, args: list[str]) -> None:
 
 def dispatch_document(document_id: uuid.UUID, dispatch: Dispatch = send) -> None:
     dispatch(RUN_DOCUMENT, [str(document_id)])
+
+
+def queue_requirement_run(db: Session, requirement: Requirement) -> AnalysisRun:
+    """A queued run for a posted (or changed) requirement, **in the caller's transaction** — the
+    post, its message and its run commit together (US-31). Dispatch it after the commit with
+    :func:`dispatch_requirement_run`."""
+    run = AnalysisRun(
+        project_id=requirement.project_id,
+        scope=AnalysisScope.REQUIREMENT,
+        subject_id=requirement.id,
+        status=AnalysisRunStatus.QUEUED,
+    )
+    db.add(run)
+    db.flush()
+    return run
+
+
+def dispatch_requirement_run(run_id: uuid.UUID, dispatch: Dispatch = send) -> None:
+    dispatch(RUN_REQUIREMENT, [str(run_id)])
 
 
 def analyse_project(db: Session, project_id: uuid.UUID, dispatch: Dispatch = send) -> int:
