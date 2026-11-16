@@ -220,6 +220,9 @@ export function applyEvent(queryClient: QueryClient, event: RealtimeEvent): void
     }
   } else if (event.type === "analysis.completed" && event.project_id) {
     void queryClient.invalidateQueries({ queryKey: ["findings", event.project_id] });
+    if (event.entity_id) {
+      void queryClient.invalidateQueries({ queryKey: ["analysis-run", event.entity_id] });
+    }
   } else if (event.type.startsWith("message.") && event.entity_id) {
     // Ids only in the event (CR-04): re-read the message, which re-checks access, then patch.
     void apiFetch<Message>(`/messages/${event.entity_id}`)
