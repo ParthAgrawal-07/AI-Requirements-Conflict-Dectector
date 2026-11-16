@@ -285,7 +285,7 @@ class TestProjectAndLifecycleColumns:
         assert {r.project_id for r in rows} == {document.project_id}
         assert {r.state for r in rows} == {RequirementState.PROPOSED}
         assert {r.origin for r in rows} == {RequirementOrigin.DOCUMENT}
-        assert {r.owner_id for r in rows} == {None}
+        assert {r.owner_id for r in rows} == {document.uploaded_by}  # US-36: the uploader
 
     def test_baseline_import_makes_requirements_approved(
         self, db_session: Session, storage: LocalFileStorage, make_stored_document: MakeDoc

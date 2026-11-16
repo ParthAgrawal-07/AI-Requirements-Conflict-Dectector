@@ -38,6 +38,7 @@ from app.models import (
     FindingCategory,
     JoinRequest,
     Message,
+    OwnershipRequest,
     Project,
     Requirement,
     Role,
@@ -86,6 +87,7 @@ class World:
     custom_role: Role  # an unused custom role ("Client reviewer")
     message: Message  # a chat message by the Owner in `channel`
     finding: Finding  # an Ambiguous finding about a requirement of `document`
+    ownership_request: OwnershipRequest  # `target` asks to own that requirement
     db: Session
 
 
@@ -198,6 +200,16 @@ CASES = [
         needs="baseline.manage",
     ),
     Case("POST", "/api/v1/requirements/{requirement_id}/signoff", lambda _: {"version": 1}),
+    # Sprint 3 — ownership (Bansil, US-36). Deciding is for the owner or whoever may reassign; the
+    # world's requirement has no owner, so it needs baseline.manage.
+    Case("POST", "/api/v1/requirements/{requirement_id}/ownership-requests", lambda _: {}),
+    Case("GET", "/api/v1/requirements/{requirement_id}/ownership-requests"),
+    Case(
+        "POST",
+        "/api/v1/ownership-requests/{ownership_request_id}/decision",
+        lambda _: {"accept": True},
+        needs="baseline.manage",
+    ),
     # Sprint 3 — the live map's shared layout (Dhavni, US-14)
     Case(
         "PUT",
@@ -285,6 +297,9 @@ def world(
     )
     db_session.add(finding)
     db_session.commit()
+    ownership_request = OwnershipRequest(requirement_id=vague.id, requester_id=target.id)
+    db_session.add(ownership_request)
+    db_session.commit()
     return World(
         workspace=workspace,
         project=project,
@@ -297,6 +312,7 @@ def world(
         custom_role=custom_role,
         message=message,
         finding=finding,
+        ownership_request=ownership_request,
         db=db_session,
     )
 
@@ -334,6 +350,7 @@ def _call(api: TestClient, case: Case, world: World, user: User) -> int:
         user_id=world.target.id,
         role_id=world.custom_role.id,
         requirement_id=world.finding.requirement_id,
+        ownership_request_id=world.ownership_request.id,
     )
     headers = {"Authorization": f"Bearer {security.create_access_token(user.id)[0]}"}
     body = case.body(world)

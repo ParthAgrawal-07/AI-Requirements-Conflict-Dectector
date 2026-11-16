@@ -3,8 +3,13 @@ import type { RequirementRead, RequirementState } from "../../api/types";
 import { useAuth } from "../../app/auth";
 import { Badge } from "../../components/Badge";
 import type { BadgeTone } from "../../components/Badge";
+import { useParams } from "react-router-dom";
+import { usePermissions } from "../../app/usePermissions";
 import { Button } from "../../components/Button";
+import { useMembers } from "../channels/api";
 import { useRequirements, type RequirementFilters } from "./api";
+import { OwnerChip } from "./OwnerChip";
+import { OwnershipRequestDialog } from "./OwnershipRequestDialog";
 
 const PAGE_SIZE = 50;
 
@@ -86,6 +91,11 @@ export function RequirementsTable({
   };
   const { data, isLoading, isError, error } = useRequirements(projectId, filters);
   const total = data?.total ?? 0;
+  const [ownership, setOwnership] = useState<RequirementRead | null>(null);
+  const { can } = usePermissions({ projectId });
+  const { workspaceId } = useParams();
+  const members = useMembers(workspaceId);
+  const names = new Map((members.data ?? []).map((m) => [m.user.id, m.user.full_name]));
 
   return (
     <section aria-label="Requirements">
@@ -182,7 +192,17 @@ export function RequirementsTable({
                   <td>
                     <StateBadge requirement={item} />
                   </td>
-                  <td>{item.owner_name ?? <span className="muted">Unassigned</span>}</td>
+                  <td>
+                    <OwnerChip ownerName={item.owner_name} group={null} />{" "}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      aria-label={`Ownership of ${item.source_req_id ?? "this requirement"}`}
+                      onClick={() => setOwnership(item)}
+                    >
+                      Ownership…
+                    </Button>
+                  </td>
                   <td>{ORIGIN_LABEL[item.origin]}</td>
                   <td>{item.stakeholder_group ?? <span className="muted">—</span>}</td>
                 </tr>
@@ -212,6 +232,18 @@ export function RequirementsTable({
             Next
           </Button>
         </div>
+      )}
+
+      {ownership && (
+        <OwnershipRequestDialog
+          open
+          onClose={() => setOwnership(null)}
+          projectId={projectId}
+          requirement={ownership}
+          canRequest={can("req.propose")}
+          canManage={can("baseline.manage")}
+          names={names}
+        />
       )}
     </section>
   );

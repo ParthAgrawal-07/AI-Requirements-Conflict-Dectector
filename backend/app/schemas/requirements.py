@@ -88,11 +88,14 @@ class RequirementDetail(RequirementRead):
 
 
 class RequirementUpdate(BaseModel):
-    """``PATCH /requirements/{id}``: a lifecycle move. Text never changes here — that is a change
-    request (US-33)."""
+    """``PATCH /requirements/{id}``: a lifecycle move and/or a new owner or stakeholder group
+    (US-36). Text never changes here — that is a change request (US-33). Send only what changes;
+    ``"stakeholder_group": null`` clears the group."""
 
     model_config = ConfigDict(extra="forbid")
 
+    owner_id: uuid.UUID | None = None
+    stakeholder_group: str | None = Field(default=None, max_length=120)
     state: RequirementState | None = None
     # The version the caller read and decided on (FR-98); required with ``state``.
     version: int | None = Field(default=None, ge=1)
@@ -111,3 +114,33 @@ class SignOffRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     version: int = Field(ge=1)
+
+
+# ── Ownership requests (Bansil — US-36, FR-59) ──────────────────────────────────────────────
+class OwnershipRequestCreate(BaseModel):
+    """``POST /requirements/{id}/ownership-requests``: ask to own a requirement."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class OwnershipDecision(BaseModel):
+    """``POST /ownership-requests/{id}/decision``: the owner or a manager accepts or declines."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    accept: bool
+
+
+class OwnershipRequestRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    requirement_id: uuid.UUID
+    requester_id: uuid.UUID
+    status: str
+    note: str | None
+    decided_by: uuid.UUID | None
+    decided_at: datetime | None
+    created_at: datetime
