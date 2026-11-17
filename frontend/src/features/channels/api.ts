@@ -38,7 +38,10 @@ export interface Message {
   parent_id: UUID | null;
   kind: MessageKind;
   body: string;
-  author: { id: UUID; full_name: string; is_member: boolean };
+  /** null: a system message written by the app (a result card, US-31). */
+  author: { id: UUID; full_name: string; is_member: boolean } | null;
+  /** A card's ids (run_id, requirement_id…); details are read over REST. */
+  payload?: Record<string, unknown> | null;
   mentions: UUID[];
   created_at: string;
   edited_at: string | null;
