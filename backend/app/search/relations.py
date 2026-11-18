@@ -153,6 +153,90 @@ def similar_neighbours(
     return [(n.requirement_id, min(1.0, n.similarity)) for n in neighbours]
 
 
+def related(
+    db: Session,
+    requirement_id: uuid.UUID,
+    *,
+    hops: int = 2,
+    similar_k: int = SIMILAR_K,
+) -> list[Related]:
+    """Requirements related to ``requirement_id``, nearest and strongest first (see module doc)."""
+    source = db.get(Requirement, requirement_id)
+    if source is None:
+        return []
+    found: dict[uuid.UUID, Related] = {}
+
+    def offer(candidate: Related) -> None:
+        current = found.get(candidate.requirement_id)
+        if current is None or (candidate.depth, STRENGTH[candidate.kind]) < (
+            current.depth,
+            STRENGTH[current.kind],
+        ):
+            found[candidate.requirement_id] = candidate
+
+    for edge in finding_edges(db, [source.id]):
+        offer(
+            Related(
+                edge.target,
+                None,
+                1,
+                edge.kind,
+                [source.id, edge.target],
+                edge.finding_id,
+                severity=edge.severity,
+                via=[edge.kind],
+            )
+        )
+    linked = set(found)
+    for neighbour_id, similarity in similar_neighbours(db, source, k=similar_k, exclude=linked):
+        offer(
+            Related(
+                neighbour_id,
+                None,
+                1,
+                RelationKind.SIMILAR,
+                [source.id, neighbour_id],
+                similarity=round(similarity, 3),
+                via=[RelationKind.SIMILAR],
+            )
+        )
+
+    rows = _in_baseline_or_proposed(db, found)
+    found = {key: value for key, value in found.items() if key in rows}
+    if hops >= 2:
+        first = {r.requirement_id: r for r in found.values() if r.depth == 1}
+        for edge in finding_edges(db, list(first)):
+            if edge.target == source.id:
+                continue
+            parent = first[edge.source]
+            offer(
+                Related(
+                    edge.target,
+                    None,
+                    2,
+                    edge.kind,
+                    [*parent.path, edge.target],
+                    edge.finding_id,
+                    severity=edge.severity,
+                    via=[*parent.via, edge.kind],
+                )
+            )
+
+    found.pop(source.id, None)
+    rows.update(_in_baseline_or_proposed(db, set(found) - set(rows)))
+    result = []
+    for item in found.values():
+        requirement = rows.get(item.requirement_id)
+        if requirement is None:
+            continue
+        item.label = requirement.source_req_id
+        item.owner_id = requirement.owner_id
+        item.is_protected = requirement.is_protected
+        result.append(item)
+    result.sort(key=lambda r: (r.depth, STRENGTH[r.kind], r.label or "", str(r.requirement_id)))
+    return result
+
+
 def _in_baseline_or_proposed(
     db: Session, requirement_ids: Collection[uuid.UUID]
 ) -> dict[uuid.UUID, Requirement]:
