@@ -73,6 +73,40 @@ def move(db: Session, requirement: Requirement, state: RequirementState) -> None
     db.commit()
 
 
+@pytest.mark.parametrize("protected", [True, False])
+def test_get_audits_only_protected_requirement_reads(
+    client: TestClient,
+    db_session: Session,
+    requirement: Requirement,
+    analyst: User,
+    workspace: Workspace,
+    protected: bool,
+) -> None:
+    """Authorized protected reads record IDs and action without requirement text (NFR-13)."""
+    requirement.is_protected = protected
+    db_session.commit()
+
+    response = client.get(f"/api/v1/requirements/{requirement.id}", headers=headers_for(analyst))
+
+    assert response.status_code == 200
+    assert response.json()["requirement_id"] == str(requirement.id)
+    db_session.rollback()
+    records = db_session.scalars(
+        select(AuditLog).where(
+            AuditLog.requirement_id == requirement.id,
+            AuditLog.action == AuditAction.VIEWED_PROTECTED,
+        )
+    ).all()
+    if protected:
+        (record,) = records
+        assert record.actor_id == analyst.id
+        assert record.workspace_id == workspace.id
+        assert record.finding_id is None
+        assert record.details is None
+    else:
+        assert records == []
+
+
 def test_an_analyst_starts_the_review_and_approves_and_both_are_recorded(
     client: TestClient,
     db_session: Session,
