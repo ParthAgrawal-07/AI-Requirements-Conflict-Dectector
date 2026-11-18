@@ -253,9 +253,9 @@ def posted_run(
             "priority": "must",
         }
     )
-    _, posted = posts.post_requirement(db_session, channel=channel, author=user, fields=fields)
+    result = posts.post_requirement(db_session, channel=channel, author=user, fields=fields)
+    posted, run = result.requirement, result.run  # the post queues its own run (US-31)
     posted.source_req_id = "REQ-015"
-    run = orchestrator.queue_requirement_run(db_session, posted)
     db_session.commit()
     recorder = Recorder()
     orchestrator.start_requirement_run(
@@ -416,7 +416,7 @@ def test_suffixed_requirement_label_is_a_complete_reference() -> None:
     )
 
 
-def test_card_omits_oversized_entries_without_exceeding_message_limit(
+def test_card_shortens_an_oversized_entry_within_the_message_limit(
     db_session: Session, posted_run: tuple[AnalysisRun, User]
 ) -> None:
     from app.classification.result_card import publish_card
@@ -428,8 +428,7 @@ def test_card_omits_oversized_entries_without_exceeding_message_limit(
     db_session.commit()
     card = publish_card(db_session, run)
     assert card is not None and len(card.body) <= 4000
-    assert "findings view" in card.body
-    assert "x" not in card.body
+    assert "x" * 5000 not in card.body and "…" in card.body  # shortened, not dropped
 
 
 def test_partial_batch_refreshes_card_before_provider_retry(
@@ -562,4 +561,4 @@ def test_card_skips_large_entry_and_keeps_later_small_entry(
     db_session.commit()
     card = publish_card(db_session, run)
     assert card is not None and len(card.body) <= 4000
-    assert "A small later entry" in card.body and card.body.count("findings view") == 1
+    assert "A small later entry" in card.body

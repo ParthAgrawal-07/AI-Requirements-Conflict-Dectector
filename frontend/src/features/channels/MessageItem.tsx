@@ -5,6 +5,7 @@ import { Button } from "../../components/Button";
 import { useDeleteMessage, useEditMessage, type Member, type Message } from "./api";
 import { Composer } from "./Composer";
 import { segments } from "./mentions";
+import { ResultCard } from "./ResultCard";
 
 export interface MessageItemProps {
   message: Message;
@@ -61,6 +62,7 @@ export function MessageItem({ message, members, canPost, onOpenThread }: Message
         {message.edited_at && !message.deleted && <span className="muted"> · edited</span>}
         {message.kind === "requirement_post" && (
           <Badge tone="proposed" icon="📄">
+            {typeof message.payload?.label === "string" ? `${message.payload.label} · ` : ""}
             Requirement · Proposed
           </Badge>
         )}
@@ -80,6 +82,8 @@ export function MessageItem({ message, members, canPost, onOpenThread }: Message
             setEditing(false);
           }}
         />
+      ) : message.kind === "analysis_card" ? (
+        <ResultCard message={message} />
       ) : (
         <MessageBody message={message} names={names} />
       )}

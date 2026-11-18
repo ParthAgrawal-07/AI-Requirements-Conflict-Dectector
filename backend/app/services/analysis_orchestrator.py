@@ -347,11 +347,16 @@ def _close(db: Session, run: AnalysisRun, *, error: str | None = None) -> None:
 
 def after_run(db: Session, run_id: uuid.UUID, transition: str = CLOSED) -> None:
     """Follow-ups of a run that closed or parked for budget (``analysis.after_run``): the live-map
-    delta once it is done. Each step is best effort — a failed follow-up never reopens the run.
+    delta once it is done, the result card in a posted requirement's thread (Keval, US-31) —
+    "waiting for budget" first, rewritten with the results when the run finishes — and the
+    clarification questions, queued as their own task because each is an LLM call (Madhav, US-09).
+    Each step is best effort — a failed follow-up never reopens the run.
 
     ``transition`` is the change that queued the job. Only the closing job sends the map delta: a
     park job delivered after the resumed run finished also sees ``done`` and must not send a
-    second delta for the same change (ADR-21)."""
+    second delta for the same change (ADR-21). The card shows the run as it is now, so a late park
+    job only rewrites it with the same results."""
+    from app.classification.result_card import publish_card
     from app.graph import deltas
 
     run = db.get(AnalysisRun, run_id)
@@ -363,13 +368,10 @@ def after_run(db: Session, run_id: uuid.UUID, transition: str = CLOSED) -> None:
         except Exception:
             db.rollback()
             logger.exception("Map delta for run %s failed", run_id)
-
-        if run.error_message is None:
+        if run.error_message is None:  # Madhav (US-09): questions for its findings, queued
             send(CLARIFY_RUN, [str(run.id)])
     if run.status in (AnalysisRunStatus.DONE, AnalysisRunStatus.WAITING_BUDGET):
         try:
-            from app.classification.result_card import publish_card
-
             publish_card(db, run)
         except Exception:
             db.rollback()

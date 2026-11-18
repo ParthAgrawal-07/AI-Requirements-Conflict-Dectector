@@ -42,6 +42,7 @@ from app.models import (
     FindingCategory,
     JoinRequest,
     Message,
+    OwnershipRequest,
     Project,
     Requirement,
     Role,
@@ -92,6 +93,7 @@ class World:
     finding: Finding  # an Ambiguous finding about a requirement of `document`
     run: AnalysisRun  # a finished analysis of `document`
     clarification: Clarification  # the question about `finding`
+    ownership_request: OwnershipRequest  # `target` asks to own that requirement
     db: Session
 
 
@@ -193,9 +195,11 @@ CASES = [
     # Sprint 2 — findings (US-07)
     Case("GET", "/api/v1/projects/{project_id}/findings"),
     Case("GET", "/api/v1/findings/{finding_id}"),
-    # Sprint 3 — lifecycle, sign-off and review (Parth, US-37, US-10). The world's requirement is
-    # Proposed and not protected: holders of baseline.manage may start its review; the sign-off is
-    # refused with 409 (not protected) — past the permission check; the review confirms the finding.
+    # Sprint 3 — a run's results, behind the result card (Keval, US-31)
+    Case("GET", "/api/v1/analysis-runs/{analysis_run_id}"),
+    # Sprint 3 — lifecycle and sign-off (Parth, US-37). The world's requirement is Proposed and not
+    # protected: holders of baseline.manage may start its review; the sign-off is refused with 409
+    # (not protected) — past the permission check.
     Case("GET", "/api/v1/requirements/{requirement_id}"),
     Case(
         "PATCH",
@@ -214,6 +218,20 @@ CASES = [
         lambda _: {"resolution": "Under 2 seconds at p95"},
         needs="req.comment",
     ),
+    # Sprint 3 — finding review (Affan, US-10): the world's finding is about an unprotected
+    # requirement, so a protected-only finding.review does not count (see the test below).
+    Case("POST", "/api/v1/findings/{finding_id}/review", lambda _: {"action": "confirm"}),
+    Case("GET", "/api/v1/findings/{finding_id}/reviews"),
+    # Sprint 3 — ownership (Bansil, US-36). Deciding is for the owner or whoever may reassign; the
+    # world's requirement has no owner, so it needs baseline.manage.
+    Case("POST", "/api/v1/requirements/{requirement_id}/ownership-requests", lambda _: {}),
+    Case("GET", "/api/v1/requirements/{requirement_id}/ownership-requests"),
+    Case(
+        "POST",
+        "/api/v1/ownership-requests/{ownership_request_id}/decision",
+        lambda _: {"accept": True},
+        needs="baseline.manage",
+    ),
     # Sprint 3 — the live map's shared layout (Dhavni, US-14)
     Case(
         "PUT",
@@ -224,6 +242,19 @@ CASES = [
     ),
     # Sprint 3 — similar-requirement hints (Heet, FR-83)
     Case("POST", "/api/v1/projects/{project_id}/similar", lambda _: {"text": "audit logs"}),
+    # Sprint 3 — requirement composer (Pranshu, US-30)
+    Case(
+        "POST",
+        "/api/v1/projects/{project_id}/requirements",
+        lambda _: {
+            "fields": {
+                "template": "free_text",
+                "slots": {"statement": "The system shall keep audit logs for seven years."},
+                "type": "functional",
+                "priority": "must",
+            }
+        },
+    ),
 ]
 
 
@@ -300,6 +331,16 @@ def world(
         original_ai_output={},
     )
     db_session.add(finding)
+    run = AnalysisRun(
+        project_id=project.id,
+        scope=AnalysisScope.DOCUMENT,
+        subject_id=document.id,
+        status=AnalysisRunStatus.DONE,
+    )
+    db_session.add(run)
+    db_session.commit()
+    ownership_request = OwnershipRequest(requirement_id=vague.id, requester_id=target.id)
+    db_session.add(ownership_request)
     db_session.commit()
     run = AnalysisRun(
         project_id=project.id,
@@ -324,6 +365,7 @@ def world(
         finding=finding,
         run=run,
         clarification=clarification,
+        ownership_request=ownership_request,
         db=db_session,
     )
 
@@ -360,9 +402,10 @@ def _call(api: TestClient, case: Case, world: World, user: User) -> int:
         channel_id=world.channel.id,
         user_id=world.target.id,
         role_id=world.custom_role.id,
-        requirement_id=world.finding.requirement_id,
         analysis_run_id=world.run.id,
+        requirement_id=world.finding.requirement_id,
         clarification_id=world.clarification.id,
+        ownership_request_id=world.ownership_request.id,
     )
     headers = {"Authorization": f"Bearer {security.create_access_token(user.id)[0]}"}
     body = case.body(world)

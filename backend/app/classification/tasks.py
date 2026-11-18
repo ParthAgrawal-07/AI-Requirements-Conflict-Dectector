@@ -150,7 +150,7 @@ def classify_candidate_pair(
             original_ai_output=output.model_dump(mode="json"),
             context_version=pack.context_version,
             prompt_version=PROMPT_VERSION,
-            llm_model=llm.provenance,
+            llm_model=llm.model,
         )
         try:
             with db.begin_nested():
@@ -206,7 +206,7 @@ def classify_requirement(
             original_ai_output=output.model_dump(mode="json"),
             context_version=pack.context_version,
             prompt_version=PROMPT_VERSION,
-            llm_model=llm.provenance,
+            llm_model=llm.model,
         )
         db.add(finding)
     db.commit()

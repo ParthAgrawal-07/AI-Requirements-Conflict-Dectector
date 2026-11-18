@@ -138,7 +138,7 @@ def generate(db: Session, llm: LLMClient, finding: Finding) -> Clarification | N
         question=output.question.strip(),
         addressed_to=output.addressed_to,
         prompt_version=PROMPT_VERSION,
-        llm_model=llm.provenance,
+        llm_model=llm.model,
     )
     try:
         with db.begin_nested():

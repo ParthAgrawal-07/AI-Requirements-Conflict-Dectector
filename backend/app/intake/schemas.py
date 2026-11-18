@@ -59,6 +59,16 @@ class AcceptanceCriterion(BaseModel):
     then: str = Field(min_length=1, max_length=500)
 
 
+class DraftCriterion(BaseModel):
+    """A criterion as far as it is written: a draft keeps half-written ones (FR-81)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    given: str = Field(default="", max_length=500)
+    when: str = Field(default="", max_length=500)
+    then: str = Field(default="", max_length=500)
+
+
 class _FieldsBase(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -67,7 +77,6 @@ class _FieldsBase(BaseModel):
     owner_id: uuid.UUID | None = None
     tags: list[str] = Field(default_factory=list, max_length=10)
     rationale: str | None = Field(default=None, max_length=2000)
-    acceptance_criteria: list[AcceptanceCriterion] = Field(default_factory=list, max_length=10)
     # Where the requirement card is posted; null = the group's channel (interface design §5.2).
     channel_id: uuid.UUID | None = None
 
@@ -99,6 +108,7 @@ class ComposerFields(_FieldsBase):
     template: EarsTemplate
     type: RequirementType
     priority: Priority
+    acceptance_criteria: list[AcceptanceCriterion] = Field(default_factory=list, max_length=10)
 
     @model_validator(mode="after")
     def _slots_complete(self) -> "ComposerFields":
@@ -119,6 +129,7 @@ class DraftFields(_FieldsBase):
     template: EarsTemplate | None = None
     type: RequirementType | None = None
     priority: Priority | None = None
+    acceptance_criteria: list[DraftCriterion] = Field(default_factory=list, max_length=10)
 
 
 class RequirementDraftRead(BaseModel):

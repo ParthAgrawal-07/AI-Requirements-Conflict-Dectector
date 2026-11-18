@@ -2,24 +2,27 @@ import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { useProjectRealtime } from "../../app/socket";
 import { Button } from "../../components/Button";
-import { useFindings, type FindingCategory } from "./api";
+import { STATUS_LABEL, useFindings, type FindingCategory, type FindingStatus } from "./api";
 import { FindingCard } from "./FindingCard";
 import { FindingDrawer } from "./FindingDrawer";
 
 const CATEGORIES: FindingCategory[] = ["Conflicting", "Duplicate", "Dependent", "Ambiguous", "Incomplete"];
+const STATUSES = Object.keys(STATUS_LABEL) as FindingStatus[];
 const PAGE = 20;
 
-/** The project's findings (US-05, US-07): most confident first, filter by category or by low
- *  confidence, open one side by side. Reviewing (confirm, dismiss…) arrives with US-10 (S3). */
+/** The project's findings (US-05, US-07, US-10): most confident first, filter by category, review
+ *  state or low confidence, open one side by side and review it there. */
 export function FindingsPage() {
   const { projectId = "" } = useParams();
   useProjectRealtime(projectId);
   const [category, setCategory] = useState<FindingCategory | undefined>();
+  const [status, setStatus] = useState<FindingStatus | undefined>();
   const [lowOnly, setLowOnly] = useState(false);
   const [offset, setOffset] = useState(0);
   const [open, setOpen] = useState<string | null>(null);
   const findings = useFindings(projectId, {
     category,
+    status,
     low_confidence: lowOnly ? true : undefined,
     limit: PAGE,
     offset,
@@ -49,6 +52,23 @@ export function FindingsPage() {
             <option value="">All</option>
             {CATEGORIES.map((item) => (
               <option key={item}>{item}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Review{" "}
+          <select
+            value={status ?? ""}
+            onChange={(event) => {
+              setStatus((event.target.value || undefined) as FindingStatus | undefined);
+              setOffset(0);
+            }}
+          >
+            <option value="">All</option>
+            {STATUSES.map((item) => (
+              <option key={item} value={item}>
+                {STATUS_LABEL[item]}
+              </option>
             ))}
           </select>
         </label>
@@ -87,7 +107,7 @@ export function FindingsPage() {
           </Button>
         </nav>
       )}
-      <FindingDrawer findingId={open} onClose={() => setOpen(null)} />
+      <FindingDrawer projectId={projectId} findingId={open} onClose={() => setOpen(null)} />
     </div>
   );
 }

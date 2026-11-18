@@ -14,6 +14,7 @@ from typing import Any
 from fastapi import APIRouter, Depends
 
 from app.api import (
+    analysis_runs,
     auth,
     channels,
     clarifications,
@@ -28,6 +29,7 @@ from app.api import (
     projects,
     reports,
     requirements,
+    requirements_compose,
     roles,
     workspaces,
 )
@@ -51,6 +53,7 @@ for _router in (
     context.router,
     documents.router,
     requirements.router,
+    requirements_compose.router,
     intake.router,
     drafts.router,
     join_codes.router,
@@ -59,6 +62,7 @@ for _router in (
     graph_api.router,
     findings.router,
     clarifications.router,
+    analysis_runs.router,
     search_similar.router,
 ):
     api_router.include_router(_router, dependencies=_authenticated, responses=_unauthorized)

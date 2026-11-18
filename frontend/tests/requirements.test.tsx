@@ -77,6 +77,32 @@ describe("RequirementsTable", () => {
     renderWithProviders(<RequirementsTable projectId="p1" />);
     expect(await screen.findByText("Check extraction")).toBeInTheDocument();
   });
+
+  it("says when ownership requests could not be loaded instead of showing none", async () => {
+    let fail = true;
+    mockApi({
+      "GET /api/v1/projects/p1/requirements": page([REQ]),
+      "GET /api/v1/requirements/r1/ownership-requests": [],
+    });
+    const fetchMock = vi.mocked(fetch);
+    const original = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (input, init) =>
+      String(input).includes("/ownership-requests") && fail
+        ? new Response(JSON.stringify({ error: { code: "boom", message: "down" } }), {
+            status: 500,
+          })
+        : original(input, init),
+    );
+    const { user } = renderWithProviders(<RequirementsTable projectId="p1" />);
+
+    await user.click(await screen.findByRole("button", { name: "Ownership of REQ-014" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("The ownership requests could not be loaded.");
+    fail = false;
+    await user.click(within(alert).getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+  });
 });
 
 describe("RequirementsPage permissions", () => {

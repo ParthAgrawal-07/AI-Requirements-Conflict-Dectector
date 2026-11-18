@@ -224,6 +224,8 @@ def _to_row(document: Document, order_index: int, item: ExtractedRequirement) ->
             else RequirementState.PROPOSED
         ),
         origin=RequirementOrigin.DOCUMENT,
+        # US-36: an imported requirement belongs to its uploader until someone reassigns it.
+        owner_id=document.uploaded_by,
         stakeholder_group=document.stakeholder_group,
         # The ID printed in the document, or None. The segmenter's fallback "UNKNOWN-…" ``id``
         # is not an identifier from the document, so it is never stored as one (FR-04).

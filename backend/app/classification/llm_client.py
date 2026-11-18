@@ -22,6 +22,7 @@ Requirement text reaches the model only inside the delimited data sections built
 import json
 import logging
 import re
+import threading
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -63,6 +64,12 @@ class LLMTransport(Protocol):
         ...
 
 
+def model_label(transport: object) -> str:
+    """``"<provider>/<model>"`` of the transport that answered last — stored with every AI result
+    (ADR-31: record the provider and model)."""
+    return str(getattr(transport, "label", type(transport).__name__))
+
+
 class GeminiTransport:
     """Google Gemini through the official ``google-genai`` SDK (ADR-31 primary)."""
 
@@ -82,6 +89,7 @@ class GeminiTransport:
         self._client = genai.Client(api_key=api_key)
         self._model = model
         self._timeout_seconds = timeout_seconds
+        self.label = f"gemini/{model}"
 
     def send(self, system: str, user: str) -> str:
         from google.genai import errors
@@ -141,6 +149,7 @@ class GroqTransport:
             max_retries=max_retries,
         )
         self._model = model
+        self.label = f"groq/{model}"
 
     def send(self, system: str, user: str) -> str:
         errors = self._groq
@@ -230,18 +239,27 @@ class FallbackTransport:
     def __init__(self, primary: LLMTransport, backup: LLMTransport | None = None) -> None:
         self.primary = primary
         self.backup = backup
-        self.last_transport = primary
+        # The client is cached per process and shared by worker threads: who answered is kept per
+        # thread, so a reply is never stored with the label another thread's call just set.
+        self._answered = threading.local()
+
+    @property
+    def label(self) -> str:
+        """Who answered this thread's last call (ADR-31: record the provider and model)."""
+        return str(getattr(self._answered, "label", model_label(self.primary)))
 
     def send(self, system: str, user: str) -> str:
         try:
-            self.last_transport = self.primary
-            return self.primary.send(system, user)
+            reply = self.primary.send(system, user)
+            self._answered.label = model_label(self.primary)
+            return reply
         except LLMUnavailableError as exc:
             if self.backup is None:
                 raise
             logger.warning("Primary LLM unavailable (%s), falling back to backup transport", exc)
-            self.last_transport = self.backup
-            return self.backup.send(system, user)
+            reply = self.backup.send(system, user)
+            self._answered.label = model_label(self.backup)
+            return reply
 
 
 @dataclass
@@ -250,6 +268,7 @@ class FakeTransport:
 
     replies: list[str]
     calls: list[tuple[str, str]] = field(default_factory=list)
+    label: str = "fake/test"
 
     def send(self, system: str, user: str) -> str:
         self.calls.append((system, user))
@@ -265,16 +284,10 @@ class LLMClient:
         self.calls = 0  # requests sent, for analysis-run accounting (llm_calls)
 
     @property
-    def provenance(self) -> str:
-        """Provider/model that served the latest successful call (ADR-31)."""
-        transport = self._transport
-        if isinstance(transport, FallbackTransport):
-            transport = transport.last_transport
-        if isinstance(transport, GeminiTransport):
-            return f"gemini/{transport._model}"
-        if isinstance(transport, GroqTransport):
-            return f"groq/{transport._model}"
-        return "fake/test" if isinstance(transport, FakeTransport) else "unknown/unknown"
+    def model(self) -> str:
+        """``"<provider>/<model>"`` that answered this thread's last call (e.g.
+        ``gemini/gemini-2.5-flash``, or ``groq/…`` after a fall-over)."""
+        return model_label(self._transport)
 
     def complete_text(self, system: str, user: str, *, project_id: uuid.UUID | None = None) -> str:
         """A plain-text reply (the brief drafter validates its own JSON)."""
