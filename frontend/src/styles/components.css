@@ -264,3 +264,152 @@
 .permission-group { border: 1px solid var(--line); border-radius: var(--radius); padding: var(--space-3); display: grid; gap: var(--space-2); }
 .permission-group legend { font-weight: 600; padding: 0 var(--space-1); }
 .project-role { display: grid; gap: var(--space-1); margin-bottom: var(--space-3); }
+
+/* ── Composer (US-30, interface design §5) ─────────────────────────────────── */
+.composer-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.composer-header,
+.composer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.composer-footer {
+  justify-content: flex-end;
+  border-top: 1px solid var(--line);
+  padding-top: var(--space-3);
+}
+.composer-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr);
+  gap: var(--space-5);
+}
+.composer-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.ears-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.ears-picker .pill {
+  cursor: pointer;
+}
+.ears-picker .pill:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.pill-active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.slot-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.slot-field input,
+.slot-field textarea {
+  min-width: 220px;
+  padding: var(--space-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  font: inherit;
+}
+.slot-field textarea {
+  min-width: 480px;
+}
+.slot-word {
+  font-weight: 600;
+}
+.field-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+.field-row label,
+.criterion label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: 14px;
+}
+.criteria {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+}
+.criterion {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+.preview-pane {
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  align-self: start;
+}
+.preview-sentence {
+  font-size: 16px;
+  margin: var(--space-2) 0 var(--space-4);
+}
+.similar-list {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-2) 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.owner-chip {
+  white-space: nowrap;
+}
+.plain-list {
+  list-style: none;
+  padding: 0;
+}
+
+/* ── Result card (US-31, interface design §10) ─────────────────────────────── */
+.result-card {
+  border-left: 3px solid var(--accent);
+  background: var(--paper-raised);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+}
+.result-card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.result-findings {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-2) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.result-question {
+  margin: var(--space-1) 0 0;
+}
+@media (max-width: 900px) {
+  .composer-grid {
+    grid-template-columns: 1fr;
+  }
+  .slot-field textarea {
+    min-width: 0;
+    width: 100%;
+  }
+}

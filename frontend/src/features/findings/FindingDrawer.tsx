@@ -1,9 +1,24 @@
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { ApiError } from "../../api/client";
+import { usePermissions } from "../../app/usePermissions";
 import { Badge } from "../../components/Badge";
+import { Button } from "../../components/Button";
 import { Drawer } from "../../components/Drawer";
-import { CATEGORY_ICONS, highlight, useFinding, type Finding, type FindingRequirement } from "./api";
+import { useToast } from "../../components/Toast";
+import { ReviewActions } from "../review/ReviewActions";
+import {
+  CATEGORY_ICONS,
+  highlight,
+  useAnswerClarification,
+  useFinding,
+  type Clarification,
+  type Finding,
+  type FindingRequirement,
+} from "./api";
 
 export interface FindingDrawerProps {
+  projectId: string;
   findingId: string | null;
   onClose: () => void;
 }
@@ -49,9 +64,61 @@ function RequirementPanel({ finding, requirement }: { finding: Finding; requirem
   );
 }
 
+/** The finding's clarification question (US-09) and, until someone answers it, the answer form
+ *  (FR-23). An answered question shows the resolution instead. */
+function ClarificationPanel({ projectId, finding, clarification }: { projectId: string; finding: Finding; clarification: Clarification }) {
+  const { can } = usePermissions({ projectId });
+  const notify = useToast();
+  const answer = useAnswerClarification(projectId, finding.id);
+  const [resolution, setResolution] = useState("");
+  return (
+    <section aria-label="Clarification">
+      <h3>Clarification question</h3>
+      <p>
+        {clarification.question} <Badge tone="ai">AI</Badge>
+      </p>
+      {clarification.answered ? (
+        <p>
+          <strong>Answer:</strong> {clarification.resolution}
+        </p>
+      ) : (
+        can("req.comment") && (
+          <form
+            className="form-stack"
+            onSubmit={(event) => {
+              event.preventDefault();
+              answer.mutate(
+                { clarificationId: clarification.id, resolution: resolution.trim() },
+                {
+                  onSuccess: () => {
+                    setResolution("");
+                    notify("Answer recorded", "success");
+                  },
+                  onError: (error) => notify(error instanceof ApiError ? error.message : "Could not save the answer", "error"),
+                },
+              );
+            }}
+          >
+            <label>
+              Answer
+              <textarea rows={2} maxLength={2000} required value={resolution} onChange={(e) => setResolution(e.target.value)} />
+            </label>
+            <div className="row-actions">
+              <Button type="submit" size="sm" loading={answer.isPending} disabled={!resolution.trim()}>
+                Record answer
+              </Button>
+            </div>
+          </form>
+        )
+      )}
+    </section>
+  );
+}
+
 /** A finding side by side (US-05, US-07): both requirements with the problem clause highlighted,
- *  the explanation, what is vague or missing, and how sure the analysis is. */
-export function FindingDrawer({ findingId, onClose }: FindingDrawerProps) {
+ *  the explanation, what is vague or missing, and how sure the analysis is; then its clarification
+ *  question (US-09) and the review actions (US-10). */
+export function FindingDrawer({ projectId, findingId, onClose }: FindingDrawerProps) {
   const finding = useFinding(findingId);
   const data = finding.data;
   return (
@@ -97,6 +164,10 @@ export function FindingDrawer({ findingId, onClose }: FindingDrawerProps) {
             Produced by AI analysis{data.context_version ? ` with project context v${data.context_version}` : ""}
             {data.prompt_version ? ` · prompts ${data.prompt_version}` : ""}. People decide what to do with it.
           </p>
+          {data.clarification && (
+            <ClarificationPanel projectId={projectId} finding={data} clarification={data.clarification} />
+          )}
+          <ReviewActions finding={data} projectId={projectId} />
         </>
       )}
     </Drawer>

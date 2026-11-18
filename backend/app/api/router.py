@@ -28,12 +28,14 @@ from app.api import (
     projects,
     reports,
     requirements,
+    requirements_compose,
     roles,
     workspaces,
 )
 from app.core.auth import get_current_user
 from app.graph import api as graph_api
 from app.schemas.common import ErrorResponse
+from app.search import similar as search_similar
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -50,6 +52,7 @@ for _router in (
     context.router,
     documents.router,
     requirements.router,
+    requirements_compose.router,
     intake.router,
     drafts.router,
     join_codes.router,
@@ -58,6 +61,7 @@ for _router in (
     graph_api.router,
     findings.router,
     analysis_runs.router,
+    search_similar.router,
 ):
     api_router.include_router(_router, dependencies=_authenticated, responses=_unauthorized)
 

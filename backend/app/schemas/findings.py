@@ -10,12 +10,14 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.models import (
     FindingCategory,
+    FindingReview,
     FindingStatus,
     RequirementOrigin,
     RequirementState,
     Severity,
 )
 from app.services.findings import FindingView
+from app.services.review_state import ReviewAction
 
 ReviewAction = str
 FindingReview = Any
