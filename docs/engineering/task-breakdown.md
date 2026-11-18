@@ -70,7 +70,7 @@ Owners are listed primary first. Enablers are 0-point tasks inside the sprint. D
 |---|---|---|
 | US-30 Requirement composer with EARS templates | 5 | Pranshu (backend and composer UI) |
 | US-31 Live analysis of a posted requirement | 8 | Heet (incremental retrieval, similar hints), Keval (classification, budget, result card), Abhyudit (requirement runs) |
-| US-14 Live requirements map | 8 | Dhavni didi (graph revisions, deltas, narrator, positions), Abhijeet (map UI, changes feed, live updates) |
+| US-14 Live requirements map | 8 | Dhavni didi (graph revisions, deltas, narrator, positions), Abhijeet (map UI, changes feed, applying live deltas on the map) |
 | US-37 Requirement lifecycle states | 3 | Parth |
 | US-36 Owners, stakeholder groups, ownership requests | 3 | Bansil (backend and UI) |
 | US-09 Generate clarification questions | 5 | Madhav |
@@ -88,7 +88,7 @@ Owners are listed primary first. Enablers are 0-point tasks inside the sprint. D
 | US-12 Version history | 3 | Affan (backend and UI) |
 | US-56 Raise a concern (human-raised findings) | 3 | Abhyudit (backend and UI) |
 
-**Order inside the sprint:** week 1 — US-11, US-33, US-52, US-56; week 2 — US-34, US-35 on top of them. Abhijeet starts the change-request page against a fixed sample JSON on day 1.
+**Order inside the sprint:** week 1 — US-11, US-33, US-52, US-56; week 2 — US-34, US-35 on top of them. Pranshu starts the change-request page against a fixed sample JSON on day 1.
 
 ### Sprint 5 · Weeks 10–11 · Suggestions, awareness and preview (38 points) → CP2
 

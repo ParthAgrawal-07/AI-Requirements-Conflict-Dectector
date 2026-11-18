@@ -41,6 +41,11 @@
 | S6 | Regression; final accuracy; change-log sentences match deltas; SRS fidelity check | Security, accessibility, production smoke (with Madhav) |
 | S7 | Demo data validation | Bug bash |
 
+From Sprint 3 work is divided by feature ([Sprint Plan §2.1](../planning/v5/IT314_RCD_Sprint_Plan_v5.md#21-from-sprint-3-features-not-layers)):
+each feature owner writes the unit and API tests for their feature's backend and UI, so the testers' column
+above is cross-feature work only. Abhyudit and Affan also own features (for example US-31 requirement runs,
+US-10 finding review) and test those like any other owner.
+
 ## 3. Sample Test Cases by Story
 
 | Story | Test case | Expected result |

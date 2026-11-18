@@ -37,8 +37,8 @@ the same load. The rules:
 
 1. **One owner per feature.** The owner writes its API, database work, screen and unit tests. Nobody is
    frontend-only or backend-only.
-2. **Large stories are split by feature, not by layer.** For example US-14 is *live updates* (Dhavni didi)
-   and *map view* (Abhijeet); US-35 is *reviews* (Heet), *merge and agreement guard* (Parth) and *merge box* (Affan).
+2. **Large stories are split by feature, not by layer.** For example US-14 is *live-update backend: revisions, deltas, narrator* (Dhavni didi)
+   and *map view, including applying deltas* (Abhijeet); US-35 is *reviews* (Heet), *merge and agreement guard* (Parth) and *merge box* (Affan).
 3. **Testers keep their test plan and also own features.** Abhyudit and Affan each own fewer features
    because the checkpoint reports, E2E, load and security work stay with them.
 4. **Area owners review.** Parth reviews every migration and permission change, Keval every LLM call and
@@ -75,7 +75,7 @@ the same load. The rules:
 | **Heet** | Retrieval, impact, reviews, change log | US-31 retrieval and hints · US-11 impact and relationship queries · US-35 reviews · US-58 rule checks · US-06 thresholds · US-55 change-log backend, Changes panel and tests · US-50 time slider | Scrum Master S5 |
 | **Keval** | LLM and AI quality | US-31 classification, budget, result card · US-34 narrative · US-51 lint, pre-flight, AI wording · US-58 attribute extraction · US-45 prompts · US-15 feedback loop · US-55 summary · US-61 section prompts | Reviews every LLM call; Scrum Master S6 |
 | **Madhav** | Clarification and consequences | US-09 clarification questions · US-34 consequence checks and Checks tab · US-45 suggestion service | S6 injection and rate-limit tests with Affan; Scrum Master S7 |
-| **Abhijeet** | Map UI, issues, notifications, compliance | US-14 map UI and live updates · US-52 issue API, list, page, comments · US-38 notifications, inbox, bell · US-18 compliance | Demo script S7 |
+| **Abhijeet** | Map UI, issues, notifications, compliance | US-14 map UI, changes feed, applying live deltas · US-52 issue API, list, page, comments · US-38 notifications, inbox, bell · US-18 compliance | Demo script S7 |
 | **Abhyudit** | Testing (accuracy, backend) + features | US-31 requirement runs · US-56 raise a concern · US-13 dashboard · US-45 suggestion panel · US-42 timeline · US-59 open-items report · US-08 severity and severity sort | CP1 and CP2 accuracy and recall reports, regression, SRS fidelity tests |
 | **Affan** | Testing (E2E, performance, security) + features | US-10 finding review · US-12 version history · US-35 merge box · US-57 decision owners and settings page · US-53 discussion, votes, watch, links and link edges on the map | CP1 and CP2 E2E, merge-rule tests, security, accessibility, smoke; bug bash lead |
 
@@ -157,7 +157,7 @@ Each member owned one primary area as code owner and reviewer. Everyone writes u
 |---|---|---|
 | US-30 Requirement composer with EARS templates | 5 | Pranshu (backend and composer UI) |
 | US-31 Live analysis of a posted requirement | 8 | Heet (incremental retrieval, similar hints), Keval (classification, budget, result card), Abhyudit (requirement runs) |
-| US-14 **Live requirements map** | 8 | Dhavni didi (graph revisions, deltas, narrator, positions), Abhijeet (map UI, changes feed, live updates) |
+| US-14 **Live requirements map** | 8 | Dhavni didi (graph revisions, deltas, narrator, positions), Abhijeet (map UI, changes feed, applying live deltas on the map) |
 | US-37 Requirement lifecycle states | 3 | Parth |
 | US-36 Owners, stakeholder groups, ownership requests | 3 | Bansil (backend and UI) |
 | US-09 Generate clarification questions | 5 | Madhav |
@@ -250,7 +250,7 @@ Primary work per member per sprint (story numbers; *E* = enabler or test work). 
 | Heet | E: embedding contract, hint latency | E: embedding stage | 05 (candidates) | 31 (retrieval, hints) | 11 (impact, relations), 33 (change-request client), 35 (reviews) | 58 (rule checks), 06 (thresholds) | 55 (change log, Changes panel), 50 (time slider); E: recall tuning for 58 | Final report |
 | Keval | E: LLM adapter, lint catalogue | 60 (context pack); E: classifier skeleton | 05 (classification), 07 | 31 (classify, budget, result card) | 34 (narrative) | 51 (lint, pre-flight, AI), 45 (prompts), 58 (extraction) | 15 (feedback loop and view), 55 (summary), 61 (section prompts) | Final report |
 | Madhav | E: join codes, checks schema | 25 | 28; E: question prompts | 09 | 34 (checks, delta, risk, Checks tab) | 45 (suggestion service) | E: injection and rate-limit tests with Affan | Final report |
-| Abhijeet | E: prototypes, map spike | 24, 25, 60 (UI) | 07, 26, 49 (UI); 22 prototypes | 14 (map UI, live updates) | 52 (issue API, list, page, comments) | 38 (notifications, inbox, bell) | 18 (compliance) | Demo script |
+| Abhijeet | E: prototypes, map spike | 24, 25, 60 (UI) | 07, 26, 49 (UI); 22 prototypes | 14 (map UI, applying live deltas) | 52 (issue API, list, page, comments) | 38 (notifications, inbox, bell) | 18 (compliance) | Demo script |
 | Abhyudit | E: benchmark v2 plan | E: labelling, API tests | 05 accuracy; 22 sessions | 31 (requirement runs); CP1 accuracy report | 56 (raise a concern); affected sets, auto-issue owners | 13 (dashboard), 45 (suggestion panel); CP2 recall report, suggestion rating | 42 (timeline), 59 (open items), 08 (severity); regression, final accuracy | Demo data |
 | Affan | E: Playwright, permission matrix | 27 tests; join-code abuse; E2E | 22 sessions; WebSocket tests | 10 (finding review); CP1 E2E, map freshness | 12 (version history), 35 (merge box); merge-rule tests | 57 (decision owners, settings page); CP2 E2E | 53 (discussion, votes, watch, links); isolation, accessibility, smoke | Bug bash lead |
 

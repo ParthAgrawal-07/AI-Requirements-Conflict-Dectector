@@ -218,8 +218,8 @@
 /backend/app/api/consequences.py                             @PrimeNotFound
 /backend/app/api/suggestions.py                              @PrimeNotFound
 /backend/app/clarification/generator.py                      @PrimeNotFound
-/backend/app/clarification/prompts/clarify_v1_system.md      @PrimeNotFound
-/backend/app/clarification/prompts/clarify_v1_user.md        @PrimeNotFound
+/backend/app/clarification/prompts/clarify_v1_system.md      @PrimeNotFound @kevaldarji6126
+/backend/app/clarification/prompts/clarify_v1_user.md        @PrimeNotFound @kevaldarji6126
 /backend/app/clarification/schemas.py                        @PrimeNotFound
 /backend/app/clarification/tasks.py                          @PrimeNotFound
 /backend/app/consequences/checks.py                          @PrimeNotFound

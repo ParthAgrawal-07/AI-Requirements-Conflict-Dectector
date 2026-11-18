@@ -28,7 +28,7 @@
 | US-11 | Change-Impact Analysis Engine | Must | 8 | S4 | EP-05 | Heet (impact analysis, relationship queries) | FR-24, FR-25 | ⬜ |
 | US-12 | Maintain Requirement Version History | Must | 3 | S4 | EP-05 | Affan (backend and UI) | FR-26, DR-08 | ⬜ |
 | US-13 | View Requirements Quality Dashboard | Must | 5 | S5 | EP-06 | Abhyudit (aggregation and dashboard) | FR-27, FR-28, FR-42 | ⬜ |
-| US-14 | Live Requirements Map | Must | 8 | S3 | EP-15 | Dhavni didi (graph revisions, deltas, narrator, positions), Abhijeet (map UI, changes feed, live updates) | FR-29, FR-84, NFR-32, NFR-33 | ⬜ |
+| US-14 | Live Requirements Map | Must | 8 | S3 | EP-15 | Dhavni didi (graph revisions, deltas, narrator, positions), Abhijeet (map UI, changes feed, applying live deltas on the map) | FR-29, FR-84, NFR-32, NFR-33 | ⬜ |
 | US-15 | Dismiss / Resolve a Flag (Feedback Loop) | Should | 3 | S6 | EP-04 | Keval (backend and UI) | FR-18, NFR-22 | ⬜ |
 | US-16 | Export Issue, Impact and Consequence Reports | Should | 5 | — | EP-06 | — | FR-30 | ⏸ Deferred |
 | US-17 | Receive Executive / ROI Summary Report | Could | 5 | — | EP-09 | — | — | ⏸ Deferred |
