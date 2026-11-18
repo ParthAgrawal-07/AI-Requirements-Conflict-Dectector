@@ -88,11 +88,27 @@ export const EMPTY_FIELDS: ComposerFields = {
   channel_id: null,
 };
 
-/** The server refuses half-written criteria (all three parts are required): keep only whole ones,
- *  and drop empty strings so a draft never fails validation while someone is typing. */
-export function cleanFields(fields: ComposerFields): ComposerFields {
+const filled = (c: AcceptanceCriterion) =>
+  Boolean(c.given.trim() || c.when.trim() || c.then.trim());
+const complete = (c: AcceptanceCriterion) =>
+  Boolean(c.given.trim() && c.when.trim() && c.then.trim());
+
+/** 1-based numbers of the criteria that are started but not finished: *Propose* waits for them. */
+export function incompleteCriteria(fields: ComposerFields): number[] {
+  return fields.acceptance_criteria.flatMap((c, i) => (filled(c) && !complete(c) ? [i + 1] : []));
+}
+
+/** What the server receives. Only the chosen template's slots go (the composer keeps the others
+ *  locally so switching back restores them), and empty strings are dropped. A draft keeps
+ *  half-written criteria (FR-81); a proposal is only sent once none is half-written. */
+export function cleanFields(
+  fields: ComposerFields,
+  template: EarsTemplate | null,
+  { draft }: { draft: boolean },
+): ComposerFields {
+  const active = new Set(template?.slots.map((slot) => slot.key) ?? []);
   const slots = Object.fromEntries(
-    Object.entries(fields.slots).filter(([, value]) => value.trim() !== ""),
+    Object.entries(fields.slots).filter(([key, value]) => active.has(key) && value.trim() !== ""),
   );
   return {
     ...fields,
@@ -100,9 +116,7 @@ export function cleanFields(fields: ComposerFields): ComposerFields {
     stakeholder_group: fields.stakeholder_group?.trim() || null,
     rationale: fields.rationale?.trim() || null,
     tags: fields.tags.map((tag) => tag.trim()).filter(Boolean),
-    acceptance_criteria: fields.acceptance_criteria.filter(
-      (c) => c.given.trim() && c.when.trim() && c.then.trim(),
-    ),
+    acceptance_criteria: fields.acceptance_criteria.filter(draft ? filled : complete),
   };
 }
 
@@ -122,7 +136,8 @@ export function useDrafts(projectId: string) {
   });
 }
 
-/** Create the draft on the first save, update it afterwards. */
+/** Create the draft on the first save, update it afterwards. ``fields`` is already cleaned
+ *  (``cleanFields(…, { draft: true })``). */
 export function useSaveDraft(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -130,11 +145,11 @@ export function useSaveDraft(projectId: string) {
       id
         ? apiFetch<Draft>(`/me/drafts/${id}`, {
             method: "PATCH",
-            json: { fields: cleanFields(fields) },
+            json: { fields },
           })
         : apiFetch<Draft>("/me/drafts", {
             method: "POST",
-            json: { project_id: projectId, fields: cleanFields(fields) },
+            json: { project_id: projectId, fields },
           }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["drafts"] }),
   });
@@ -155,13 +170,14 @@ export function useSimilar(projectId: string, text: string, enabled: boolean) {
   });
 }
 
+/** ``fields`` is already cleaned (``cleanFields(…, { draft: false })``). */
 export function usePropose(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ fields, draftId }: { fields: ComposerFields; draftId: UUID | null }) =>
       apiFetch<PostResult>(`/projects/${projectId}/requirements`, {
         method: "POST",
-        json: { fields: cleanFields(fields), draft_id: draftId },
+        json: { fields, draft_id: draftId },
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({

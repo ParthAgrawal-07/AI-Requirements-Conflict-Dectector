@@ -7,7 +7,9 @@ import { Button } from "../../components/Button";
 import { useToast } from "../../components/Toast";
 import { useChannels, useMembers } from "../channels/api";
 import {
+  cleanFields,
   EMPTY_FIELDS,
+  incompleteCriteria,
   usePropose,
   useSaveDraft,
   useSimilar,
@@ -44,6 +46,13 @@ type SaveState = "clean" | "dirty" | "saving" | "saved" | "error";
  *  a private draft saved every 5 s, and *Propose*, which posts the card and starts live analysis.
  *  Members who may not propose (viewers, compliance reviewers) get no form at all. */
 export function ComposerPage() {
+  const { projectId = "" } = useParams();
+  // A new project is a new composer: its fields and draft must not carry over (or autosave the
+  // previous project's draft through this project's hooks).
+  return <Composer key={projectId} />;
+}
+
+function Composer() {
   const { workspaceId = "", projectId = "" } = useParams();
   const { user } = useAuth();
   const { can, isLoading: permissionsLoading } = usePermissions({ projectId });
@@ -68,8 +77,11 @@ export function ComposerPage() {
   const missing = template ? missingSlots(template, fields.slots) : ["a template"];
   const similar = useSimilar(projectId, similarText, can("req.propose"));
 
+  // Every edit bumps the revision; a save is "saved" only if nothing changed while it ran.
+  const revision = useRef(0);
   const update = useCallback((change: Partial<ComposerFields>) => {
     setFields((current) => ({ ...current, ...change }));
+    revision.current += 1;
     setSaveState("dirty");
   }, []);
 
@@ -80,34 +92,55 @@ export function ComposerPage() {
     return () => clearTimeout(timer);
   }, [statement, fields.slots]);
 
-  // Autosave every 5 s while there are unsaved changes (a private draft, FR-81).
-  // Refs, not dependencies: the interval must survive re-renders (typing re-renders every key).
-  const latest = useRef({ fields, draftId, saveState, save: saveDraft.mutate });
-  latest.current = { fields, draftId, saveState, save: saveDraft.mutate };
+  // One save at a time, for autosave and *Save draft* alike: two first saves would create two
+  // drafts, and an older PATCH finishing last would overwrite newer fields. Refs, not
+  // dependencies: the autosave interval must survive re-renders (typing re-renders every key).
+  const latest = useRef({
+    fields,
+    template,
+    saveState,
+    save: saveDraft.mutate,
+  });
+  latest.current = { fields, template, saveState, save: saveDraft.mutate };
+  const draftRef = useRef<string | null>(null);
+  const saving = useRef(false);
+  const saveNow = useCallback(() => {
+    if (saving.current) return; // the running save leaves newer edits "dirty" for the next tick
+    const { fields: current, template: chosen, save } = latest.current;
+    const snapshot = revision.current;
+    saving.current = true;
+    setSaveState("saving");
+    save(
+      {
+        id: draftRef.current,
+        fields: cleanFields(current, chosen, { draft: true }),
+      },
+      {
+        onSuccess: (draft) => {
+          draftRef.current = draft.id;
+          setDraftId(draft.id);
+          setSaveState(revision.current === snapshot ? "saved" : "dirty");
+        },
+        onError: () => setSaveState("error"),
+        onSettled: () => {
+          saving.current = false;
+        },
+      },
+    );
+  }, []);
   useEffect(() => {
     const timer = setInterval(() => {
-      const { fields: current, draftId: id, saveState: state, save } = latest.current;
-      if (state !== "dirty") return;
-      setSaveState("saving");
-      save(
-        { id, fields: current },
-        {
-          onSuccess: (draft) => {
-            setDraftId(draft.id);
-            setSaveState((now) => (now === "saving" ? "saved" : now));
-          },
-          onError: () => setSaveState("error"),
-        },
-      );
+      if (latest.current.saveState === "dirty") saveNow();
     }, AUTOSAVE_MS);
     return () => clearInterval(timer);
-  }, []);
+  }, [saveNow]);
 
-  const ready = Boolean(statement && fields.type && fields.priority);
+  const unfinished = incompleteCriteria(fields);
+  const ready = Boolean(statement && fields.type && fields.priority && unfinished.length === 0);
   const submit = useCallback(() => {
     if (!ready || propose.isPending) return;
     propose.mutate(
-      { fields, draftId },
+      { fields: cleanFields(fields, template, { draft: false }), draftId },
       {
         onSuccess: (result) => {
           const label = result.requirement.source_req_id ?? "The requirement";
@@ -118,7 +151,7 @@ export function ComposerPage() {
           notify(error instanceof ApiError ? error.message : "Could not propose it", "error"),
       },
     );
-  }, [ready, propose, fields, draftId, notify, navigate, workspaceId, projectId]);
+  }, [ready, propose, fields, template, draftId, notify, navigate, workspaceId, projectId]);
 
   const resumable = useMemo(
     () => (drafts.data ?? []).filter((d) => d.id !== draftId),
@@ -171,12 +204,17 @@ export function ComposerPage() {
             variant="ghost"
             onClick={() => {
               const draft = resumable[0];
+              const tags = draft.fields.tags ?? [];
               setFields({
                 ...EMPTY_FIELDS,
                 ...draft.fields,
                 slots: draft.fields.slots ?? {},
+                tags,
               });
+              setTagText(tags.join(", "));
+              draftRef.current = draft.id;
               setDraftId(draft.id);
+              revision.current += 1;
               setSaveState("saved");
             }}
           >
@@ -342,23 +380,12 @@ export function ComposerPage() {
       </div>
 
       <footer className="composer-footer">
-        <Button
-          onClick={() => {
-            setSaveState("saving");
-            saveDraft.mutate(
-              { id: draftId, fields },
-              {
-                onSuccess: (draft) => {
-                  setDraftId(draft.id);
-                  setSaveState("saved");
-                },
-                onError: () => setSaveState("error"),
-              },
-            );
-          }}
-        >
-          Save draft
-        </Button>
+        {unfinished.length > 0 && (
+          <p className="muted small" role="status">
+            Finish or remove criterion {unfinished.join(", ")} to propose.
+          </p>
+        )}
+        <Button onClick={saveNow}>Save draft</Button>
         <Button type="submit" variant="accent" disabled={!ready} loading={propose.isPending}>
           Propose requirement <kbd>Ctrl ⏎</kbd>
         </Button>

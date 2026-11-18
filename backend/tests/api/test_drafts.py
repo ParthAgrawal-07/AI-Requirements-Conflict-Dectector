@@ -96,6 +96,24 @@ class TestDrafts:
         )
         assert client.get(f"{DRAFTS}/{draft['id']}", headers=headers_for(user)).status_code == 404
 
+    def test_a_draft_keeps_a_half_written_criterion_a_proposal_does_not(
+        self, client: TestClient, project: Project, channel: Channel, user: User
+    ) -> None:
+        half = {**EVENT_DRIVEN, "acceptance_criteria": [{"given": "a logged-in user"}]}
+
+        created = _create(client, user, project, half)
+
+        assert created.status_code == 201
+        assert created.json()["fields"]["acceptance_criteria"] == [
+            {"given": "a logged-in user", "when": "", "then": ""}
+        ]
+        proposed = client.post(
+            f"/api/v1/channels/{channel.id}/requirement-posts",
+            json={"fields": half},
+            headers=headers_for(user),
+        )
+        assert proposed.status_code == 422
+
     def test_drafts_are_private(
         self, client: TestClient, project: Project, user: User, make_user: Callable[..., User]
     ) -> None:

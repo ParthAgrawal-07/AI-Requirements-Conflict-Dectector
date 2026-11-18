@@ -35,6 +35,7 @@ export function SlotFields({ template, slots, onChange }: SlotFieldsProps) {
               <textarea
                 id={id}
                 rows={3}
+                aria-required="true"
                 value={slots[slot.key] ?? ""}
                 placeholder={slot.placeholder}
                 maxLength={4000}
@@ -43,6 +44,7 @@ export function SlotFields({ template, slots, onChange }: SlotFieldsProps) {
             ) : (
               <input
                 id={id}
+                aria-required="true"
                 value={slots[slot.key] ?? ""}
                 placeholder={slot.placeholder}
                 maxLength={500}

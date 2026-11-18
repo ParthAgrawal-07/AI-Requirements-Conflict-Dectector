@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent } from "@testing-library/react";
 import { ComposerPage, AUTOSAVE_MS } from "../src/features/composer/ComposerPage";
 import type { EarsTemplate } from "../src/features/composer/api";
-import { cleanFields, EMPTY_FIELDS } from "../src/features/composer/api";
+import { cleanFields, EMPTY_FIELDS, incompleteCriteria } from "../src/features/composer/api";
 import { missingSlots, renderStatement } from "../src/features/composer/ears";
-import { mockApi, renderWithProviders, screen, waitFor } from "./test-utils";
+import { mockApi, renderWithProviders, screen, waitFor, within } from "./test-utils";
 
 vi.mock("../src/app/auth", async (original) => ({
   ...(await original<typeof import("../src/app/auth")>()),
@@ -91,19 +91,31 @@ describe("the EARS preview mirrors the backend", () => {
     expect(missingSlots(EVENT, { trigger: "x", system: " " })).toEqual(["System", "Response"]);
   });
 
-  it("keeps only whole acceptance criteria and non-empty slots", () => {
-    const cleaned = cleanFields({
-      ...EMPTY_FIELDS,
-      slots: { trigger: "x", system: "" },
-      tags: [" a ", ""],
-      acceptance_criteria: [
-        { given: "g", when: "w", then: "t" },
-        { given: "g", when: "", then: "t" },
-      ],
-    });
+  const written = {
+    ...EMPTY_FIELDS,
+    slots: {
+      trigger: "x",
+      system: "",
+      state: "left over from another template",
+    },
+    tags: [" a ", ""],
+    acceptance_criteria: [
+      { given: "g", when: "w", then: "t" },
+      { given: "g", when: "", then: "" },
+      { given: "", when: "", then: "" },
+    ],
+  };
+
+  it("sends only the chosen template's non-empty slots", () => {
+    const cleaned = cleanFields(written, EVENT, { draft: true });
     expect(cleaned.slots).toEqual({ trigger: "x" });
     expect(cleaned.tags).toEqual(["a"]);
-    expect(cleaned.acceptance_criteria).toHaveLength(1);
+  });
+
+  it("keeps half-written criteria in a draft but only whole ones in a proposal", () => {
+    expect(cleanFields(written, EVENT, { draft: true }).acceptance_criteria).toHaveLength(2);
+    expect(cleanFields(written, EVENT, { draft: false }).acceptance_criteria).toHaveLength(1);
+    expect(incompleteCriteria(written)).toEqual([2]);
   });
 });
 
@@ -212,6 +224,63 @@ describe("ComposerPage", () => {
       project_id: "p1",
       fields: { slots: { trigger: "the user is inactive" } },
     });
+  });
+
+  it("saves one draft at a time and keeps edits made during a save unsaved", async () => {
+    const draft = {
+      id: "d1",
+      project_id: "p1",
+      fields: EMPTY_FIELDS,
+      preview: null,
+      updated_at: "x",
+    };
+    const { calls } = api(undefined, {
+      "POST /api/v1/me/drafts": [201, draft],
+    });
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const fetchMock = vi.mocked(fetch);
+    const original = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (input, init) => {
+      if (init?.method === "POST" && String(input).endsWith("/me/drafts")) await gate;
+      return original(input, init);
+    });
+    const { user } = renderWithProviders(<ComposerPage />, {
+      route: ROUTE,
+      path: PATH,
+    });
+    const trigger = await screen.findByLabelText("Trigger");
+    fireEvent.change(trigger, { target: { value: "the user is inactive" } });
+
+    await user.click(screen.getByRole("button", { name: "Save draft" }));
+    fireEvent.change(trigger, {
+      target: { value: "the user is inactive for 5 minutes" },
+    });
+    await user.click(screen.getByRole("button", { name: "Save draft" })); // ignored: one in flight
+    release();
+
+    await waitFor(() => expect(screen.getByText("Unsaved changes")).toBeInTheDocument());
+    expect(calls.filter((c) => c.method === "POST" && c.path === "/api/v1/me/drafts")).toHaveLength(
+      1,
+    );
+  });
+
+  it("will not propose with a half-written criterion and says which", async () => {
+    api();
+    const { user } = renderWithProviders(<ComposerPage />, {
+      route: ROUTE,
+      path: PATH,
+    });
+    await fillEvent(user);
+
+    await user.click(screen.getByRole("button", { name: "+ Criterion" }));
+    await user.type(
+      within(screen.getByRole("group", { name: "Criterion 1" })).getByLabelText("Given"),
+      "a session",
+    );
+
+    expect(screen.getByRole("button", { name: /propose requirement/i })).toBeDisabled();
+    expect(screen.getByText("Finish or remove criterion 1 to propose.")).toBeInTheDocument();
   });
 
   it("shows similar requirements as hints, not verdicts", async () => {
