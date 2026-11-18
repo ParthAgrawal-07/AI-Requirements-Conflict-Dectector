@@ -82,7 +82,11 @@ class EvidenceSpan(BaseModel):
 class FindingRead(BaseModel):
     id: uuid.UUID
     project_id: uuid.UUID
-    source: Literal["AI"] = "AI"  # human-raised concerns arrive with US-56 (Sprint 4)
+    # Who found it (ADR-25): the analysis, a rule check (S5) or a person's concern (US-56).
+    source: Literal["AI", "Rule", "Person"] = "AI"
+    raised_by: uuid.UUID | None = None  # for a concern
+    external_ref: str | None = None  # what the concern cites, e.g. "Contract §7.2"
+    ai_miss: bool = False  # a concern neither the AI nor a rule had found (NFR-37)
     category: FindingCategory
     status: FindingStatus
     severity: Severity | None
