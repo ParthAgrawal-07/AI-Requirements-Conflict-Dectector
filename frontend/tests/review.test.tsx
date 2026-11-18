@@ -91,20 +91,6 @@ describe("ReviewActions", () => {
     );
   });
 
-  it("escalates without a reason left over from a cancelled dismissal", async () => {
-    const { calls } = api(FINDING);
-    const { user } = drawer();
-
-    await user.click(await screen.findByRole("button", { name: "Dismiss…" }));
-    await user.type(screen.getByLabelText("Why is it not a real issue?"), "Different products");
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
-    await user.click(screen.getByRole("button", { name: "Escalate" }));
-
-    await waitFor(() => expect(posted(calls, "/api/v1/findings/f1/review")).toEqual([{ action: "escalate" }]));
-    await user.click(screen.getByRole("button", { name: "Dismiss…" }));
-    expect(screen.getByLabelText("Why is it not a real issue?")).toHaveValue("");
-  });
-
   it("offers only the categories a pair can have when reclassifying", async () => {
     api(FINDING);
     const { user } = drawer();

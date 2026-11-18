@@ -1,17 +1,20 @@
 import type { ReactNode } from "react";
 import { Link, Navigate, Outlet, useLocation } from "react-router-dom";
 import type { RouteObject } from "react-router-dom";
-import { Button } from "../components/Button";
 import { LoginPage } from "../features/auth/LoginPage";
 import { SignupWithCodePage } from "../features/auth/SignupWithCodePage";
+import { ChangeEditor } from "../features/changes/ChangeEditor";
 import { ChannelView } from "../features/channels/ChannelView";
 import { ComposerPage } from "../features/composer/ComposerPage";
 import { FindingsPage } from "../features/findings/FindingsPage";
+import { IssueList } from "../features/issues/IssueList";
+import { IssuePage } from "../features/issues/IssuePage";
 import { KitPage } from "../features/kit/KitPage";
 import { JoinPage } from "../features/members/JoinPage";
 import { MembersPage } from "../features/members/MembersPage";
 import { WorkspaceCreate } from "../features/members/WorkspaceCreate";
-import { lastProject, useProjects, useWorkspaces } from "../features/projects/api";
+import { MapPage } from "../features/map/MapPage";
+import { lastProject, useWorkspaces } from "../features/projects/api";
 import { ProjectHomePage } from "../features/projects/ProjectHomePage";
 import { WorkspaceHomePage } from "../features/projects/WorkspaceHomePage";
 import { prototypeRoutes } from "../features/prototypes/routes";
@@ -26,9 +29,8 @@ import { ComingSoon } from "./ComingSoon";
 
 /** Routes behind sign-in; a signed-out visitor goes to /login and comes back afterwards. */
 export function RequireAuth({ children }: { children?: ReactNode }) {
-  const { token, loading, restoring } = useAuth();
+  const { token, loading } = useAuth();
   const location = useLocation();
-  if (restoring) return <p className="page">Loading…</p>;
   if (!token) {
     return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
   }
@@ -39,31 +41,11 @@ export function RequireAuth({ children }: { children?: ReactNode }) {
 /** "/" opens the last-used project (US-24), else the only workspace, else a hint. */
 export function RootRedirect() {
   const workspaces = useWorkspaces();
-  const last = lastProject();
-  const projects = useProjects(last?.workspaceId);
-
-  if (workspaces.isLoading || (Boolean(last?.projectId) && projects.isLoading)) {
-    return <p className="page">Loading…</p>;
-  }
-
-  if (workspaces.isError) {
-    return (
-      <div className="page" role="alert">
-        <h1>Could not load workspaces</h1>
-        <p className="field-error">
-          {workspaces.error instanceof Error ? workspaces.error.message : "Failed to load workspaces."}
-        </p>
-        <Button onClick={() => void workspaces.refetch()}>Try again</Button>
-      </div>
-    );
-  }
-
+  if (workspaces.isLoading) return <p className="page">Loading…</p>;
   const list = workspaces.data ?? [];
+  const last = lastProject();
   if (last && list.some((workspace) => workspace.id === last.workspaceId)) {
-    const projectExists =
-      Boolean(last.projectId) &&
-      Boolean(projects.data?.items.some((p) => p.id === last.projectId));
-    const target = projectExists
+    const target = last.projectId
       ? `/w/${last.workspaceId}/p/${last.projectId}`
       : `/w/${last.workspaceId}`;
     return <Navigate to={target} replace />;
@@ -88,9 +70,6 @@ export function NoWorkspace() {
 }
 
 const LATER: { path: string; title: string; sprint: string }[] = [
-  { path: "map", title: "Map", sprint: "Sprint 3 (US-14)" },
-  { path: "issues", title: "Issues", sprint: "Sprint 4 (US-52)" },
-  { path: "changes", title: "Change requests", sprint: "Sprint 4 (US-33)" },
   { path: "baselines", title: "Baselines", sprint: "Sprint 5 (US-40)" },
   { path: "insights", title: "Insights", sprint: "Sprint 5 (US-13)" },
 ];
@@ -123,6 +102,10 @@ export const routes: RouteObject[] = [
               { path: "requirements/new", element: <ComposerPage /> },
               { path: "channels/:channelId", element: <ChannelView /> },
               { path: "findings", element: <FindingsPage /> },
+              { path: "map", element: <MapPage /> },
+              { path: "issues", element: <IssueList /> },
+              { path: "issues/:issueId", element: <IssuePage /> },
+              { path: "changes/new", element: <ChangeEditor /> },
               ...LATER.map((item) => ({
                 path: item.path,
                 element: <ComingSoon title={item.title} sprint={item.sprint} />,

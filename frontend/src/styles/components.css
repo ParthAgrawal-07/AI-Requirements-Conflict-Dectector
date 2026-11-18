@@ -174,19 +174,11 @@
 .nav-link[aria-current="page"] { background: var(--ink); color: var(--paper-raised); }
 .main { overflow: auto; }
 
-/* ── Layout helpers ───────────────────────────────────────────── */
-.row { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.page-section { margin-bottom: var(--space-5); }
-.error-state { color: var(--danger); }
-.kit-page { min-height: 100%; }
-
 /* ── Auth screens (Sign in board) ────────────────────────────── */
 .auth-layout { display: grid; grid-template-columns: 1fr 1fr; min-height: 100%; }
 .auth-art { display: flex; flex-direction: column; justify-content: space-between; padding: var(--space-6); border-right: 1px solid var(--line); }
 .auth-panel { display: flex; align-items: center; justify-content: center; padding: var(--space-6); background: var(--paper-raised); }
 .auth-form { width: min(400px, 100%); }
-.auth-brand { display: flex; align-items: center; gap: var(--space-3); }
-.auth-tagline { font-size: 18px; max-width: 360px; }
 .auth-form h1 { margin: 0 0 var(--space-1); font-size: 30px; }
 @media (max-width: 860px) {
   .auth-layout { grid-template-columns: 1fr; }
@@ -413,3 +405,50 @@
     width: 100%;
   }
 }
+
+/* ── Live map (US-14, interface design §9) and review (US-10) ─────────────── */
+.map-page { display: flex; flex-direction: column; gap: var(--space-3); }
+.map-toolbar { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
+.map-toolbar fieldset { border: 0; margin: 0; padding: 0; }
+.graph-canvas {
+  height: min(70vh, 640px);
+  min-height: 360px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper-raised);
+}
+.map-legend summary { cursor: pointer; font-size: 14px; }
+.map-legend dl { display: grid; grid-template-columns: max-content 1fr; gap: var(--space-1) var(--space-3); margin: var(--space-2) 0 0; font-size: 13px; }
+.map-legend dt { font-weight: 600; }
+.map-legend dd { margin: 0; }
+.legend-line { display: inline-block; width: 24px; vertical-align: middle; border-top: 3px solid var(--ink-soft); }
+.legend-conflict { border-top-color: var(--conflict); }
+.legend-duplicate { border-top: 2px dashed #6d28d9; }
+.legend-depends { border-top-width: 2px; }
+.map-tables { display: grid; gap: var(--space-5); }
+.map-tables caption { text-align: left; font-weight: 600; padding-bottom: var(--space-2); }
+.link-button { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); cursor: pointer; text-decoration: underline; }
+.changes-feed { border-top: 1px solid var(--line); padding-top: var(--space-3); }
+.feed-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); max-height: 220px; overflow: auto; }
+.feed-item { background: none; border: 0; padding: var(--space-1) var(--space-2); font: inherit; text-align: left; width: 100%; border-radius: var(--radius-sm); cursor: pointer; }
+.feed-item:hover, .feed-item:focus-visible { background: var(--accent-soft); }
+.requirement-quote { margin: var(--space-3) 0; padding: var(--space-3); border-left: 3px solid var(--line-strong); background: var(--paper-sunken); }
+.readiness { list-style: none; padding: 0; margin: 0 0 var(--space-2); display: grid; gap: var(--space-1); font-size: 13px; }
+.review-actions { margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px dashed var(--line); }
+
+/* ── Issues (US-52, US-56) and version history (US-12) ──────────────────────────────────── */
+.issue-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.issue-row { padding: var(--space-3) var(--space-4); }
+.issue-title { margin: 0 0 var(--space-1); display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.issue-labels { display: flex; flex-wrap: wrap; gap: var(--space-1); margin: var(--space-1) 0 0; }
+.label-chip { font-size: 12px; padding: 1px 8px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--paper-sunken); }
+.issue-body { white-space: pre-wrap; }
+.inline-list { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.comment-list { list-style: none; padding: 0; margin: 0 0 var(--space-3); display: grid; gap: var(--space-3); }
+.comment { border-left: 3px solid var(--line); padding-left: var(--space-3); }
+.comment p { margin: 0; }
+.version-list { list-style: none; padding: 0; margin: 0; display: grid; gap: var(--space-4); }
+.version-meta { margin: 0 0 var(--space-1); }
+.word-diff { margin: 0; line-height: 1.6; }
+.word-diff del { background: var(--conflict-soft); color: inherit; text-decoration: line-through; }
+.word-diff ins { background: var(--approved-soft); color: inherit; text-decoration: underline; }

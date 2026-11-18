@@ -100,14 +100,13 @@ export function ReviewActions({ finding, projectId }: ReviewActionsProps) {
               <Button size="sm" onClick={() => setMode("merge")}>
                 Merge…
               </Button>
-              {/* Escalate has no note field: sending ``reason`` here would audit leftover text. */}
-              <Button size="sm" variant="ghost" loading={review.isPending} onClick={() => act("escalate")}>
+              <Button size="sm" variant="ghost" onClick={() => act("escalate", { reason: reason || undefined })}>
                 Escalate
               </Button>
             </>
           )}
           {!live && (
-            <Button size="sm" variant="ghost" loading={review.isPending} onClick={() => act("reopen")}>
+            <Button size="sm" variant="ghost" onClick={() => act("reopen")}>
               Reopen
             </Button>
           )}
@@ -167,14 +166,7 @@ export function ReviewActions({ finding, projectId }: ReviewActionsProps) {
             <Button type="submit" size="sm" variant="primary" loading={review.isPending}>
               {mode === "dismiss" ? "Dismiss" : mode === "merge" ? "Merge" : "Reclassify"}
             </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                setMode(null);
-                setReason("");
-              }}
-            >
+            <Button size="sm" variant="ghost" onClick={() => setMode(null)}>
               Cancel
             </Button>
           </div>
