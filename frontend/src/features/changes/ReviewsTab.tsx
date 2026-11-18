@@ -2,11 +2,15 @@ import { useState } from "react";
 import { ApiError } from "../../api/client";
 import { Button } from "../../components/Button";
 import { useToast } from "../../components/Toast";
+import { useMembers } from "../channels/api";
 import type { Quote } from "./DiffView";
 import {
+  ACTIVE,
+  useAddReviewer,
   useSubmitReview,
   type ChangeRequest,
   type ReviewDecision,
+  type ReviewRequest,
   type Reviews,
 } from "./api";
 
@@ -31,6 +35,12 @@ const DECISION_LABEL: Record<ReviewDecision, string> = {
   approve: "Approve",
   request_changes: "Request changes",
   comment: "Comment only",
+};
+const REASON_TEXT: Record<string, string> = {
+  owner: "owner",
+  direct_conflict: "owner of a conflicting requirement",
+  compliance: "compliance",
+  requested: "requested",
 };
 
 function when(iso: string): string {
@@ -164,6 +174,70 @@ export function ReviewsTab({ change, reviews, canReview, pending, onPendingChang
               Send review
             </Button>
           </div>
+        </form>
+      )}
+    </section>
+  );
+}
+
+export interface ReviewerListProps {
+  change: ChangeRequest;
+  requests: ReviewRequest[];
+  workspaceId: string;
+  canAdd: boolean; // the proposer, or a member who may merge
+}
+
+/** Who was asked (automatically: owner, owners of conflicting requirements, compliance for a
+ *  protected one) and whether each approved this revision; the proposer can ask one more. */
+export function ReviewerList({ change, requests, workspaceId, canAdd }: ReviewerListProps) {
+  const members = useMembers(canAdd ? workspaceId : undefined);
+  const add = useAddReviewer(change.id);
+  const notify = useToast();
+  const [reviewer, setReviewer] = useState("");
+  const asked = new Set(requests.map((r) => r.reviewer?.id));
+  const candidates = (members.data ?? []).filter((m) => !asked.has(m.user.id) && m.user.id !== change.proposer?.id);
+
+  return (
+    <section aria-label="Reviewers" className="reviewer-list">
+      <h2 className="eyebrow">Reviewers</h2>
+      {requests.length === 0 && <p className="muted small">Nobody asked yet.</p>}
+      <ul className="readiness">
+        {requests.map((request, index) => (
+          <li key={request.reviewer?.id ?? index}>
+            <span aria-hidden="true">{request.approved ? "✓" : "○"}</span>{" "}
+            {request.reviewer?.full_name ?? "A former member"}{" "}
+            <span className="muted small">
+              {request.approved ? "approved" : "requested"} · {REASON_TEXT[request.reason] ?? request.reason}
+              {request.required ? ", required" : ", optional"}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {canAdd && ACTIVE.has(change.status) && (
+        <form
+          className="inline-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            add.mutate(reviewer, {
+              onSuccess: () => setReviewer(""),
+              onError: (error) => notify(error instanceof ApiError ? error.message : "Could not ask them", "error"),
+            });
+          }}
+        >
+          <label>
+            <span className="sr-only">Ask someone to review</span>
+            <select value={reviewer} onChange={(e) => setReviewer(e.target.value)}>
+              <option value="">Ask someone…</option>
+              {candidates.map((m) => (
+                <option key={m.user.id} value={m.user.id}>
+                  {m.user.full_name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Button type="submit" size="sm" disabled={!reviewer} loading={add.isPending}>
+            Ask
+          </Button>
         </form>
       )}
     </section>
