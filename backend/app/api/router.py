@@ -23,6 +23,7 @@ from app.api import (
     drafts,
     findings,
     intake,
+    issues,
     join_codes,
     me,
     messages,
@@ -62,6 +63,7 @@ for _router in (
     graph_api.router,
     findings.router,
     clarifications.router,
+    issues.router,
     analysis_runs.router,
     search_similar.router,
 ):
