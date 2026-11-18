@@ -26,6 +26,7 @@ def publish_card(db: Session, run: AnalysisRun) -> Message | None:
     )
     if requirement is None or requirement.origin_message_id is None:
         return None
+    db.refresh(run)
     root = db.get(Message, requirement.origin_message_id)
     channel = db.get(Channel, root.channel_id) if root is not None else None
     if root is None or channel is None:
@@ -36,11 +37,16 @@ def publish_card(db: Session, run: AnalysisRun) -> Message | None:
     elif run.error_message:
         body = f"AI analysis could not finish: {run.error_message}"
     elif findings:
-        body = "AI analysis findings:\n" + "\n".join(
-            f"{f.category.value}: {f.explanation or f.rationale}"
-            + (f"\nClarification: {f.clarification.question}" if f.clarification else "")
-            for f in findings
-        )
+        body = "AI analysis findings:"
+        notice = "\nMore entries are available in the findings view."
+        for finding in findings:
+            entry = f"\n{finding.category.value}: {finding.explanation or finding.rationale}"
+            if finding.clarification:
+                entry += f"\nClarification: {finding.clarification.question}"
+            if len(body) + len(entry) + len(notice) > messages.MAX_MESSAGE_CHARS:
+                body += notice
+                break
+            body += entry
     else:
         body = "No issues detected by analysis — analysis can miss conflicts."
     payload = {"analysis_run_id": str(run.id), "status": run.status.value}

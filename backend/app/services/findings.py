@@ -11,7 +11,7 @@ import uuid
 from dataclasses import dataclass
 
 from sqlalchemy import func, or_, select
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy.orm import Session, aliased, selectinload
 
 from app.core.errors import NotFoundError
 from app.models import (
@@ -41,21 +41,46 @@ class FindingView:
 
 def _involved(db: Session, findings: list[Finding]) -> dict[uuid.UUID, list[Requirement]]:
     pair_ids = [f.candidate_pair_id for f in findings if f.candidate_pair_id]
+    project_ids = {f.project_id for f in findings}
+    a, b = aliased(Requirement), aliased(Requirement)
     pairs = {
         pair.id: pair
-        for pair in db.scalars(select(CandidatePair).where(CandidatePair.id.in_(pair_ids)))
+        for pair in db.scalars(
+            select(CandidatePair)
+            .join(a, a.id == CandidatePair.requirement_a_id)
+            .join(b, b.id == CandidatePair.requirement_b_id)
+            .where(
+                CandidatePair.id.in_(pair_ids),
+                a.project_id.in_(project_ids),
+                a.project_id == b.project_id,
+            )
+        )
     }
-    wanted: set[uuid.UUID] = {f.requirement_id for f in findings if f.requirement_id}
+    wanted = {f.requirement_id for f in findings if f.requirement_id}
     for pair in pairs.values():
-        wanted |= {pair.requirement_a_id, pair.requirement_b_id}
-    by_id = {r.id: r for r in db.scalars(select(Requirement).where(Requirement.id.in_(wanted)))}
+        wanted.update((pair.requirement_a_id, pair.requirement_b_id))
+    by_id = {
+        r.id: r
+        for r in db.scalars(
+            select(Requirement).where(
+                Requirement.id.in_(wanted), Requirement.project_id.in_(project_ids)
+            )
+        )
+    }
     involved: dict[uuid.UUID, list[Requirement]] = {}
     for finding in findings:
-        if finding.candidate_pair_id and (subject := pairs.get(finding.candidate_pair_id)):
-            ids = [subject.requirement_a_id, subject.requirement_b_id]
+        if finding.candidate_pair_id:
+            subject = pairs.get(finding.candidate_pair_id)
+            ids = [subject.requirement_a_id, subject.requirement_b_id] if subject else []
+            if not subject or any(
+                i not in by_id or by_id[i].project_id != finding.project_id for i in ids
+            ):
+                raise NotFoundError("Finding requirements not found")
         else:
             ids = [finding.requirement_id] if finding.requirement_id else []
-        involved[finding.id] = [by_id[i] for i in ids if i in by_id]
+        involved[finding.id] = [
+            by_id[i] for i in ids if i in by_id and by_id[i].project_id == finding.project_id
+        ]
     return involved
 
 
@@ -99,6 +124,7 @@ def list_findings(
     rows = list(
         db.scalars(
             select(Finding)
+            .options(selectinload(Finding.clarification))
             .where(*conditions)
             .order_by(Finding.confidence.desc(), Finding.created_at, Finding.id)
             .limit(limit)

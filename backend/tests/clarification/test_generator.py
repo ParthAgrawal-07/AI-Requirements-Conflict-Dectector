@@ -158,7 +158,7 @@ def test_a_generic_question_is_asked_again_with_the_reason(
     clarification = generate(db_session, LLMClient(transport), finding)
 
     assert clarification is not None and clarification.question == TIMEOUT_QUESTION
-    assert "rejected because it is a generic question" in transport.calls[1][1]
+    assert "failed specificity or reference validation" in transport.calls[1][1]
 
 
 def test_nothing_is_stored_when_every_question_is_generic(
@@ -342,7 +342,21 @@ def test_repeated_batches_share_the_persisted_run_limit(
     db_session.commit()
     llm = LLMClient(FakeTransport([]))
     questions_for_run(db_session, run.id, llm)
+    before = set(
+        db_session.scalars(
+            select(Clarification.id).join(Finding).where(Finding.analysis_run_id == run.id)
+        )
+    )
+    assert len(before) == 20
     questions_for_run(db_session, run.id, llm)
+    assert (
+        set(
+            db_session.scalars(
+                select(Clarification.id).join(Finding).where(Finding.analysis_run_id == run.id)
+            )
+        )
+        == before
+    )
     assert (
         len(
             list(
@@ -388,3 +402,97 @@ def test_existing_question_without_linkage_is_published_once(
         )
     messages = list(db_session.scalars(select(Message).where(Message.kind == MessageKind.SYSTEM)))
     assert len(messages) == 1 and clarification.message_id == messages[0].id
+
+
+def test_suffixed_requirement_label_is_a_complete_reference() -> None:
+    check_specific(
+        ClarificationOutput(
+            question="Which limit applies to REQ-014-A?",
+            addressed_to="owner",
+            requirement_ids=["REQ-014-A"],
+        ),
+        ["REQ-014-A"],
+        [],
+    )
+
+
+def test_card_omits_oversized_entries_without_exceeding_message_limit(
+    db_session: Session, posted_run: tuple[AnalysisRun, User]
+) -> None:
+    from app.classification.result_card import publish_card
+
+    run, _ = posted_run
+    finding = db_session.scalar(select(Finding).where(Finding.analysis_run_id == run.id))
+    assert finding is not None
+    finding.explanation = "x" * 5000
+    db_session.commit()
+    card = publish_card(db_session, run)
+    assert card is not None and len(card.body) <= 4000
+    assert "findings view" in card.body
+    assert "x" not in card.body
+
+
+def test_partial_batch_refreshes_card_before_provider_retry(
+    db_session: Session, posted_run: tuple[AnalysisRun, User]
+) -> None:
+    from app.classification.llm_client import LLMUnavailableError
+
+    run, _ = posted_run
+    original = db_session.scalar(select(Finding).where(Finding.analysis_run_id == run.id))
+    assert original is not None
+    requirements = clarification_tasks.involved_requirements(db_session, original)
+    extra = finding_about(db_session, requirements[0], category=FindingCategory.INCOMPLETE)
+    extra.analysis_run_id = run.id
+    extra.confidence = 0.1
+    db_session.commit()
+    with pytest.raises(LLMUnavailableError):
+        questions_for_run(db_session, run.id, LLMClient(FakeTransport([reply()])))
+    card = db_session.scalar(select(Message).where(Message.kind == MessageKind.ANALYSIS_CARD))
+    assert card is not None and TIMEOUT_QUESTION in card.body
+
+
+def test_manual_generation_refreshes_requirement_card(
+    db_session: Session, posted_run: tuple[AnalysisRun, User]
+) -> None:
+    run, _ = posted_run
+    finding = db_session.scalar(select(Finding).where(Finding.analysis_run_id == run.id))
+    assert finding is not None
+    result = clarification_tasks.question_for_finding(
+        db_session, finding.id, LLMClient(FakeTransport([reply()]))
+    )
+    card = db_session.scalar(select(Message).where(Message.kind == MessageKind.ANALYSIS_CARD))
+    assert result is not None and card is not None and TIMEOUT_QUESTION in card.body
+
+
+def test_unpublished_posted_question_can_be_redispatched(
+    db_session: Session, posted_run: tuple[AnalysisRun, User], client, user: User, followups
+) -> None:
+    from tests.api.conftest import headers_for
+
+    run, _ = posted_run
+    finding = db_session.scalar(select(Finding).where(Finding.analysis_run_id == run.id))
+    assert finding is not None
+    clarification = generate(db_session, LLMClient(FakeTransport([reply()])), finding)
+    assert clarification is not None and clarification.message_id is None
+    response = client.post(
+        f"/api/v1/findings/{finding.id}/clarification", headers=headers_for(user)
+    )
+    assert response.status_code == 202
+    assert (clarification_tasks.GENERATE_FOR_FINDING, [str(finding.id)]) in followups
+
+
+def test_pair_with_endpoint_outside_finding_project_is_rejected(
+    db_session: Session, pair: tuple[Requirement, Requirement]
+) -> None:
+    from app.core.errors import NotFoundError
+
+    finding = finding_about(db_session, *pair)
+    project = db_session.get(Project, finding.project_id)
+    assert project is not None
+    other = Project(workspace_id=project.workspace_id, name="Other project")
+    db_session.add(other)
+    db_session.flush()
+    pair[1].project_id = other.id
+    db_session.commit()
+    with pytest.raises(NotFoundError):
+        clarification_tasks.involved_requirements(db_session, finding)

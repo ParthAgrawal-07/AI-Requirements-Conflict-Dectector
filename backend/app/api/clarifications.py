@@ -13,20 +13,29 @@ from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import DbSession, requires
 from app.clarification.generator import needs_question
 from app.clarification.tasks import GENERATE_FOR_FINDING
-from app.core.errors import ConflictError, NotFoundError
-from app.models import AuditAction, AuditLog, Clarification, Finding, Project
+from app.core.celery_app import celery_app
+from app.core.errors import AppError, ConflictError, NotFoundError
+from app.models import (
+    AnalysisRun,
+    AnalysisScope,
+    AuditAction,
+    AuditLog,
+    Clarification,
+    Finding,
+    Project,
+    Requirement,
+)
 from app.schemas.common import ErrorResponse
 from app.schemas.findings import ClarificationRead
-from app.services import analysis_orchestrator
 from app.services.access import AccessContext, Scope, register_scope_resolver
-from app.services.findings import involved_requirements
+from app.services.findings import get_finding, involved_requirements
 
 router = APIRouter(tags=["clarifications"])
 
@@ -42,6 +51,11 @@ class AnswerRequest(BaseModel):
 
     resolution: str = Field(min_length=3, max_length=2000)
 
+    @field_validator("resolution", mode="before")
+    @classmethod
+    def normalize(cls, value: Any) -> Any:
+        return value.strip() if isinstance(value, str) else value
+
 
 @router.get(
     "/findings/{finding_id}/clarification",
@@ -54,6 +68,7 @@ def get_clarification(
     ctx: Annotated[AccessContext, requires("view")],
     db: DbSession,
 ) -> ClarificationRead:
+    get_finding(db, finding_id, ctx.user, ctx.workspace_id)
     clarification = db.scalar(select(Clarification).where(Clarification.finding_id == finding_id))
     if clarification is None:
         raise NotFoundError("This finding has no clarification question yet")
@@ -64,7 +79,10 @@ def get_clarification(
     "/findings/{finding_id}/clarification",
     status_code=202,
     summary="Generate the finding's clarification question now (queued)",
-    responses=_ERRORS,
+    responses={
+        **_ERRORS,
+        503: {"model": ErrorResponse, "description": "Queue unavailable; retry later"},
+    },
 )
 def request_clarification(
     finding_id: uuid.UUID,
@@ -79,9 +97,26 @@ def request_clarification(
             "Only open Conflicting, Ambiguous and Incomplete findings get a question",
             code="no_question_needed",
         )
-    if finding.clarification is not None:
+    run = db.get(AnalysisRun, finding.analysis_run_id) if finding.analysis_run_id else None
+    subject = (
+        db.get(Requirement, run.subject_id)
+        if run and run.scope is AnalysisScope.REQUIREMENT
+        else None
+    )
+    needs_reply = subject is not None and subject.origin_message_id is not None
+    if finding.clarification is not None and (
+        finding.clarification.message_id is not None or not needs_reply
+    ):
         raise ConflictError("This finding already has a question", code="already_asked")
-    analysis_orchestrator.send(GENERATE_FOR_FINDING, [str(finding.id)])
+    try:
+        celery_app.send_task(GENERATE_FOR_FINDING, args=[str(finding.id)])
+    except Exception as error:
+        raise AppError(
+            "Question generation could not be queued; please retry",
+            status_code=503,
+            code="generation_unavailable",
+            headers={"Retry-After": "5"},
+        ) from error
     return Response(status_code=202)
 
 
@@ -98,13 +133,21 @@ def answer_clarification(
     db: DbSession,
 ) -> ClarificationRead:
     clarification = db.scalar(
-        select(Clarification).where(Clarification.id == clarification_id).with_for_update()
+        select(Clarification)
+        .join(Finding)
+        .join(Project)
+        .where(
+            Clarification.id == clarification_id,
+            Finding.project_id == ctx.project_id,
+            Project.workspace_id == ctx.workspace_id,
+        )
+        .with_for_update(of=Clarification)
     )
     if clarification is None:
         raise NotFoundError("Clarification not found")
     if clarification.resolved_at is not None:
         raise ConflictError("This question was already answered", code="already_answered")
-    clarification.resolution = body.resolution.strip()
+    clarification.resolution = body.resolution
     clarification.resolved_by = ctx.user.id
     clarification.resolved_at = datetime.now(UTC)
     _record_in_history(db, ctx, clarification)

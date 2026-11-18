@@ -249,7 +249,9 @@ def post_system_message(
 
     Mentions in the body are parsed as for a member's message, so an @mentioned owner is notified.
     Posts even in an archived channel: the card belongs to a requirement posted before archiving.
-    Commits and announces ``message.created``.
+    With commit=True, commits and announces ``message.created``. With commit=False,
+    returns a flushed message in the caller's transaction; the caller must commit before
+    announcing ``message.created``.
     """
     if kind not in SYSTEM_KINDS:
         raise ValueError(f"{kind} is not a system message kind")

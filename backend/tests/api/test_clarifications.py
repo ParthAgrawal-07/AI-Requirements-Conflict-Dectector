@@ -107,6 +107,9 @@ def test_answering_records_the_resolution_in_each_requirements_history(
         select(AuditLog).where(AuditLog.action == AuditAction.CLARIFICATION_ANSWERED)
     ).all()
     assert len(history) == 2 and {h.finding_id for h in history} == {finding.id}
+    pair = db_session.get(CandidatePair, finding.candidate_pair_id)
+    assert pair is not None
+    assert {h.requirement_id for h in history} == {pair.requirement_a_id, pair.requirement_b_id}
 
 
 def test_a_finding_is_resolved_once_accepted_and_answered(
@@ -172,6 +175,8 @@ def test_another_workspaces_question_is_a_404(
     clarification: Clarification,
     make_user: Callable[..., User],
     make_workspace: Callable[..., Workspace],
+    db_session: Session,
+    followups: list[tuple[str, list[str]]],
 ) -> None:
     stranger = make_user(role=DefaultRole.OWNER, workspace=make_workspace())
 
@@ -183,6 +188,16 @@ def test_another_workspaces_question_is_a_404(
         == 404
     )
 
+    db_session.delete(clarification)
+    db_session.commit()
+    assert (
+        client.post(
+            f"/api/v1/findings/{finding.id}/clarification", headers=headers_for(stranger)
+        ).status_code
+        == 404
+    )
+    assert followups == []
+
 
 def test_a_finding_without_a_question_says_so(
     client: TestClient, finding: Finding, user: User
@@ -192,7 +207,7 @@ def test_a_finding_without_a_question_says_so(
     assert response.status_code == 404
 
 
-@pytest.mark.parametrize("value", ["   ", " a ", " ab ", "x" * 2001])
+@pytest.mark.parametrize("value", ["   ", " a ", " ab ", "\x1c\x1d\x1e\x1f", "x" * 2001])
 def test_answer_rejects_invalid_normalized_resolution(value: str) -> None:
     from pydantic import ValidationError
 
@@ -200,3 +215,19 @@ def test_answer_rejects_invalid_normalized_resolution(value: str) -> None:
 
     with pytest.raises(ValidationError):
         AnswerRequest(resolution=value)
+
+
+def test_generation_reports_broker_failure(
+    client: TestClient, finding: Finding, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.api.clarifications import celery_app
+
+    def unavailable(*args: Any, **kwargs: Any) -> None:
+        raise ConnectionError("broker unavailable")
+
+    monkeypatch.setattr(celery_app, "send_task", unavailable)
+    response = client.post(
+        f"/api/v1/findings/{finding.id}/clarification", headers=headers_for(user)
+    )
+    assert response.status_code == 503
+    assert response.headers["Retry-After"] == "5"

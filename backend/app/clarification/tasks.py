@@ -90,23 +90,25 @@ def _questions_for_run(db: Session, run: AnalysisRun, llm: LLMClient) -> list[Cl
     ]
     remaining = max(0, MAX_AUTO_QUESTIONS_PER_RUN - used)
     created: list[Clarification] = []
-    for finding in findings:
-        if finding.clarification is None and remaining <= 0:
-            continue
-        existed = finding.clarification is not None
-        try:
-            clarification = _question(db, llm, finding)
-        except BudgetExceededError:
-            logger.info("Clarifications for project %s wait for budget", finding.project_id)
-            break
-        if clarification is not None:
-            created.append(clarification)
-            if not existed:
-                remaining -= 1
-    if created and run.scope is AnalysisScope.REQUIREMENT:
-        from app.classification.result_card import publish_card
+    try:
+        for finding in findings:
+            if finding.clarification is None and remaining <= 0:
+                continue
+            existed = finding.clarification is not None
+            try:
+                clarification = _question(db, llm, finding)
+            except BudgetExceededError:
+                logger.info("Clarifications for project %s wait for budget", finding.project_id)
+                break
+            if clarification is not None:
+                created.append(clarification)
+                if not existed:
+                    remaining -= 1
+    finally:
+        if created and run.scope is AnalysisScope.REQUIREMENT:
+            from app.classification.result_card import publish_card
 
-        publish_card(db, run)
+            publish_card(db, run)
     return created
 
 
@@ -117,7 +119,13 @@ def question_for_finding(
     if finding is None:
         return None
     try:
-        return _question(db, llm, finding)
+        result = _question(db, llm, finding)
+        run = db.get(AnalysisRun, finding.analysis_run_id) if finding.analysis_run_id else None
+        if result is not None and run and run.scope is AnalysisScope.REQUIREMENT:
+            from app.classification.result_card import publish_card
+
+            publish_card(db, run)
+        return result
     except BudgetExceededError:
         return None
 

@@ -42,7 +42,6 @@ from app.models import (
     FindingCategory,
     JoinRequest,
     Message,
-    OwnershipRequest,
     Project,
     Requirement,
     Role,
@@ -91,7 +90,6 @@ class World:
     custom_role: Role  # an unused custom role ("Client reviewer")
     message: Message  # a chat message by the Owner in `channel`
     finding: Finding  # an Ambiguous finding about a requirement of `document`
-    ownership_request: OwnershipRequest  # `target` asks to own that requirement
     run: AnalysisRun  # a finished analysis of `document`
     clarification: Clarification  # the question about `finding`
     db: Session
@@ -206,8 +204,6 @@ CASES = [
         needs="baseline.manage",
     ),
     Case("POST", "/api/v1/requirements/{requirement_id}/signoff", lambda _: {"version": 1}),
-    Case("POST", "/api/v1/findings/{finding_id}/review", lambda _: {"action": "confirm"}),
-    Case("GET", "/api/v1/findings/{finding_id}/reviews"),
     # Sprint 3 — clarification questions (Madhav, US-09). The world's finding already has one,
     # so requesting another is a 409 — past the permission check.
     Case("GET", "/api/v1/findings/{finding_id}/clarification"),
@@ -216,31 +212,7 @@ CASES = [
         "POST",
         "/api/v1/clarifications/{clarification_id}/answer",
         lambda _: {"resolution": "Under 2 seconds at p95"},
-    ),
-    # Sprint 3 — a run's results, behind the result card (Keval, US-31)
-    Case("GET", "/api/v1/analysis-runs/{analysis_run_id}"),
-    # Sprint 3 — the composer and ownership (Bansil, US-30, US-36). Deciding is for the owner or
-    # whoever may reassign; the world's requirement has no owner, so it needs baseline.manage.
-    Case(
-        "POST",
-        "/api/v1/projects/{project_id}/requirements",
-        lambda w: {
-            "fields": {
-                "template": "free_text",
-                "slots": {"statement": "The system shall keep audit logs for seven years."},
-                "type": "functional",
-                "priority": "must",
-                "channel_id": str(w.channel.id),
-            }
-        },
-    ),
-    Case("POST", "/api/v1/requirements/{requirement_id}/ownership-requests", lambda _: {}),
-    Case("GET", "/api/v1/requirements/{requirement_id}/ownership-requests"),
-    Case(
-        "POST",
-        "/api/v1/ownership-requests/{ownership_request_id}/decision",
-        lambda _: {"accept": True},
-        needs="baseline.manage",
+        needs="req.comment",
     ),
     # Sprint 3 — the live map's shared layout (Dhavni, US-14)
     Case(
@@ -329,7 +301,6 @@ def world(
     )
     db_session.add(finding)
     db_session.commit()
-    ownership_request = OwnershipRequest(requirement_id=vague.id, requester_id=target.id)
     run = AnalysisRun(
         project_id=project.id,
         scope=AnalysisScope.DOCUMENT,
@@ -337,7 +308,7 @@ def world(
         status=AnalysisRunStatus.DONE,
     )
     clarification = Clarification(finding_id=finding.id, question="What does 'fast' mean?")
-    db_session.add_all([ownership_request, run, clarification])
+    db_session.add_all([run, clarification])
     db_session.commit()
     return World(
         workspace=workspace,
@@ -351,7 +322,6 @@ def world(
         custom_role=custom_role,
         message=message,
         finding=finding,
-        ownership_request=ownership_request,
         run=run,
         clarification=clarification,
         db=db_session,
@@ -391,7 +361,6 @@ def _call(api: TestClient, case: Case, world: World, user: User) -> int:
         user_id=world.target.id,
         role_id=world.custom_role.id,
         requirement_id=world.finding.requirement_id,
-        ownership_request_id=world.ownership_request.id,
         analysis_run_id=world.run.id,
         clarification_id=world.clarification.id,
     )

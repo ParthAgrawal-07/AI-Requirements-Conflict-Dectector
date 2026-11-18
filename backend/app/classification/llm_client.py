@@ -274,8 +274,6 @@ class LLMClient:
             return f"gemini/{transport._model}"
         if isinstance(transport, GroqTransport):
             return f"groq/{transport._model}"
-        if isinstance(transport, AnthropicTransport):
-            return f"anthropic/{transport._model}"
         return "fake/test" if isinstance(transport, FakeTransport) else "unknown/unknown"
 
     def complete_text(self, system: str, user: str, *, project_id: uuid.UUID | None = None) -> str:

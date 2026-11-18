@@ -89,7 +89,7 @@ def check_specific(output: ClarificationOutput, labels: list[str], vague_terms: 
         raise GenericQuestionError(
             "requirement_ids must match the supplied IDs named in the question"
         )
-    if set(re.findall(r"\bREQ-\d+\b", question)) - set(labels):
+    if set(re.findall(r"(?<![\w-])REQ-[\w]+(?:-[\w]+)*(?![\w-])", question)) - set(labels):
         raise GenericQuestionError("the question names unknown requirement IDs")
     if vague_terms and not any(term.lower() in question.lower() for term in vague_terms):
         raise GenericQuestionError(
@@ -172,11 +172,11 @@ def ask(
         try:
             check_specific(output, labels, vague_terms)
             return output
-        except GenericQuestionError as reason:
+        except GenericQuestionError:
             if attempt == MAX_GENERIC_RETRIES:
                 return None
             prompt = (
-                f"{user}\n\nYour previous question was rejected because {reason}. Ask one "
+                f"{user}\n\nThe question failed specificity or reference validation. Consult the escaped data section. Ask one "
                 "specific question that names the requirement IDs."
             )
     return None
