@@ -1,0 +1,122 @@
+{
+  "description": "Component C (PLAN.md §5): 10 scripted change requests against the planted SRS (component A, labels.csv). Owners and protected requirements are the fixture the tests load the SRS with. expected_affected_ids are the requirements the impact analysis must list (one hop over findings, a second hop over findings; no embeddings), expected_owners the owners of the target and of everything affected. expected_resolved / expected_new_conflicts / expected_new_duplicates are what the findings delta must report when the classifier answers as the label says (an oracle): they test the delta, not the classifier.",
+  "owners": {
+    "Asha": ["REQ-002", "REQ-004", "REQ-008", "REQ-020", "REQ-021", "REQ-028", "REQ-034", "REQ-036", "REQ-038", "REQ-040", "REQ-050"],
+    "Ravi": ["REQ-006", "REQ-012", "REQ-023", "REQ-027", "REQ-032", "REQ-035", "REQ-037", "REQ-041", "REQ-045"],
+    "Meera": ["REQ-013", "REQ-017", "REQ-024", "REQ-039", "REQ-044", "REQ-046", "REQ-047", "REQ-048", "REQ-049"]
+  },
+  "protected": ["REQ-028", "REQ-034"],
+  "change_requests": [
+    {
+      "cr_id": "CR-1",
+      "target_req_id": "REQ-001",
+      "proposed_text": "The system shall authenticate users with a username and password or a passkey.",
+      "expected_affected_ids": [],
+      "expected_owners": [],
+      "expected_new_conflicts": [],
+      "expected_resolved": [],
+      "split": "dev",
+      "notes": "No impact: REQ-001 has no finding and no owner."
+    },
+    {
+      "cr_id": "CR-2",
+      "target_req_id": "REQ-021",
+      "proposed_text": "API requests shall time out after 10 seconds.",
+      "expected_affected_ids": ["REQ-023"],
+      "expected_owners": ["Asha", "Ravi"],
+      "expected_new_conflicts": [],
+      "expected_resolved": ["REQ-023"],
+      "split": "dev",
+      "notes": "Single-requirement impact: aligning the timeout resolves the 2 s vs 10 s conflict."
+    },
+    {
+      "cr_id": "CR-3",
+      "target_req_id": "REQ-032",
+      "proposed_text": "Sessions shall remain active until the user logs out, except admin and guest sessions, which expire after 5 minutes of inactivity.",
+      "expected_affected_ids": ["REQ-004", "REQ-020"],
+      "expected_owners": ["Asha", "Ravi"],
+      "expected_new_conflicts": [],
+      "expected_resolved": ["REQ-004", "REQ-020"],
+      "split": "dev",
+      "notes": "Multi-owner conflict: REQ-032 (Ravi) conflicts with REQ-004 and REQ-020 (Asha); the change resolves both."
+    },
+    {
+      "cr_id": "CR-4",
+      "target_req_id": "REQ-008",
+      "proposed_text": "The system shall store an email address for every user; verifying it is optional.",
+      "expected_affected_ids": ["REQ-006", "REQ-027"],
+      "expected_owners": ["Asha", "Ravi"],
+      "expected_new_conflicts": ["REQ-027"],
+      "expected_resolved": ["REQ-027"],
+      "split": "dev",
+      "notes": "Dependency break: REQ-006 and REQ-027 depend on a verified address; a reset email to an unverified address conflicts with REQ-027's intent."
+    },
+    {
+      "cr_id": "CR-5",
+      "target_req_id": "REQ-050",
+      "proposed_text": "The system shall lock an account after five consecutive failed login attempts.",
+      "expected_affected_ids": ["REQ-040", "REQ-041"],
+      "expected_owners": ["Asha", "Ravi"],
+      "expected_new_conflicts": [],
+      "expected_new_duplicates": ["REQ-040"],
+      "expected_resolved": ["REQ-040"],
+      "split": "dev",
+      "notes": "Duplicate introduced: the new text restates REQ-040 (whose duplicate REQ-041 is two steps away); the dependency on REQ-040 no longer holds."
+    },
+    {
+      "cr_id": "CR-6",
+      "target_req_id": "REQ-034",
+      "proposed_text": "Audit log entries shall be retained for ten years.",
+      "expected_affected_ids": ["REQ-035"],
+      "expected_owners": ["Asha", "Ravi"],
+      "expected_new_conflicts": [],
+      "expected_resolved": [],
+      "split": "dev",
+      "notes": "Protected requirement: the conflict with automatic deletion after 12 months still holds; a compliance reviewer must approve."
+    },
+    {
+      "cr_id": "CR-7",
+      "target_req_id": "REQ-044",
+      "proposed_text": "The system shall not display any login history to the user.",
+      "expected_affected_ids": ["REQ-045"],
+      "expected_owners": ["Meera", "Ravi"],
+      "expected_new_conflicts": ["REQ-045"],
+      "expected_resolved": ["REQ-045"],
+      "split": "heldout",
+      "notes": "A duplicate becomes a conflict: REQ-045 still shows the last sign-in."
+    },
+    {
+      "cr_id": "CR-8",
+      "target_req_id": "REQ-004",
+      "proposed_text": "Admin sessions shall expire after 15 minutes of inactivity.",
+      "expected_affected_ids": ["REQ-032", "REQ-020"],
+      "expected_owners": ["Asha", "Ravi"],
+      "expected_new_conflicts": [],
+      "expected_resolved": [],
+      "split": "heldout",
+      "notes": "Two-hop ripple: REQ-020 is reached through REQ-032's conflict; REQ-004 still conflicts with REQ-032."
+    },
+    {
+      "cr_id": "CR-9",
+      "target_req_id": "REQ-024",
+      "proposed_text": "Administrators shall be able to reset a user's password but never view it.",
+      "expected_affected_ids": ["REQ-028"],
+      "expected_owners": ["Meera", "Asha"],
+      "expected_new_conflicts": [],
+      "expected_resolved": ["REQ-028"],
+      "split": "heldout",
+      "notes": "Touches a protected requirement (REQ-028) and resolves the plaintext-password conflict."
+    },
+    {
+      "cr_id": "CR-10",
+      "target_req_id": "REQ-013",
+      "proposed_text": "Retention periods shall be fixed at seven years for every data category.",
+      "expected_affected_ids": ["REQ-017"],
+      "expected_owners": ["Meera"],
+      "expected_new_conflicts": [],
+      "expected_resolved": [],
+      "split": "heldout",
+      "notes": "REQ-017 still depends on the retention rule; nothing resolved, nothing new."
+    }
+  ]
+}
