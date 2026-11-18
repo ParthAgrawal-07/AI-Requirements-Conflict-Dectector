@@ -21,10 +21,24 @@ never related: they are out of the baseline and are not analysed again.
 """
 
 import uuid
+from collections.abc import Collection, Iterable
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from app.models import FindingCategory, FindingStatus
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.embeddings.candidates import EXCLUDED_STATES
+from app.embeddings.store import nearest_requirements
+from app.models import (
+    CandidatePair,
+    Embedding,
+    Finding,
+    FindingCategory,
+    FindingStatus,
+    Project,
+    Requirement,
+)
 
 # A finding still says something about its requirements in these states (US-10).
 LIVE_STATUSES = (FindingStatus.FLAGGED, FindingStatus.CONFIRMED, FindingStatus.RECLASSIFIED)
@@ -87,3 +101,65 @@ def _directed(kind: RelationKind, source_is_a: bool, direction: object) -> Relat
         return kind
     source_depends = (direction == "A_depends_on_B") == source_is_a
     return RelationKind.DEPENDS_ON if source_depends else RelationKind.REQUIRED_BY
+
+
+def finding_edges(db: Session, requirement_ids: Collection[uuid.UUID]) -> list[Edge]:
+    """Every live pair finding touching ``requirement_ids``, once per end in the set."""
+    if not requirement_ids:
+        return []
+    ids = list(requirement_ids)
+    rows = db.execute(
+        select(Finding, CandidatePair)
+        .join(CandidatePair, CandidatePair.id == Finding.candidate_pair_id)
+        .where(
+            Finding.is_stale.is_(False),
+            Finding.status.in_(LIVE_STATUSES),
+            Finding.category.in_(list(_PAIR_KINDS)),
+            (CandidatePair.requirement_a_id.in_(ids)) | (CandidatePair.requirement_b_id.in_(ids)),
+        )
+    )
+    wanted = set(ids)
+    edges: list[Edge] = []
+    for finding, pair in rows:
+        direction = (finding.original_ai_output or {}).get("dependency_direction")
+        severity = finding.severity.value if finding.severity else None
+        kind = _PAIR_KINDS[finding.category]
+        a, b = pair.requirement_a_id, pair.requirement_b_id
+        if a in wanted:
+            edges.append(Edge(a, b, _directed(kind, True, direction), finding.id, severity))
+        if b in wanted:
+            edges.append(Edge(b, a, _directed(kind, False, direction), finding.id, severity))
+    return edges
+
+
+def similar_neighbours(
+    db: Session, requirement: Requirement, *, k: int = SIMILAR_K, exclude: Iterable[uuid.UUID] = ()
+) -> list[tuple[uuid.UUID, float]]:
+    """The requirement's nearest neighbours by embedding, above the project's threshold."""
+    vector = db.scalar(select(Embedding.vector).where(Embedding.requirement_id == requirement.id))
+    if vector is None:
+        return []
+    project = db.get(Project, requirement.project_id)
+    threshold = project.similarity_threshold if project else None
+    neighbours = nearest_requirements(
+        db,
+        requirement.project_id,
+        list(vector),
+        k=k,
+        min_similarity=threshold,
+        exclude={requirement.id, *exclude},
+        exclude_states=EXCLUDED_STATES,
+    )
+    return [(n.requirement_id, min(1.0, n.similarity)) for n in neighbours]
+
+
+def _in_baseline_or_proposed(
+    db: Session, requirement_ids: Collection[uuid.UUID]
+) -> dict[uuid.UUID, Requirement]:
+    if not requirement_ids:
+        return {}
+    return {
+        r.id: r
+        for r in db.scalars(select(Requirement).where(Requirement.id.in_(list(requirement_ids))))
+        if r.state not in EXCLUDED_STATES
+    }
