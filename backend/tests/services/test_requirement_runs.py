@@ -4,9 +4,10 @@ resumed once the budget allows."""
 
 import uuid
 from collections.abc import Callable, Iterator
+from typing import Any
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import Row, select
 from sqlalchemy.orm import Session
 
 from app.classification.budget import CountingBudget, UnlimitedBudget
@@ -91,7 +92,7 @@ def test_a_post_is_compared_with_the_baseline_and_the_run_closes_with_its_findin
     assert finding is not None and finding.category is FindingCategory.CONFLICTING
     (completed,) = [e for e in events.published if e.type == ANALYSIS_COMPLETED]
     assert completed.data["scope"] == "requirement" and completed.data["subject_id"] == str(post.id)
-    assert followups == [(orchestrator.AFTER_RUN, [str(run.id)])]
+    assert followups == [(orchestrator.AFTER_RUN, [str(run.id), orchestrator.CLOSED])]
 
 
 def test_after_the_run_the_map_hears_about_it(
@@ -195,12 +196,16 @@ def test_an_exhausted_budget_parks_the_run_once_and_it_resumes_when_budget_retur
     assert run.status is AnalysisRunStatus.WAITING_BUDGET
     parked = [e for e in events.published if e.type == ANALYSIS_COMPLETED]
     assert [e.data["status"] for e in parked] == ["waiting_budget"]  # once, not per item
-    assert followups == [(orchestrator.AFTER_RUN, [str(run.id)])]
+    assert followups == [(orchestrator.AFTER_RUN, [str(run.id), orchestrator.PARKED])]
 
-    assert orchestrator.resume_waiting(db_session, budget=CountingBudget(0)) == []
+    assert (
+        orchestrator.resume_waiting(db_session, budget=CountingBudget(0), llm_configured=True) == []
+    )
 
     again = Recorder()
-    resumed = orchestrator.resume_waiting(db_session, budget=UnlimitedBudget(), dispatch=again)
+    resumed = orchestrator.resume_waiting(
+        db_session, budget=UnlimitedBudget(), llm_configured=True, dispatch=again
+    )
     assert resumed == [run.id]
     db_session.refresh(run)
     assert run.status is AnalysisRunStatus.RUNNING
@@ -216,5 +221,128 @@ def test_a_run_that_is_not_waiting_is_not_resumed(
     post = make_post(db_session, project, user, POSTED)
     run = queue(db_session, post)
 
-    assert orchestrator.resume_run(db_session, run.id, dispatch=Recorder()) is False
-    assert orchestrator.resume_run(db_session, uuid.uuid4(), dispatch=Recorder()) is False
+    for run_id in (run.id, uuid.uuid4()):
+        resumed = orchestrator.resume_run(
+            db_session, run_id, llm_configured=True, dispatch=Recorder()
+        )
+        assert resumed is False
+
+
+def park(db: Session, project: Project, user: User) -> AnalysisRun:
+    post = make_post(db, project, user, POSTED)
+    run = queue(db, post)
+    recorder = Recorder()
+    start(db, run, recorder)
+    run_everything(db, recorder, LLMClient(FakeTransport([]), CountingBudget(0)))
+    db.refresh(run)
+    assert run.status is AnalysisRunStatus.WAITING_BUDGET
+    return run
+
+
+def test_a_failed_start_hands_the_run_back_so_a_retry_starts_it(
+    db_session: Session,
+    project: Project,
+    user: User,
+    approved: Requirement,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.embeddings import incremental
+
+    post = make_post(db_session, project, user, POSTED)
+    run = queue(db_session, post)
+
+    def broken(*_: object, **__: object) -> None:
+        raise RuntimeError("embedder down")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(incremental, "candidates_for_requirement", broken)
+        with pytest.raises(RuntimeError):
+            start(db_session, run, Recorder())
+
+    db_session.refresh(run)
+    assert run.status is AnalysisRunStatus.QUEUED and run.started_at is None
+    recorder = Recorder()
+    assert start(db_session, run, recorder) is not None
+    assert len(recorder.of(orchestrator.CHECK_REQUIREMENT)) == 1
+
+
+def test_the_park_event_carries_the_status_the_park_left(
+    db_session: Session,
+    project: Project,
+    user: User,
+    approved: Requirement,
+    events: bus.InProcessEventBus,
+    followups: list[tuple[str, list[str]]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    published = orchestrator._publish
+    swept: list[bool] = []
+
+    def resume_first(db: Session, row: Row[*tuple[Any, ...]]) -> None:
+        # A sweep resumes the run between the park commit and the announcement.
+        if not swept:
+            swept.append(
+                orchestrator.resume_run(db, run_id, llm_configured=True, dispatch=Recorder())
+            )
+        published(db, row)
+
+    post = make_post(db_session, project, user, POSTED)
+    run = queue(db_session, post)
+    run_id = run.id
+    recorder = Recorder()
+    start(db_session, run, recorder)
+    monkeypatch.setattr(orchestrator, "_publish", resume_first)
+
+    run_everything(db_session, recorder, LLMClient(FakeTransport([]), CountingBudget(0)))
+
+    statuses = {e.data["status"] for e in events.published if e.type == ANALYSIS_COMPLETED}
+    assert swept == [True] and statuses == {"waiting_budget"}  # never the sweep's "running"
+
+
+def test_a_late_park_follow_up_sends_no_second_map_delta(
+    db_session: Session,
+    project: Project,
+    user: User,
+    approved: Requirement,
+    events: bus.InProcessEventBus,
+    followups: list[tuple[str, list[str]]],
+) -> None:
+    run = park(db_session, project, user)
+    again = Recorder()
+    orchestrator.resume_run(db_session, run.id, llm_configured=True, dispatch=again)
+    run_everything(db_session, again, LLMClient(FakeTransport([pair_reply(), single_reply()])))
+    db_session.refresh(run)
+    assert run.status is AnalysisRunStatus.DONE
+
+    assert [args[1] for _, args in followups] == [orchestrator.PARKED, orchestrator.CLOSED]
+    orchestrator.after_run(db_session, run.id, orchestrator.CLOSED)
+    orchestrator.after_run(db_session, run.id, orchestrator.PARKED)  # delivered late
+
+    assert len([e for e in events.published if e.type == GRAPH_DELTA]) == 1
+
+
+def test_a_resumed_run_is_claimed_once_even_from_a_stale_copy(
+    db_session: Session, project: Project, user: User, approved: Requirement
+) -> None:
+    run = park(db_session, project, user)
+    first = Recorder()
+    assert orchestrator.resume_run(db_session, run.id, llm_configured=True, dispatch=first)
+
+    # A second sweep that loaded the row while it was still waiting.
+    run.status = AnalysisRunStatus.WAITING_BUDGET
+    second = Recorder()
+    assert not orchestrator.resume_run(db_session, run.id, llm_configured=True, dispatch=second)
+    assert second.sent == [] and first.of(orchestrator.CLASSIFY_PAIR)
+
+
+def test_a_run_resumed_without_an_llm_ends_and_says_so(
+    db_session: Session, project: Project, user: User, approved: Requirement
+) -> None:
+    run = park(db_session, project, user)
+    recorder = Recorder()
+
+    assert orchestrator.resume_run(db_session, run.id, llm_configured=False, dispatch=recorder)
+
+    db_session.refresh(run)
+    assert run.status is AnalysisRunStatus.DONE and run.error_message == orchestrator.NO_LLM
+    assert recorder.sent == []
