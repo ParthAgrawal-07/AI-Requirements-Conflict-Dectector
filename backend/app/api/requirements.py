@@ -149,10 +149,12 @@ def update_requirement(
 ) -> RequirementDetail:
     sent = body.model_fields_set
     reassigning = bool(sent & {"owner_id", "stakeholder_group"})
-    if (body.state is None or body.version is None) and not reassigning:
+    moving = body.state is not None and body.version is not None
+    if not moving and not reassigning:
         raise BadRequestError("Nothing to change", code="nothing_to_change")
+    staged: list[str] = []
     if reassigning:
-        ownership.reassign(
+        staged = ownership.reassign(
             db,
             ctx,
             requirement_id,
@@ -160,18 +162,24 @@ def update_requirement(
             set_owner="owner_id" in sent,
             group=body.stakeholder_group,
             set_group="stakeholder_group" in sent,
+            commit=not moving,
         )
     if body.state is None or body.version is None:
         return _detail(db, ctx, requirement_id)
-    lifecycle.transition(
-        db,
-        ctx,
-        requirement_id,
-        body.state,
-        version=body.version,
-        reason=body.reason,
-        accepted_risk=body.accepted_risk,
-    )
+    try:
+        lifecycle.transition(
+            db,
+            ctx,
+            requirement_id,
+            body.state,
+            version=body.version,
+            reason=body.reason,
+            accepted_risk=body.accepted_risk,
+        )
+    except Exception:
+        db.rollback()  # a refused move takes the staged reassignment with it
+        raise
+    ownership.announce(db, ctx, requirement_id, staged)  # the transition's commit carried it
     return _detail(db, ctx, requirement_id)
 
 
