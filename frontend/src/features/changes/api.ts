@@ -5,7 +5,9 @@
 // ["change-request", id, "reviews" | "agreement" | "checks"] for one, so a change_request.* event
 // refreshes all of it with one prefix (app/socket.ts).
 
-import type { RequirementState, UUID } from "../../api/types";
+import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { apiFetch } from "../../api/client";
+import type { Page, RequirementState, UUID } from "../../api/types";
 import type { BadgeTone } from "../../components/Badge";
 
 export interface UserRef {
@@ -187,4 +189,171 @@ export interface Checks {
   state: "pending" | "done" | "stale";
   stale_reasons: string[];
   report: Report | null;
+}
+
+// ── Queries ─────────────────────────────────────────────────────────────────────────────────
+export interface ChangeRequestFilters {
+  status?: ChangeStatus;
+  requirement?: UUID;
+  limit: number;
+  offset: number;
+}
+
+export function useChangeRequests(projectId: string, filters: ChangeRequestFilters) {
+  return useQuery({
+    queryKey: ["change-requests", projectId, filters],
+    queryFn: ({ signal }) =>
+      apiFetch<Page<ChangeRequest>>(`/projects/${projectId}/change-requests`, { query: { ...filters }, signal }),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useChangeRequest(id: string | undefined) {
+  return useQuery({
+    queryKey: ["change-request", id],
+    enabled: Boolean(id),
+    queryFn: () => apiFetch<ChangeRequest>(`/change-requests/${id}`),
+  });
+}
+
+export function useReviews(id: string) {
+  return useQuery({
+    queryKey: ["change-request", id, "reviews"],
+    queryFn: () => apiFetch<Reviews>(`/change-requests/${id}/reviews`),
+  });
+}
+
+export function useAgreement(id: string, enabled = true) {
+  return useQuery({
+    queryKey: ["change-request", id, "agreement"],
+    enabled,
+    queryFn: () => apiFetch<Agreement>(`/change-requests/${id}/agreement`),
+  });
+}
+
+export function useChecks(id: string) {
+  return useQuery({
+    queryKey: ["change-request", id, "checks"],
+    queryFn: () => apiFetch<Checks>(`/change-requests/${id}/checks`),
+  });
+}
+
+/** The change editor's pre-flight: who and what a change would touch, before it is written. */
+export function useImpact(requirementId: string | null, kind: ChangeKind) {
+  return useQuery({
+    queryKey: ["impact", requirementId, kind],
+    enabled: Boolean(requirementId),
+    queryFn: () => apiFetch<Impact>(`/requirements/${requirementId}/impact`, { query: { kind } }),
+  });
+}
+
+// ── Mutations ───────────────────────────────────────────────────────────────────────────────
+function settle(queryClient: QueryClient, change: ChangeRequest) {
+  queryClient.setQueryData(["change-request", change.id], change);
+  void queryClient.invalidateQueries({ queryKey: ["change-request", change.id] });
+  void queryClient.invalidateQueries({ queryKey: ["change-requests", change.project_id] });
+}
+
+export interface ChangeRequestInput {
+  kind: ChangeKind;
+  proposed_body?: string;
+  reason: string;
+  base_version: number;
+  resolves: number[]; // ISS numbers
+  draft: boolean;
+}
+
+export function useOpenChangeRequest(requirementId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ChangeRequestInput) =>
+      apiFetch<ChangeRequest>(`/requirements/${requirementId}/change-requests`, { method: "POST", json: input }),
+    onSuccess: (change) => settle(queryClient, change),
+  });
+}
+
+export interface ChangeRequestUpdate {
+  proposed_body?: string;
+  reason?: string;
+  rebase?: boolean;
+  open?: boolean;
+}
+
+export function useUpdateChangeRequest(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ChangeRequestUpdate) =>
+      apiFetch<ChangeRequest>(`/change-requests/${id}`, { method: "PATCH", json: input }),
+    onSuccess: (change) => settle(queryClient, change),
+  });
+}
+
+export interface ReviewInput {
+  decision: ReviewDecision;
+  rationale?: string;
+  comments: InlineComment[];
+}
+
+export function useSubmitReview(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ReviewInput) =>
+      apiFetch<ChangeRequest>(`/change-requests/${id}/reviews`, { method: "POST", json: input }),
+    onSuccess: (change) => settle(queryClient, change),
+  });
+}
+
+export function useAddReviewer(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (reviewerId: UUID) =>
+      apiFetch<ReviewRequest>(`/change-requests/${id}/reviewers`, { method: "POST", json: { reviewer_id: reviewerId } }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["change-request", id] }),
+  });
+}
+
+/** Merge (rcr.merge): version n+1, or a 409 ``merge_blocked`` whose details are the unmet
+ *  conditions (ApiError.details). A merge also moves the requirement, its versions and issues. */
+export function useMerge(change: ChangeRequest) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (acceptedRiskReason: string | undefined) =>
+      apiFetch<ChangeRequest>(`/change-requests/${change.id}/merge`, {
+        method: "POST",
+        json: { accepted_risk_reason: acceptedRiskReason },
+      }),
+    onSuccess: (merged) => {
+      settle(queryClient, merged);
+      void queryClient.invalidateQueries({ queryKey: ["requirement", merged.requirement.id] });
+      void queryClient.invalidateQueries({ queryKey: ["versions", merged.requirement.id] });
+      void queryClient.invalidateQueries({ queryKey: ["requirements", merged.project_id] });
+      void queryClient.invalidateQueries({ queryKey: ["issues", merged.project_id] });
+    },
+    onError: () => void queryClient.invalidateQueries({ queryKey: ["change-request", change.id, "agreement"] }),
+  });
+}
+
+export function useCloseChangeRequest(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (reason: string) =>
+      apiFetch<ChangeRequest>(`/change-requests/${id}/close`, { method: "POST", json: { reason } }),
+    onSuccess: (change) => settle(queryClient, change),
+  });
+}
+
+export function useWithdraw(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiFetch<ChangeRequest>(`/change-requests/${id}/withdraw`, { method: "POST" }),
+    onSuccess: (change) => settle(queryClient, change),
+  });
+}
+
+export function useRerunChecks(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiFetch<void>(`/change-requests/${id}/checks/rerun`, { method: "POST" }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["change-request", id, "checks"] }),
+  });
 }
