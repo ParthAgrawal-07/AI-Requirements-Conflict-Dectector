@@ -57,6 +57,19 @@ def test_calls_are_counted_until_the_allowance_and_never_beyond(client: redis.Re
     assert 0 < int(client.ttl(budget.key(project))) <= 40 * 24 * 3600
 
 
+def test_a_failed_allowance_lookup_spends_nothing(client: redis.Redis) -> None:
+    project = uuid.uuid4()
+
+    def broken(_project: uuid.UUID | None) -> int:
+        raise RuntimeError("settings unavailable")
+
+    budget = RedisBudget(client, broken, now=lambda: datetime(2026, 11, 15, tzinfo=UTC))
+    with pytest.raises(RuntimeError):
+        budget.reserve(project)
+
+    assert client.get(budget.key(project)) is None
+
+
 def test_a_new_month_starts_from_zero(client: redis.Redis) -> None:
     project = uuid.uuid4()
     guard(client, allowance=1, month=11).reserve(project)

@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session, aliased
 
 from app.core.errors import NotFoundError
 from app.models import (
+    AnalysisRun,
     AuditAction,
     AuditLog,
     CandidatePair,
@@ -25,7 +26,7 @@ from app.models import (
     Requirement,
     User,
 )
-from app.services.access import Scope, register_scope_resolver
+from app.services.access import AccessContext, Scope, register_scope_resolver
 
 
 @dataclass(frozen=True)
@@ -108,6 +109,29 @@ def list_findings(
     involved = _involved(db, rows)
     views = [FindingView(f, involved[f.id], project.confidence_threshold) for f in rows]
     return views, total
+
+
+def run_findings(
+    db: Session, ctx: AccessContext, run_id: uuid.UUID
+) -> tuple[AnalysisRun, list[FindingView]]:
+    """One analysis run of the caller's project and its current findings, as finding cards
+    (US-31: the result card's data). A run of another project is not found."""
+    run = db.scalar(
+        select(AnalysisRun).where(
+            AnalysisRun.id == run_id, AnalysisRun.project_id == ctx.project_id
+        )
+    )
+    project = db.get(Project, run.project_id) if run is not None else None
+    if run is None or project is None:
+        raise NotFoundError("Analysis run not found")
+    findings = list(
+        db.scalars(
+            select(Finding)
+            .where(Finding.analysis_run_id == run.id, Finding.is_stale.is_(False))
+            .order_by(Finding.confidence.desc(), Finding.created_at, Finding.id)
+        )
+    )
+    return run, views_of(db, project, findings)
 
 
 def views_of(db: Session, project: Project, findings: list[Finding]) -> list[FindingView]:

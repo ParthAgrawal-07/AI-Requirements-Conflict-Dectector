@@ -19,9 +19,6 @@ from app.models import (
 from app.services.findings import FindingView
 from app.services.review_state import ReviewAction
 
-ReviewAction = str
-FindingReview = Any
-
 
 class FindingRequirement(BaseModel):
     """A requirement the finding is about, with where it came from (US-07)."""

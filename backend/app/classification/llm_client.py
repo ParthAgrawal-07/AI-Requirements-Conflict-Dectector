@@ -22,6 +22,7 @@ Requirement text reaches the model only inside the delimited data sections built
 import json
 import logging
 import re
+import threading
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -238,19 +239,26 @@ class FallbackTransport:
     def __init__(self, primary: LLMTransport, backup: LLMTransport | None = None) -> None:
         self.primary = primary
         self.backup = backup
-        self.label = model_label(primary)  # whichever answered the last call
+        # The client is cached per process and shared by worker threads: who answered is kept per
+        # thread, so a reply is never stored with the label another thread's call just set.
+        self._answered = threading.local()
+
+    @property
+    def label(self) -> str:
+        """Who answered this thread's last call (ADR-31: record the provider and model)."""
+        return str(getattr(self._answered, "label", model_label(self.primary)))
 
     def send(self, system: str, user: str) -> str:
         try:
             reply = self.primary.send(system, user)
-            self.label = model_label(self.primary)
+            self._answered.label = model_label(self.primary)
             return reply
         except LLMUnavailableError as exc:
             if self.backup is None:
                 raise
             logger.warning("Primary LLM unavailable (%s), falling back to backup transport", exc)
             reply = self.backup.send(system, user)
-            self.label = model_label(self.backup)
+            self._answered.label = model_label(self.backup)
             return reply
 
 
@@ -277,8 +285,8 @@ class LLMClient:
 
     @property
     def model(self) -> str:
-        """``"<provider>/<model>"`` that answered the last call (e.g. ``gemini/gemini-2.5-flash``,
-        or ``groq/…`` after a fall-over)."""
+        """``"<provider>/<model>"`` that answered this thread's last call (e.g.
+        ``gemini/gemini-2.5-flash``, or ``groq/…`` after a fall-over)."""
         return model_label(self._transport)
 
     def complete_text(self, system: str, user: str, *, project_id: uuid.UUID | None = None) -> str:

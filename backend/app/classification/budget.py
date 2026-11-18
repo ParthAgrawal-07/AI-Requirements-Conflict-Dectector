@@ -86,7 +86,8 @@ class RedisBudget:
     """The production guard: one Redis counter per project and calendar month (UTC).
 
     ``INCR`` first, then compare — atomic, so concurrent workers can never spend more than the
-    allowance; a call over the line is given back (``DECR``) before raising.
+    allowance; a call over the line is given back (``DECR``) before raising. The allowance is read
+    before the counter moves, so a failed lookup never spends a unit of the month's quota.
     """
 
     def __init__(
@@ -105,11 +106,12 @@ class RedisBudget:
 
     def reserve(self, project_id: uuid.UUID | None) -> None:
         key = self.key(project_id)
+        allowance = self._allowance(project_id)
         try:
             used = int(self._client.incr(key))
             if used == 1:
                 self._client.expire(key, KEY_TTL_SECONDS)
-            if used > self._allowance(project_id):
+            if used > allowance:
                 self._client.decr(key)
                 raise BudgetExceededError(project_id)
         except redis.RedisError:

@@ -23,6 +23,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.graph.deltas import label_of
 from app.models import (
     AnalysisRun,
     AnalysisRunStatus,
@@ -36,18 +37,6 @@ from app.models import (
     Requirement,
     Severity,
 )
-
-try:
-    from app.graph.deltas import label_of
-except ImportError:
-
-    def label_of(requirement: Requirement | None) -> str:
-        """How sentences name a requirement: its printed ID, or a short stable stand-in."""
-        if requirement is None:
-            return ""
-        return requirement.source_req_id or f"requirement {str(requirement.id)[:8]}"
-
-
 from app.models.channel import MAX_MESSAGE_CHARS
 from app.services import messages as message_service
 
@@ -139,7 +128,7 @@ def render(db: Session, run: AnalysisRun, requirement: Requirement, findings: li
     others = _other_requirements(db, requirement, findings)
     owners = _owners(requirement, others)
     if findings and owners:
-        tail.append("Owners: " + " ".join(f"<@{owner}>" for owner in owners))
+        tail.append(_owner_line(owners))
 
     questions = _questions(db, findings)
     # Whole findings only, most severe first, so the owners' mentions at the end always fit.
@@ -156,6 +145,19 @@ def render(db: Session, run: AnalysisRun, requirement: Requirement, findings: li
         body.extend(block)
         budget -= size
     return "\n".join(head + body + tail)
+
+
+def _owner_line(owners: list[uuid.UUID]) -> str:
+    """The owners to notify, cut to a quarter of the card so the card always fits; the owners
+    left out are counted (they still see the card in the thread and on the map)."""
+    limit = MAX_MESSAGE_CHARS // 4
+    line = "Owners:"
+    for shown, owner in enumerate(owners):
+        mention = f" <@{owner}>"
+        if len(line) + len(mention) > limit:
+            return f"{line} and {len(owners) - shown} more"
+        line += mention
+    return line
 
 
 def _findings(db: Session, run: AnalysisRun) -> list[Finding]:
@@ -200,7 +202,10 @@ def _other_requirements(
     rows = {
         r.id: r
         for r in db.scalars(
-            select(Requirement).where(Requirement.id.in_(list(set(other_ids.values()))))
+            select(Requirement).where(
+                Requirement.project_id == requirement.project_id,
+                Requirement.id.in_(list(set(other_ids.values()))),
+            )
         )
     }
     return {fid: rows[rid] for fid, rid in other_ids.items() if rid in rows}

@@ -2,6 +2,7 @@
 analysis ends, with each finding and the owners @mentioned; "waiting for budget" first when the
 budget is used up, rewritten when the run finishes; never claims a requirement is conflict-free."""
 
+import uuid
 from collections.abc import Callable, Iterator
 
 import pytest
@@ -11,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.classification.budget import CountingBudget, UnlimitedBudget
 from app.classification.llm_client import FakeTransport, LLMClient
-from app.classification.result_card import CLEAN, WAITING
+from app.classification.result_card import CLEAN, WAITING, _owner_line
 from app.core.permissions import DefaultRole
 from app.embeddings.model import HashingEmbedder
 from app.embeddings.store import embed_document
@@ -29,6 +30,7 @@ from app.models import (
     User,
     Workspace,
 )
+from app.models.channel import MAX_MESSAGE_CHARS
 from app.realtime import bus
 from app.realtime.events import MESSAGE_UPDATED
 from app.services import analysis_orchestrator as orchestrator
@@ -141,6 +143,16 @@ def test_a_clean_result_says_analysis_can_miss_conflicts_and_mentions_nobody(
     assert card.mentions == []
 
 
+def test_a_long_owner_line_is_cut_and_counts_the_rest() -> None:
+    owners = [uuid.uuid4() for _ in range(200)]
+
+    line = _owner_line(owners)
+
+    assert len(line) <= MAX_MESSAGE_CHARS // 4 + len(" and 200 more")
+    shown = line.count("<@")
+    assert 0 < shown < 200 and line.endswith(f" and {200 - shown} more")
+
+
 def test_waiting_for_budget_is_said_and_then_replaced_by_the_result(
     db_session: Session,
     channel: Channel,
@@ -155,7 +167,9 @@ def test_waiting_for_budget_is_said_and_then_replaced_by_the_result(
     assert WAITING in waiting.body
 
     again = Recorder()
-    orchestrator.resume_waiting(db_session, budget=UnlimitedBudget(), dispatch=again)
+    orchestrator.resume_waiting(
+        db_session, budget=UnlimitedBudget(), llm_configured=True, dispatch=again
+    )
     run_everything(db_session, again, LLMClient(FakeTransport([pair_reply(), single_reply()])))
     orchestrator.after_run(db_session, run.id)
 
