@@ -220,6 +220,19 @@ CASES = [
     ),
     # Sprint 3 — similar-requirement hints (Heet, FR-83)
     Case("POST", "/api/v1/projects/{project_id}/similar", lambda _: {"text": "audit logs"}),
+    # Sprint 3 — requirement composer (Pranshu, US-30)
+    Case(
+        "POST",
+        "/api/v1/projects/{project_id}/requirements",
+        lambda _: {
+            "fields": {
+                "template": "free_text",
+                "slots": {"statement": "The system shall keep audit logs for seven years."},
+                "type": "functional",
+                "priority": "must",
+            }
+        },
+    ),
 ]
 
 

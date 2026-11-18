@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.permissions import DefaultRole
 from app.core.rate_limit import InMemoryRateLimiter, get_rate_limiter
 from app.models import (
+    AnalysisRun,
     AuditAction,
     AuditLog,
     Channel,
@@ -26,7 +27,7 @@ from app.models import (
     Workspace,
 )
 from app.realtime import bus
-from app.realtime.events import MESSAGE_CREATED
+from app.realtime.events import GRAPH_DELTA, MESSAGE_CREATED
 from tests.api.conftest import headers_for
 
 DRAFTS = "/api/v1/me/drafts"
@@ -94,6 +95,24 @@ class TestDrafts:
             client.delete(f"{DRAFTS}/{draft['id']}", headers=headers_for(user)).status_code == 204
         )
         assert client.get(f"{DRAFTS}/{draft['id']}", headers=headers_for(user)).status_code == 404
+
+    def test_a_draft_keeps_a_half_written_criterion_a_proposal_does_not(
+        self, client: TestClient, project: Project, channel: Channel, user: User
+    ) -> None:
+        half = {**EVENT_DRIVEN, "acceptance_criteria": [{"given": "a logged-in user"}]}
+
+        created = _create(client, user, project, half)
+
+        assert created.status_code == 201
+        assert created.json()["fields"]["acceptance_criteria"] == [
+            {"given": "a logged-in user", "when": "", "then": ""}
+        ]
+        proposed = client.post(
+            f"/api/v1/channels/{channel.id}/requirement-posts",
+            json={"fields": half},
+            headers=headers_for(user),
+        )
+        assert proposed.status_code == 422
 
     def test_drafts_are_private(
         self, client: TestClient, project: Project, user: User, make_user: Callable[..., User]
@@ -180,7 +199,7 @@ class TestRequirementPosts:
         assert body["message"]["body"] == STATEMENT
         requirement = body["requirement"]
         assert (requirement["state"], requirement["origin"]) == ("Proposed", "post")
-        assert requirement["document_id"] is None and requirement["source_req_id"] is None
+        assert requirement["document_id"] is None and requirement["source_req_id"] == "REQ-001"
         assert requirement["owner_id"] == str(developer.id)
         assert requirement["stakeholder_group"] == "Security"
 
@@ -201,7 +220,9 @@ class TestRequirementPosts:
         assert (
             client.get(f"{DRAFTS}/{draft['id']}", headers=headers_for(developer)).status_code == 404
         )
-        assert [e.type for e in events.published] == [MESSAGE_CREATED]
+        assert [e.type for e in events.published] == [MESSAGE_CREATED, GRAPH_DELTA]
+        run = db_session.get(AnalysisRun, body["analysis_run_id"])
+        assert run is not None and run.subject_id == row.id and run.status.value == "queued"
 
     def test_it_appears_in_the_requirements_list(
         self, client: TestClient, project: Project, channel: Channel, user: User
