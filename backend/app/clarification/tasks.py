@@ -46,9 +46,9 @@ from app.models import (
     MessageKind,
     Project,
 )
+from app.services import issues
 from app.services import messages as message_service
 from app.services.findings import involved_requirements
-from app.services import issues
 
 logger = logging.getLogger(__name__)
 

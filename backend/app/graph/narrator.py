@@ -144,6 +144,7 @@ def owner_changed(actor: str | None, label: str, owner: str | None) -> str:
         return f"{_who(actor)} removed the owner of {label}."
     return f"{_who(actor)} made {owner} the owner of {label}."
 
+
 def issue_opened(actor: str | None, number: int, labels: Sequence[str]) -> str:
     """A member opened ISS-n about requirements (US-52)."""
     return f"{_who(actor)} opened ISS-{number} on {_join(list(labels))}."

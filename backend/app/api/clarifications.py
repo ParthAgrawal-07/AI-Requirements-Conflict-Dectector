@@ -32,9 +32,9 @@ from app.models import (
 )
 from app.schemas.common import ErrorResponse
 from app.schemas.findings import ClarificationRead
+from app.services import issues
 from app.services.access import AccessContext, Scope, register_scope_resolver
 from app.services.findings import get_finding, involved_requirements
-from app.services import issues
 
 router = APIRouter(tags=["clarifications"])
 

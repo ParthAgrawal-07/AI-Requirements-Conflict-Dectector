@@ -168,6 +168,7 @@ def graph_delta(*, workspace_id: uuid.UUID, delta: GraphDelta) -> Event:
         data=delta.model_dump(mode="json"),
     )
 
+
 def issue_event(
     event_type: str,
     *,
@@ -195,6 +196,7 @@ def issue_event(
             **data,
         },
     )
+
 
 def analysis_completed(
     *,

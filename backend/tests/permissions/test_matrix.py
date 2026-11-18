@@ -99,6 +99,7 @@ class World:
     issue: Issue
     db: Session
 
+
 @dataclass(frozen=True)
 class Case:
     method: str

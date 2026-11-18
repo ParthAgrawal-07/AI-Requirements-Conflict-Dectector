@@ -48,8 +48,8 @@ from app.models import (
     Project,
     Requirement,
 )
-from app.services.access import AccessContext
 from app.services import issues
+from app.services.access import AccessContext
 
 ReviewAction = Literal["confirm", "dismiss", "merge", "reclassify", "reopen", "escalate"]
 
