@@ -25,6 +25,9 @@ ANALYSIS_PROGRESS = "analysis.progress"  # a document moved to a new stage or pe
 ANALYSIS_COMPLETED = "analysis.completed"  # an analysis run finished or is waiting for budget
 MEMBERSHIP_REVOKED = "membership.revoked"  # the gateway closes the member's sockets (US-26, S2)
 GRAPH_DELTA = "graph.delta"  # nodes/edges changed on the live map (US-14, S3)
+# Change requests (US-33, US-35, S4): opened, then edited, reviewed, merged, closed or withdrawn.
+CHANGE_REQUEST_OPENED = "change_request.opened"
+CHANGE_REQUEST_UPDATED = "change_request.updated"
 # Channels (US-28, Madhav). ``data.private`` is true for a private channel: the gateway then
 # forwards the event only to sockets subscribed to that channel by id (re-checked membership).
 CHANNEL_CREATED = "channel.created"
@@ -41,6 +44,8 @@ EVENT_TYPES = frozenset(
         ANALYSIS_COMPLETED,
         MEMBERSHIP_REVOKED,
         GRAPH_DELTA,
+        CHANGE_REQUEST_OPENED,
+        CHANGE_REQUEST_UPDATED,
         CHANNEL_CREATED,
         CHANNEL_UPDATED,
         CHANNEL_MEMBER_REMOVED,
@@ -143,6 +148,37 @@ def message_event(
             "author_id": str(author_id) if author_id else None,  # None: a system card
             "mentions": mentions,
             "private": private,
+        },
+    )
+
+
+def change_request_event(
+    event_type: str,
+    *,
+    workspace_id: uuid.UUID,
+    project_id: uuid.UUID,
+    change_request_id: uuid.UUID,
+    requirement_id: uuid.UUID,
+    number: int,
+    status: str,
+    proposal_revision: int,
+    actor_id: uuid.UUID | None,
+    **data: Any,
+) -> Event:
+    """A change request changed (``change_request.*``). Ids, number, state — never its text."""
+    return Event(
+        type=event_type,
+        workspace_id=workspace_id,
+        project_id=project_id,
+        entity_id=change_request_id,
+        data={
+            "change_request_id": str(change_request_id),
+            "requirement_id": str(requirement_id),
+            "number": number,
+            "status": status,
+            "proposal_revision": proposal_revision,
+            "actor_id": str(actor_id) if actor_id else None,
+            **data,
         },
     )
 

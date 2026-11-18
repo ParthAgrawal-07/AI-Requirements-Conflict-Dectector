@@ -34,6 +34,7 @@ from app.models import (
     AnalysisRun,
     AnalysisRunStatus,
     AnalysisScope,
+    ChangeRequest,
     Channel,
     Clarification,
     Document,
@@ -94,6 +95,7 @@ class World:
     run: AnalysisRun  # a finished analysis of `document`
     clarification: Clarification  # the question about `finding`
     ownership_request: OwnershipRequest  # `target` asks to own that requirement
+    change_request: ChangeRequest  # RCR-1 by the Owner on the finding's requirement
     db: Session
 
 
@@ -255,6 +257,14 @@ CASES = [
             }
         },
     ),
+    # Sprint 4 — change requests (Bansil, US-33)
+    Case(
+        "POST",
+        "/api/v1/requirements/{requirement_id}/change-requests",
+        lambda _: {"proposed_body": "It shall answer within 2 s.", "reason": "Make it measurable"},
+    ),
+    Case("GET", "/api/v1/projects/{project_id}/change-requests"),
+    Case("GET", "/api/v1/change-requests/{change_request_id}"),
 ]
 
 
@@ -351,6 +361,17 @@ def world(
     clarification = Clarification(finding_id=finding.id, question="What does 'fast' mean?")
     db_session.add_all([run, clarification])
     db_session.commit()
+    change_request = ChangeRequest(
+        project_id=project.id,
+        requirement_id=vague.id,
+        number=1,
+        proposer_id=owner.id,
+        base_version=1,
+        proposed_body="It shall answer within 2 s.",
+        reason="Measurable",
+    )
+    db_session.add(change_request)
+    db_session.commit()
     return World(
         workspace=workspace,
         project=project,
@@ -366,6 +387,7 @@ def world(
         run=run,
         clarification=clarification,
         ownership_request=ownership_request,
+        change_request=change_request,
         db=db_session,
     )
 
@@ -406,6 +428,7 @@ def _call(api: TestClient, case: Case, world: World, user: User) -> int:
         requirement_id=world.finding.requirement_id,
         clarification_id=world.clarification.id,
         ownership_request_id=world.ownership_request.id,
+        change_request_id=world.change_request.id,
     )
     headers = {"Authorization": f"Bearer {security.create_access_token(user.id)[0]}"}
     body = case.body(world)

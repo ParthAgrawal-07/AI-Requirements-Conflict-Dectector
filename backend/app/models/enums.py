@@ -144,6 +144,9 @@ class AuditAction(StrEnum):
     GROUP_CHANGED = "group_changed"
     OWNERSHIP_REQUESTED = "ownership_requested"
     OWNERSHIP_DECIDED = "ownership_decided"
+    # Change requests (US-33) and raised concerns (US-56). Ids, numbers and versions only.
+    CHANGE_REQUEST_OPENED = "change_request_opened"
+    CONCERN_RAISED = "concern_raised"
     # Channels (US-28). Channel and user ids only — never names, topics or messages (CR-04).
     CHANNEL_CREATED = "channel_created"
     CHANNEL_UPDATED = "channel_updated"

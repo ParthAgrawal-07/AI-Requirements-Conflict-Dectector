@@ -143,3 +143,14 @@ def owner_changed(actor: str | None, label: str, owner: str | None) -> str:
     if owner is None:
         return f"{_who(actor)} removed the owner of {label}."
     return f"{_who(actor)} made {owner} the owner of {label}."
+
+
+def change_requested(actor: str | None, number: int, label: str, kind: str) -> str:
+    """RCR-n opened (US-33). Never the proposed text."""
+    what = "deprecating" if kind == "deprecate" else "a change to"
+    return f"{_who(actor)} proposed {what} {label} (RCR-{number})."
+
+
+def concern_raised(actor: str | None, kind: EdgeKind, labels: Sequence[str]) -> str:
+    """A person raised a concern (US-56): the map shows it with a Person badge."""
+    return f"{_who(actor)} raised a concern: {_KIND_NOUN.get(kind, kind)} on {_join(list(labels))}."
