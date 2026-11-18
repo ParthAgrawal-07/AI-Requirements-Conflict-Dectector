@@ -145,6 +145,32 @@ def owner_changed(actor: str | None, label: str, owner: str | None) -> str:
     return f"{_who(actor)} made {owner} the owner of {label}."
 
 
+def issue_opened(actor: str | None, number: int, labels: Sequence[str]) -> str:
+    """A member opened ISS-n about requirements (US-52)."""
+    return f"{_who(actor)} opened ISS-{number} on {_join(list(labels))}."
+
+
+def auto_issue_opened(number: int, labels: Sequence[str], owners: Sequence[str]) -> str:
+    """A conflict between owners became ISS-n by itself (FR-87). Owners by name."""
+    return f"ISS-{number} opened for the conflict between {_join(list(labels))}: assigned to {_join(list(owners))}."
+
+
+def issue_closed(actor: str | None, number: int, reason: str) -> str:
+    why = {
+        "resolved_by_merge": " by a merged change request",
+        "finding_resolved": ": its finding was resolved",
+    }.get(reason, "")
+    if reason == "manual":
+        return f"{_who(actor)} closed ISS-{number}."
+    return f"ISS-{number} closed{why}."
+
+
+def issue_reopened(actor: str | None, number: int, *, reflagged: bool = False) -> str:
+    if reflagged:
+        return f"ISS-{number} reopened: its conflict was found again."
+    return f"{_who(actor)} reopened ISS-{number}."
+
+
 def change_requested(actor: str | None, number: int, label: str, kind: str) -> str:
     """RCR-n opened (US-33). Never the proposed text."""
     what = "deprecating" if kind == "deprecate" else "a change to"

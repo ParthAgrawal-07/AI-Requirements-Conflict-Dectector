@@ -41,6 +41,8 @@ from app.models import (
     DocumentFormat,
     Finding,
     FindingCategory,
+    Issue,
+    IssueRequirement,
     JoinRequest,
     Message,
     OwnershipRequest,
@@ -95,6 +97,7 @@ class World:
     run: AnalysisRun  # a finished analysis of `document`
     clarification: Clarification  # the question about `finding`
     ownership_request: OwnershipRequest  # `target` asks to own that requirement
+    issue: Issue
     change_request: ChangeRequest  # RCR-1 by the Owner on the finding's requirement
     db: Session
 
@@ -247,6 +250,20 @@ CASES = [
     ),
     # Sprint 3 — similar-requirement hints (Heet, FR-83)
     Case("POST", "/api/v1/projects/{project_id}/similar", lambda _: {"text": "audit logs"}),
+    # Sprint 4 — issues (Dhavni, US-52).
+    Case("GET", "/api/v1/projects/{project_id}/issues"),
+    Case(
+        "POST",
+        "/api/v1/projects/{project_id}/issues",
+        lambda w: {
+            "title": "Unclear speed",
+            "requirement_ids": [str(w.finding.requirement_id)],
+        },
+    ),
+    Case("GET", "/api/v1/issues/{issue_id}"),
+    Case("PATCH", "/api/v1/issues/{issue_id}", lambda _: {"labels": ["ux"]}, needs="issue.manage"),
+    Case("GET", "/api/v1/issues/{issue_id}/comments"),
+    Case("POST", "/api/v1/issues/{issue_id}/comments", lambda _: {"body": "Agreed."}),
     # Sprint 3 — requirement composer (Pranshu, US-30)
     Case(
         "POST",
@@ -363,6 +380,15 @@ def world(
         status=AnalysisRunStatus.DONE,
     )
     clarification = Clarification(finding_id=finding.id, question="What does 'fast' mean?")
+    issue = Issue(
+        project_id=project.id,
+        number=1,
+        title="Matrix issue",
+        author_id=owner.id,
+    )
+    db_session.add(issue)
+    db_session.flush()
+    db_session.add(IssueRequirement(issue_id=issue.id, requirement_id=vague.id))
     db_session.add_all([run, clarification])
     db_session.commit()
     change_request = ChangeRequest(
@@ -391,6 +417,7 @@ def world(
         run=run,
         clarification=clarification,
         ownership_request=ownership_request,
+        issue=issue,
         change_request=change_request,
         db=db_session,
     )
@@ -432,6 +459,7 @@ def _call(api: TestClient, case: Case, world: World, user: User) -> int:
         requirement_id=world.finding.requirement_id,
         clarification_id=world.clarification.id,
         ownership_request_id=world.ownership_request.id,
+        issue_id=world.issue.id,
         change_request_id=world.change_request.id,
     )
     headers = {"Authorization": f"Bearer {security.create_access_token(user.id)[0]}"}

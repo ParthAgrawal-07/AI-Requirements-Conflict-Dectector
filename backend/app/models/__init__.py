@@ -33,6 +33,7 @@ from app.models.enums import (
     Severity,
 )
 from app.models.graph import NodePosition
+from app.models.issue import Comment, Issue, IssueAssignee, IssueRequirement
 from app.models.join_code import JoinCode, JoinRequest
 from app.models.membership import Membership, ProjectMember
 from app.models.ownership import OwnershipRequest
@@ -60,6 +61,7 @@ __all__ = [
     "ChannelMember",
     "ChannelRead",
     "Clarification",
+    "Comment",
     "Document",
     "DocumentSection",
     "DocumentFormat",
@@ -70,6 +72,9 @@ __all__ = [
     "FindingCategory",
     "FindingStatus",
     "ImportMode",
+    "Issue",
+    "IssueAssignee",
+    "IssueRequirement",
     "JoinCode",
     "JoinCodeStatus",
     "JoinRequest",

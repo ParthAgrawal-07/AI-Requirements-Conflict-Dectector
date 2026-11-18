@@ -4,7 +4,7 @@
 |---|---|
 | **Producer** | Dhavni didi (`app/realtime/`, `app/graph/schemas.py`) |
 | **Consumers** | Pranshu (`app/socket.ts`, upload progress) · Abhijeet (live map) · Madhav (notifications, S5) · Affan (WebSocket tests) |
-| **Stories** | US-03 (S1), US-29 (S2), US-14 (S3) |
+| **Stories** | US-03 (S1), US-29 (S2), US-14 (S3), US-52 (S4) |
 
 ## 1. Envelope
 
@@ -26,6 +26,7 @@ are not replayed).
 | `channel.member_removed` | S2 | channel | `channel_id, private, user_id` — that user's channel subscription ends at once |
 | `message.created`, `message.updated`, `message.deleted` | S2 | message | `message_id, channel_id, parent_id, author_id, mentions (user ids), private` — re-read `GET /messages/{id}` |
 | `graph.delta` | S3 | — | `GraphDelta` (`app/graph/schemas.py`): `from_revision, to_revision, added, changed, removed, sentences` |
+| `issue.opened` / `.updated` / `.closed` / `.reopened` / `.commented` | S4 | issue | `issue_id, number, status, actor_id (null when opened or closed by the app), assignee_ids`; plus `auto` (opened), `fields` (updated), `close_reason` (closed), `comment_id` (commented). Never the title, body or comment text |
 
 ## 2. Publishing
 
