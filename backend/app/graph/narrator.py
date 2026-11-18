@@ -143,3 +143,8 @@ def owner_changed(actor: str | None, label: str, owner: str | None) -> str:
     if owner is None:
         return f"{_who(actor)} removed the owner of {label}."
     return f"{_who(actor)} made {owner} the owner of {label}."
+
+
+def merged(actor: str | None, number: int, label: str, version: int) -> str:
+    """RCR-n merged (US-35): the requirement has a new version."""
+    return f"{_who(actor)} merged RCR-{number}: {label} is now v{version}."
