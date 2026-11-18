@@ -89,7 +89,15 @@ def request_clarification(
     ctx: Annotated[AccessContext, requires("finding.review")],
     db: DbSession,
 ) -> Response:
-    finding = db.get(Finding, finding_id)
+    finding = db.scalar(
+        select(Finding)
+        .join(Project)
+        .where(
+            Finding.id == finding_id,
+            Finding.project_id == ctx.project_id,
+            Project.workspace_id == ctx.workspace_id,
+        )
+    )
     if finding is None:
         raise NotFoundError("Finding not found")
     if not needs_question(finding):

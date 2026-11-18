@@ -19,6 +19,7 @@ import sys
 import uuid
 
 from sqlalchemy import func, select, text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.clarification.delivery import posted_subject
@@ -237,7 +238,10 @@ def generate_for_run_task(run_id: str) -> int:
 
 @celery_app.task(
     name=GENERATE_FOR_FINDING,
-    autoretry_for=(LLMUnavailableError,),
+    # A transient database error (e.g. while refreshing the result card after the reply was
+    # committed) retries too: the task is idempotent — the stored, linked question is reused and
+    # only the card is published again (FR-57).
+    autoretry_for=(LLMUnavailableError, OperationalError),
     retry_backoff=True,
     retry_backoff_max=300,
     max_retries=5,
