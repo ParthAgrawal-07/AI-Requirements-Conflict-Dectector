@@ -11,6 +11,7 @@ import { KitPage } from "../features/kit/KitPage";
 import { JoinPage } from "../features/members/JoinPage";
 import { MembersPage } from "../features/members/MembersPage";
 import { WorkspaceCreate } from "../features/members/WorkspaceCreate";
+import { MapPage } from "../features/map/MapPage";
 import { lastProject, useProjects, useWorkspaces } from "../features/projects/api";
 import { ProjectHomePage } from "../features/projects/ProjectHomePage";
 import { WorkspaceHomePage } from "../features/projects/WorkspaceHomePage";
@@ -88,7 +89,6 @@ export function NoWorkspace() {
 }
 
 const LATER: { path: string; title: string; sprint: string }[] = [
-  { path: "map", title: "Map", sprint: "Sprint 3 (US-14)" },
   { path: "issues", title: "Issues", sprint: "Sprint 4 (US-52)" },
   { path: "changes", title: "Change requests", sprint: "Sprint 4 (US-33)" },
   { path: "baselines", title: "Baselines", sprint: "Sprint 5 (US-40)" },
@@ -123,6 +123,7 @@ export const routes: RouteObject[] = [
               { path: "requirements/new", element: <ComposerPage /> },
               { path: "channels/:channelId", element: <ChannelView /> },
               { path: "findings", element: <FindingsPage /> },
+              { path: "map", element: <MapPage /> },
               ...LATER.map((item) => ({
                 path: item.path,
                 element: <ComingSoon title={item.title} sprint={item.sprint} />,
