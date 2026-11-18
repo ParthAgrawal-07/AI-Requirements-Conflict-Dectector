@@ -140,6 +140,8 @@ class Finding(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         JSONB, default=list, server_default=text("'[]'::jsonb")
     )
     prompt_version: Mapped[str | None] = mapped_column(String(16))
+    # "<provider>/<model>" that produced it (ADR-31, migration 0006g); NULL before Sprint 3.
+    llm_model: Mapped[str | None] = mapped_column(String(80))
     # Set when a requirement it is about changes (US-34, Sprint 4); stale findings are history.
     is_stale: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
     status: Mapped[FindingStatus] = mapped_column(

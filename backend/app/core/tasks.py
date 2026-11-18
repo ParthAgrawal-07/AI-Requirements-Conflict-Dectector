@@ -109,7 +109,7 @@ def after_run_task(run_id: str, transition: str = "closed") -> None:
 
 @celery_app.task(name="analysis.resume_waiting")
 def resume_waiting_task() -> list[str]:
-    """Resume runs parked for budget once their project has calls left (Celery beat)."""
+    """Resume runs parked for budget once their project has calls left (NFR-28, Celery beat)."""
     from app.classification.budget import get_budget_guard
     from app.classification.llm_client import get_llm_client
     from app.services.analysis_orchestrator import resume_waiting

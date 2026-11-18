@@ -91,6 +91,52 @@ def test_fallback_transport_switches_to_backup_on_unavailable() -> None:
     assert len(backup.calls) == 1
 
 
+def test_each_thread_records_the_provider_that_answered_it() -> None:
+    import threading
+
+    from app.classification.llm_client import FallbackTransport, LLMUnavailableError
+
+    primary_turn = threading.Event()
+    backup_done = threading.Event()
+
+    class Primary:
+        label = "gemini/test"
+
+        def send(self, system: str, user: str) -> str:
+            if user == "fail":
+                raise LLMUnavailableError("down")
+            return "primary"
+
+    class Backup:
+        label = "groq/test"
+
+        def send(self, system: str, user: str) -> str:
+            return "backup"
+
+    client = LLMClient(FallbackTransport(primary=Primary(), backup=Backup()))
+    seen: dict[str, str] = {}
+
+    def gemini_call() -> None:
+        client.complete_text("sys", "ok")
+        primary_turn.set()
+        backup_done.wait(5)  # another thread's call falls over to Groq meanwhile
+        seen["gemini"] = client.model
+
+    def groq_call() -> None:
+        primary_turn.wait(5)
+        client.complete_text("sys", "fail")
+        seen["groq"] = client.model
+        backup_done.set()
+
+    threads = [threading.Thread(target=gemini_call), threading.Thread(target=groq_call)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(10)
+
+    assert seen == {"gemini": "gemini/test", "groq": "groq/test"}
+
+
 def test_fallback_transport_does_not_switch_on_refusal() -> None:
     from app.classification.llm_client import FallbackTransport, LLMRefusedError
 

@@ -122,6 +122,11 @@ class Settings(BaseSettings):
     llm_max_retries: int = Field(default=2, ge=0, le=6)  # transport retries (429, 5xx, network)
     # US-05: re-asks when a reply does not validate against the schema; then the pair is failed.
     llm_output_retries: int = Field(default=3, ge=0, le=5)
+    # Keval (NFR-28, US-31): "redis" counts every call against the project's monthly budget;
+    # "unlimited" switches the guard off (local experiments only).
+    llm_budget_backend: Literal["redis", "unlimited"] = "redis"
+    # Calls made outside any project (e.g. drafting a brief before a project exists) per month.
+    llm_platform_monthly_calls: int = Field(default=200, ge=0, le=100_000)
 
     # ── Validators ────────────────────────────────────────
     @field_validator("database_url")

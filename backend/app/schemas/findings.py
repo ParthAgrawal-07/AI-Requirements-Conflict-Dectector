@@ -62,6 +62,7 @@ class FindingRead(BaseModel):
     missing_information: list[str] = []
     context_version: int | None
     prompt_version: str | None
+    llm_model: str | None = None  # "<provider>/<model>" that produced it (ADR-31)
     analysis_run_id: uuid.UUID | None
     created_at: datetime
     # US-10: the category the model gave (unchanged by a reclassification) and the last review.
@@ -105,6 +106,7 @@ class FindingRead(BaseModel):
             missing_information=list(output.get("missing_information") or []),
             context_version=finding.context_version,
             prompt_version=finding.prompt_version,
+            llm_model=finding.llm_model,
             analysis_run_id=finding.analysis_run_id,
             created_at=finding.created_at,
             ai_category=_category(output.get("category")),

@@ -31,6 +31,9 @@ from app.core.permissions import (
 )
 from app.embeddings.model import HashingEmbedder, get_embedder
 from app.models import (
+    AnalysisRun,
+    AnalysisRunStatus,
+    AnalysisScope,
     Channel,
     Document,
     DocumentFormat,
@@ -87,6 +90,7 @@ class World:
     custom_role: Role  # an unused custom role ("Client reviewer")
     message: Message  # a chat message by the Owner in `channel`
     finding: Finding  # an Ambiguous finding about a requirement of `document`
+    run: AnalysisRun  # a finished analysis of `document`
     ownership_request: OwnershipRequest  # `target` asks to own that requirement
     db: Session
 
@@ -189,6 +193,8 @@ CASES = [
     # Sprint 2 — findings (US-07)
     Case("GET", "/api/v1/projects/{project_id}/findings"),
     Case("GET", "/api/v1/findings/{finding_id}"),
+    # Sprint 3 — a run's results, behind the result card (Keval, US-31)
+    Case("GET", "/api/v1/analysis-runs/{analysis_run_id}"),
     # Sprint 3 — lifecycle and sign-off (Parth, US-37). The world's requirement is Proposed and not
     # protected: holders of baseline.manage may start its review; the sign-off is refused with 409
     # (not protected) — past the permission check.
@@ -313,6 +319,13 @@ def world(
         original_ai_output={},
     )
     db_session.add(finding)
+    run = AnalysisRun(
+        project_id=project.id,
+        scope=AnalysisScope.DOCUMENT,
+        subject_id=document.id,
+        status=AnalysisRunStatus.DONE,
+    )
+    db_session.add(run)
     db_session.commit()
     ownership_request = OwnershipRequest(requirement_id=vague.id, requester_id=target.id)
     db_session.add(ownership_request)
@@ -329,6 +342,7 @@ def world(
         custom_role=custom_role,
         message=message,
         finding=finding,
+        run=run,
         ownership_request=ownership_request,
         db=db_session,
     )
@@ -366,6 +380,7 @@ def _call(api: TestClient, case: Case, world: World, user: User) -> int:
         channel_id=world.channel.id,
         user_id=world.target.id,
         role_id=world.custom_role.id,
+        analysis_run_id=world.run.id,
         requirement_id=world.finding.requirement_id,
         ownership_request_id=world.ownership_request.id,
     )
