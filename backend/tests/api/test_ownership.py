@@ -163,6 +163,56 @@ def test_an_analyst_reassigns_owner_and_group_directly(
     assert actions.count(AuditAction.OWNER_CHANGED) == 1
 
 
+def test_a_refused_move_leaves_the_owner_as_it_was(
+    client: TestClient,
+    db_session: Session,
+    requirement: Requirement,
+    owner: User,
+    make_user: Callable[..., User],
+    events: bus.InProcessEventBus,
+) -> None:
+    analyst = make_user(role=DefaultRole.BUSINESS_ANALYST)
+    new_owner = make_user(role=DefaultRole.DEVELOPER)
+
+    response = client.patch(
+        f"/api/v1/requirements/{requirement.id}",
+        json={"owner_id": str(new_owner.id), "state": "Under_Review", "version": 2},
+        headers=headers_for(analyst),
+    )
+
+    assert response.status_code == 409  # a stale version: the whole PATCH is refused
+    db_session.expire_all()
+    current = db_session.get(Requirement, requirement.id)
+    assert current is not None and current.owner_id == owner.id
+    changed = select(AuditLog).where(AuditLog.action == AuditAction.OWNER_CHANGED)
+    assert db_session.scalars(changed).all() == []
+    assert [e for e in events.published if e.type == GRAPH_DELTA] == []
+
+
+def test_a_move_and_a_reassignment_commit_together(
+    client: TestClient,
+    db_session: Session,
+    requirement: Requirement,
+    make_user: Callable[..., User],
+    events: bus.InProcessEventBus,
+) -> None:
+    analyst = make_user(role=DefaultRole.BUSINESS_ANALYST)
+    new_owner = make_user(role=DefaultRole.DEVELOPER)
+
+    response = client.patch(
+        f"/api/v1/requirements/{requirement.id}",
+        json={"owner_id": str(new_owner.id), "state": "Under_Review", "version": 1},
+        headers=headers_for(analyst),
+    )
+
+    assert response.status_code == 200
+    assert (response.json()["owner_id"], response.json()["state"]) == (
+        str(new_owner.id),
+        "Under_Review",
+    )
+    assert len([e for e in events.published if e.type == GRAPH_DELTA]) == 2
+
+
 def test_a_developer_cannot_reassign(
     client: TestClient, requirement: Requirement, make_user: Callable[..., User]
 ) -> None:

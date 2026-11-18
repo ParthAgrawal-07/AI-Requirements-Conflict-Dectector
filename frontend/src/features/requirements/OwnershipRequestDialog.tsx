@@ -44,7 +44,8 @@ export function OwnershipRequestDialog({
   const decide = useDecideOwnership(id, projectId);
   const isOwner = requirement.owner_id !== null && requirement.owner_id === user?.id;
   const mayDecide = isOwner || canManage;
-  const pending = (requests.data ?? []).filter((r) => r.status === "pending");
+  // Only a successful load may read as "no pending requests"; a failure says so and offers a retry.
+  const pending = requests.isSuccess ? requests.data.filter((r) => r.status === "pending") : [];
   const mine = pending.some((r) => r.requester_id === user?.id);
   const label = requirement.source_req_id ?? "this requirement";
 
@@ -86,6 +87,16 @@ export function OwnershipRequestDialog({
         </form>
       )}
       {mine && <p className="muted">Your request is waiting for the owner or a manager.</p>}
+
+      {requests.isPending && <p className="muted">Loading ownership requests…</p>}
+      {requests.isError && (
+        <div role="alert">
+          <p>The ownership requests could not be loaded.</p>
+          <Button onClick={() => void requests.refetch()} loading={requests.isFetching}>
+            Try again
+          </Button>
+        </div>
+      )}
 
       {pending.length > 0 && (
         <section aria-label="Pending requests">

@@ -14,8 +14,18 @@ After extraction (``documents.process``) a document goes through:
    ``pairs_done`` / ``pairs_failed`` and ``checks_done`` / ``checks_failed``. The task that brings
    the counts to their totals closes the run and announces ``analysis.completed`` with the numbers.
    A failed pair stays visible as failed (G1); a run "done with 2 failed pairs" says so.
-4. An exhausted LLM budget parks the run as ``waiting_budget`` (the item stays pending; re-running
-   the analysis picks it up). No LLM configured: the run ends after candidates, saying so.
+4. An exhausted LLM budget parks the run as ``waiting_budget`` (the item stays pending). Celery
+   beat runs :func:`resume_waiting` every few minutes: once the project has budget again (a new
+   month, or a manager raised the cap) the run resumes with only what is still pending.
+   No LLM configured: the run ends after candidates, saying so.
+5. When a run closes (or parks for budget) ``analysis.after_run`` does the follow-ups outside the
+   classification tasks: the live-map delta (Dhavni, US-14) and — added by later stages — the
+   result card and clarification questions.
+
+**Posted requirements** (US-31, Sprint 3) take the same path with ``scope = requirement``: the post
+creates a *queued* run in its own transaction (:func:`queue_requirement_run`), and
+``analysis.run_requirement`` embeds the requirement, pairs it with its neighbours in the baseline
+and open proposals (Heet, ``app.embeddings.incremental``) and fans out exactly as above.
 
 Every step is idempotent: re-running a document skips unchanged pairs and requirements (G1), so a
 task delivered twice, or a re-run after a crash, never pays twice or duplicates findings.
@@ -26,9 +36,9 @@ import logging
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal
 
-from sqlalchemy import CursorResult, select, update
+from sqlalchemy import Row, select, update
 from sqlalchemy.orm import Session
 
 from app.core.celery_app import celery_app
@@ -48,6 +58,10 @@ from app.models import (
 from app.realtime import bus
 from app.realtime.events import analysis_completed
 
+if TYPE_CHECKING:
+    from app.classification.budget import BudgetGuard
+    from app.embeddings.model import Embedder
+
 logger = logging.getLogger(__name__)
 
 Dispatch = Callable[[str, list[str]], None]
@@ -57,6 +71,9 @@ RUN_DOCUMENT = "analysis.run_document"
 RUN_REQUIREMENT = "analysis.run_requirement"
 CLASSIFY_PAIR = "analysis.classify_pair"
 CHECK_REQUIREMENT = "analysis.check_requirement"
+AFTER_RUN = "analysis.after_run"
+CLOSED = "closed"
+PARKED = "parked"
 NOT_ANALYSED = (RequirementState.REJECTED, RequirementState.DEPRECATED)
 NO_LLM = "No LLM is configured: candidate pairs were found but not classified."
 
@@ -71,6 +88,34 @@ def send(name: str, args: list[str]) -> None:
 
 def dispatch_document(document_id: uuid.UUID, dispatch: Dispatch = send) -> None:
     dispatch(RUN_DOCUMENT, [str(document_id)])
+
+
+def analyse_project(db: Session, project_id: uuid.UUID, dispatch: Dispatch = send) -> int:
+    """Queue the analysis of every processed document of a project, and of every requirement
+    posted while it was in Setup (e.g. when it becomes active). Returns how many were queued."""
+    documents = list(
+        db.scalars(
+            select(Document.id)
+            .where(Document.project_id == project_id, Document.status == DocumentStatus.DONE)
+            .order_by(Document.created_at)
+        )
+    )
+    for document_id in documents:
+        dispatch_document(document_id, dispatch)
+    queued = list(
+        db.scalars(
+            select(AnalysisRun.id)
+            .where(
+                AnalysisRun.project_id == project_id,
+                AnalysisRun.scope == AnalysisScope.REQUIREMENT,
+                AnalysisRun.status == AnalysisRunStatus.QUEUED,
+            )
+            .order_by(AnalysisRun.created_at)
+        )
+    )
+    for run_id in queued:
+        dispatch_requirement_run(run_id, dispatch)
+    return len(documents) + len(queued)
 
 
 def queue_requirement_run(db: Session, requirement: Requirement) -> AnalysisRun:
@@ -92,19 +137,65 @@ def dispatch_requirement_run(run_id: uuid.UUID, dispatch: Dispatch = send) -> No
     dispatch(RUN_REQUIREMENT, [str(run_id)])
 
 
-def analyse_project(db: Session, project_id: uuid.UUID, dispatch: Dispatch = send) -> int:
-    """Queue the analysis of every processed document of a project (e.g. when it becomes active).
-    Returns how many were queued."""
-    documents = list(
-        db.scalars(
-            select(Document.id)
-            .where(Document.project_id == project_id, Document.status == DocumentStatus.DONE)
-            .order_by(Document.created_at)
+def start_requirement_run(
+    db: Session,
+    run_id: uuid.UUID,
+    *,
+    llm_configured: bool,
+    embedder: "Embedder",
+    dispatch: Dispatch = send,
+) -> AnalysisRun | None:
+    """Embed the run's requirement, pair it with its neighbours and fan out. ``None`` when the run
+    is gone or not queued (a duplicate delivery); the run stays queued while the project is in
+    Setup and starts when it is activated (:func:`analyse_project`)."""
+    from app.embeddings.incremental import candidates_for_requirement
+
+    run = db.scalar(select(AnalysisRun).where(AnalysisRun.id == run_id).with_for_update())
+    if run is None or run.status is not AnalysisRunStatus.QUEUED:
+        db.rollback()
+        return None
+    project = db.get(Project, run.project_id)
+    requirement = db.get(Requirement, run.subject_id)
+    if project is None or requirement is None:
+        db.rollback()
+        return None
+    if project.status is not ProjectStatus.ACTIVE:
+        db.rollback()
+        logger.info("Analysis of requirement %s waits: the project is not active", requirement.id)
+        return None
+    run.status = AnalysisRunStatus.RUNNING  # claims the run before the slow part
+    run.started_at = datetime.now(UTC)
+    db.commit()
+
+    try:
+        candidates = candidates_for_requirement(db, requirement, embedder)
+        needs_check = (
+            requirement.state not in NOT_ANALYSED
+            and requirement.single_checked_version != requirement.current_version
         )
+        run.pairs_total = len(candidates.pending)
+        run.checks_total = 1 if needs_check else 0
+        db.commit()
+    except Exception:
+        # Hand the claim back, or the run stays RUNNING with nothing dispatched and neither a
+        # redelivery, activation nor the budget sweep would ever pick it up again.
+        db.rollback()
+        db.execute(
+            update(AnalysisRun)
+            .where(AnalysisRun.id == run_id, AnalysisRun.status == AnalysisRunStatus.RUNNING)
+            .values(status=AnalysisRunStatus.QUEUED, started_at=None)
+        )
+        db.commit()
+        raise
+    _fan_out(
+        db,
+        run,
+        candidates.pending,
+        [requirement.id] if needs_check else [],
+        llm_configured=llm_configured,
+        dispatch=dispatch,
     )
-    for document_id in documents:
-        dispatch_document(document_id, dispatch)
-    return len(documents)
+    return run
 
 
 def start_document_run(
@@ -149,19 +240,31 @@ def start_document_run(
     )
     db.add(run)
     db.commit()
-
-    if not llm_configured or not (candidates.pending or to_check):
-        _close(
-            db,
-            run,
-            error=NO_LLM if not llm_configured and run.pairs_total + run.checks_total else None,
-        )
-        return run
-    for pair_id in candidates.pending:
-        dispatch(CLASSIFY_PAIR, [str(run.id), str(pair_id)])
-    for requirement_id in to_check:
-        dispatch(CHECK_REQUIREMENT, [str(run.id), str(requirement_id)])
+    _fan_out(
+        db, run, candidates.pending, to_check, llm_configured=llm_configured, dispatch=dispatch
+    )
     return run
+
+
+def _fan_out(
+    db: Session,
+    run: AnalysisRun,
+    pair_ids: list[uuid.UUID],
+    requirement_ids: list[uuid.UUID],
+    *,
+    llm_configured: bool,
+    dispatch: Dispatch,
+) -> None:
+    """One task per pair and per requirement to check — or close the run at once when there is
+    nothing to do (or no model to do it with)."""
+    if not llm_configured or not (pair_ids or requirement_ids):
+        work = bool(pair_ids or requirement_ids)
+        _close(db, run, error=NO_LLM if not llm_configured and work else None)
+        return
+    for pair_id in pair_ids:
+        dispatch(CLASSIFY_PAIR, [str(run.id), str(pair_id)])
+    for requirement_id in requirement_ids:
+        dispatch(CHECK_REQUIREMENT, [str(run.id), str(requirement_id)])
 
 
 def pair_outcome(db: Session, pair_id: uuid.UUID) -> Outcome:
@@ -185,13 +288,18 @@ def record(
 ) -> None:
     """Count one finished item on the run, atomically; close the run when everything is counted."""
     if outcome == "budget":
-        db.execute(
+        # The event carries the row as this transition left it: a sweep may resume the run before
+        # the announcement, and re-reading it then would announce "running".
+        parked = db.execute(
             update(AnalysisRun)
             .where(AnalysisRun.id == run_id, AnalysisRun.status == AnalysisRunStatus.RUNNING)
             .values(status=AnalysisRunStatus.WAITING_BUDGET)
-        )
+            .returning(*_EVENT_COLUMNS)
+        ).first()
         db.commit()
-        _announce(db, run_id)
+        if parked is not None:  # announced once, by the task that parked it
+            _publish(db, parked)
+            send(AFTER_RUN, [str(run_id), PARKED])
         return
     column = {
         ("pair", "done"): AnalysisRun.pairs_done,
@@ -222,34 +330,141 @@ def record(
 
 
 def _close(db: Session, run: AnalysisRun, *, error: str | None = None) -> None:
-    claimed = db.execute(
+    closed = db.execute(
         update(AnalysisRun)
         .where(AnalysisRun.id == run.id, AnalysisRun.finished_at.is_(None))
         .values(status=AnalysisRunStatus.DONE, finished_at=datetime.now(UTC), error_message=error)
-    )
+        .returning(*_EVENT_COLUMNS)
+    ).first()
     db.commit()
-    if cast(CursorResult[Any], claimed).rowcount:  # only the task that closed it announces it
-        _announce(db, run.id)
+    db.expire(run)  # callers holding the run see it closed
+    if closed is not None:  # only the task that closed it announces it
+        _publish(db, closed)
+        # Looked up at call time (not bound as a default) so tests can replace ``send``.
+        send(AFTER_RUN, [str(run.id), CLOSED])
 
 
-def _announce(db: Session, run_id: uuid.UUID) -> None:
+def after_run(db: Session, run_id: uuid.UUID, transition: str = CLOSED) -> None:
+    """Follow-ups of a run that closed or parked for budget (``analysis.after_run``): the live-map
+    delta once it is done. Each step is best effort — a failed follow-up never reopens the run.
+
+    ``transition`` is the change that queued the job. Only the closing job sends the map delta: a
+    park job delivered after the resumed run finished also sees ``done`` and must not send a
+    second delta for the same change (ADR-21)."""
+    from app.graph import deltas
+
     run = db.get(AnalysisRun, run_id)
     if run is None:
         return
-    db.refresh(run)
-    project = db.get(Project, run.project_id)
+    if transition == CLOSED and run.status is AnalysisRunStatus.DONE:
+        try:
+            deltas.run_finished(db, run)
+        except Exception:
+            db.rollback()
+            logger.exception("Map delta for run %s failed", run_id)
+
+
+def resume_waiting(
+    db: Session, *, budget: "BudgetGuard", llm_configured: bool, dispatch: Dispatch = send
+) -> list[uuid.UUID]:
+    """Resume every run parked for budget whose project has calls left again (Celery beat).
+    Oldest first, so posts are answered in the order they were made. Returns the runs resumed."""
+    resumed: list[uuid.UUID] = []
+    runs = list(
+        db.scalars(
+            select(AnalysisRun)
+            .where(AnalysisRun.status == AnalysisRunStatus.WAITING_BUDGET)
+            .order_by(AnalysisRun.created_at)
+        )
+    )
+    for run in runs:
+        left = budget.remaining(run.project_id)
+        if left is not None and left <= 0:
+            continue
+        if resume_run(db, run.id, llm_configured=llm_configured, dispatch=dispatch):
+            resumed.append(run.id)
+    return resumed
+
+
+def resume_run(
+    db: Session, run_id: uuid.UUID, *, llm_configured: bool, dispatch: Dispatch = send
+) -> bool:
+    """Put a parked run back to work on what is still pending; done and failed items keep their
+    counts. ``False`` when it was not waiting (someone else resumed it). Without an LLM the run
+    closes and says so, as a fresh run would."""
+    # Filtered on the status under the lock and re-read: a concurrent sweep may have loaded this
+    # row as waiting and the session would otherwise keep that stale copy.
+    run = db.scalar(
+        select(AnalysisRun)
+        .where(AnalysisRun.id == run_id, AnalysisRun.status == AnalysisRunStatus.WAITING_BUDGET)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if run is None:
+        db.rollback()
+        return False
+    requirement_ids = _subject_requirements(db, run)
+    pair_ids = list(
+        db.scalars(
+            select(CandidatePair.id).where(
+                CandidatePair.classification_status == ClassificationStatus.PENDING,
+                CandidatePair.requirement_a_id.in_(requirement_ids)
+                | CandidatePair.requirement_b_id.in_(requirement_ids),
+            )
+        )
+    )
+    to_check = list(
+        db.scalars(
+            select(Requirement.id).where(
+                Requirement.id.in_(requirement_ids),
+                Requirement.state.not_in(NOT_ANALYSED),
+                Requirement.single_checked_version.is_distinct_from(Requirement.current_version),
+            )
+        )
+    )
+    run.status = AnalysisRunStatus.RUNNING
+    run.pairs_total = run.pairs_done + run.pairs_failed + len(pair_ids)
+    run.checks_total = run.checks_done + run.checks_failed + len(to_check)
+    db.commit()
+    _fan_out(db, run, pair_ids, to_check, llm_configured=llm_configured, dispatch=dispatch)
+    return True
+
+
+def _subject_requirements(db: Session, run: AnalysisRun) -> list[uuid.UUID]:
+    if run.scope is AnalysisScope.REQUIREMENT:
+        return [run.subject_id]
+    return list(db.scalars(select(Requirement.id).where(Requirement.document_id == run.subject_id)))
+
+
+_EVENT_COLUMNS = (
+    AnalysisRun.id,
+    AnalysisRun.project_id,
+    AnalysisRun.subject_id,
+    AnalysisRun.status,
+    AnalysisRun.scope,
+    AnalysisRun.pairs_total,
+    AnalysisRun.pairs_failed,
+    AnalysisRun.checks_total,
+    AnalysisRun.checks_failed,
+)
+
+
+def _publish(db: Session, row: Row[*tuple[Any, ...]]) -> None:
+    """Announce ``analysis.completed`` from the row a transition returned (``_EVENT_COLUMNS``)."""
+    project = db.get(Project, row.project_id)
     if project is None:
         return
     bus.publish(
         analysis_completed(
             workspace_id=project.workspace_id,
             project_id=project.id,
-            run_id=run.id,
-            subject_id=run.subject_id,
-            status=run.status.value,
-            pairs_total=run.pairs_total,
-            pairs_failed=run.pairs_failed,
-            checks_total=run.checks_total,
-            checks_failed=run.checks_failed,
+            run_id=row.id,
+            subject_id=row.subject_id,
+            status=row.status.value,
+            scope=row.scope.value,
+            pairs_total=row.pairs_total,
+            pairs_failed=row.pairs_failed,
+            checks_total=row.checks_total,
+            checks_failed=row.checks_failed,
         )
     )

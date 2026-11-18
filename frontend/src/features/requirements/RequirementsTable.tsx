@@ -92,6 +92,11 @@ export function RequirementsTable({
   const { data, isLoading, isError, error } = useRequirements(projectId, filters);
   const total = data?.total ?? 0;
   const [ownership, setOwnership] = useState<RequirementRead | null>(null);
+  // The dialog follows the refreshed row (an accepted request changes the owner); the clicked
+  // copy only stands in while the row is off the current page.
+  const selected = ownership
+    ? (data?.items.find((item) => item.requirement_id === ownership.requirement_id) ?? ownership)
+    : null;
   const { can } = usePermissions({ projectId });
   const { workspaceId } = useParams();
   const members = useMembers(workspaceId);
@@ -234,12 +239,12 @@ export function RequirementsTable({
         </div>
       )}
 
-      {ownership && (
+      {selected && (
         <OwnershipRequestDialog
           open
           onClose={() => setOwnership(null)}
           projectId={projectId}
-          requirement={ownership}
+          requirement={selected}
           canRequest={can("req.propose")}
           canManage={can("baseline.manage")}
           names={names}

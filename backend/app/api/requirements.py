@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import DbSession, requires, requires_any
 from app.core.errors import BadRequestError, NotFoundError
 from app.intake import ownership
-from app.models import Requirement, RequirementOrigin, RequirementState
+from app.models import AuditAction, AuditLog, Requirement, RequirementOrigin, RequirementState
 from app.schemas.common import ErrorResponse, Page
 from app.schemas.documents import RequirementRead
 from app.schemas.requirements import (
@@ -90,6 +90,16 @@ def _detail(db: Session, ctx: AccessContext, requirement_id: uuid.UUID) -> Requi
     if requirement is None:
         raise NotFoundError("Requirement not found")
     db.refresh(requirement)
+    if requirement.is_protected:
+        db.add(
+            AuditLog(
+                workspace_id=ctx.workspace_id,
+                actor_id=ctx.user.id,
+                requirement_id=requirement.id,
+                action=AuditAction.VIEWED_PROTECTED,
+            )
+        )
+        db.commit()
     return RequirementDetail.build(
         requirement,
         allowed=lifecycle.allowed_moves(db, ctx, requirement),
@@ -139,10 +149,12 @@ def update_requirement(
 ) -> RequirementDetail:
     sent = body.model_fields_set
     reassigning = bool(sent & {"owner_id", "stakeholder_group"})
-    if (body.state is None or body.version is None) and not reassigning:
+    moving = body.state is not None and body.version is not None
+    if not moving and not reassigning:
         raise BadRequestError("Nothing to change", code="nothing_to_change")
+    staged: list[str] = []
     if reassigning:
-        ownership.reassign(
+        staged = ownership.reassign(
             db,
             ctx,
             requirement_id,
@@ -150,18 +162,24 @@ def update_requirement(
             set_owner="owner_id" in sent,
             group=body.stakeholder_group,
             set_group="stakeholder_group" in sent,
+            commit=not moving,
         )
     if body.state is None or body.version is None:
         return _detail(db, ctx, requirement_id)
-    lifecycle.transition(
-        db,
-        ctx,
-        requirement_id,
-        body.state,
-        version=body.version,
-        reason=body.reason,
-        accepted_risk=body.accepted_risk,
-    )
+    try:
+        lifecycle.transition(
+            db,
+            ctx,
+            requirement_id,
+            body.state,
+            version=body.version,
+            reason=body.reason,
+            accepted_risk=body.accepted_risk,
+        )
+    except Exception:
+        db.rollback()  # a refused move takes the staged reassignment with it
+        raise
+    ownership.announce(db, ctx, requirement_id, staged)  # the transition's commit carried it
     return _detail(db, ctx, requirement_id)
 
 
