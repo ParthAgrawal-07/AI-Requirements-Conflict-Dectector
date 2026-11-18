@@ -36,13 +36,25 @@ EXPECTED_TABLES = {
     # Sprint 1 (0005_collaboration, join tables)
     "join_codes",
     "join_requests",
-    # Sprint 2 (0006b_drafts_posts)
-    "requirement_drafts",
     # Sprint 2 (0005b_channels_messages)
     "channels",
     "channel_members",
     "channel_reads",
     "messages",
+    # Sprint 2 (0006_lifecycle_runs, 0006b_drafts_posts)
+    "analysis_runs",
+    "requirement_drafts",
+    # Sprint 4 (0007_issues)
+    "issues",
+    "issue_requirements",
+    "issue_assignees",
+    "comments",
+    # Sprint 4 (0007a_change_requests)
+    "change_requests",
+    "change_request_revisions",
+    "change_request_issues",
+    # Sprint 4 (0007b_consequence_reports)
+    "consequence_reports",
 }
 
 
