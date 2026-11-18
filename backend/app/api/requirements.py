@@ -75,7 +75,7 @@ def list_requirements(
 
 def _detail(db: Session, ctx: AccessContext, requirement_id: uuid.UUID) -> RequirementDetail:
     requirement = db.get(Requirement, requirement_id)
-    if requirement is None:
+    if requirement is None or requirement.project_id != ctx.project_id:
         raise NotFoundError("Requirement not found")
     db.refresh(requirement)
     if requirement.is_protected:
