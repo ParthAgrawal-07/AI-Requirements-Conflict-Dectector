@@ -25,6 +25,12 @@ ANALYSIS_PROGRESS = "analysis.progress"  # a document moved to a new stage or pe
 ANALYSIS_COMPLETED = "analysis.completed"  # an analysis run finished or is waiting for budget
 MEMBERSHIP_REVOKED = "membership.revoked"  # the gateway closes the member's sockets (US-26, S2)
 GRAPH_DELTA = "graph.delta"  # nodes/edges changed on the live map (US-14, S3)
+# Issues (US-52, S4): opened, edited, closed, reopened, commented.
+ISSUE_OPENED = "issue.opened"
+ISSUE_UPDATED = "issue.updated"
+ISSUE_CLOSED = "issue.closed"
+ISSUE_REOPENED = "issue.reopened"
+ISSUE_COMMENTED = "issue.commented"
 # Channels (US-28, Madhav). ``data.private`` is true for a private channel: the gateway then
 # forwards the event only to sockets subscribed to that channel by id (re-checked membership).
 CHANNEL_CREATED = "channel.created"
@@ -41,6 +47,11 @@ EVENT_TYPES = frozenset(
         ANALYSIS_COMPLETED,
         MEMBERSHIP_REVOKED,
         GRAPH_DELTA,
+        ISSUE_OPENED,
+        ISSUE_UPDATED,
+        ISSUE_CLOSED,
+        ISSUE_REOPENED,
+        ISSUE_COMMENTED,
         CHANNEL_CREATED,
         CHANNEL_UPDATED,
         CHANNEL_MEMBER_REMOVED,
@@ -157,6 +168,33 @@ def graph_delta(*, workspace_id: uuid.UUID, delta: GraphDelta) -> Event:
         data=delta.model_dump(mode="json"),
     )
 
+def issue_event(
+    event_type: str,
+    *,
+    workspace_id: uuid.UUID,
+    project_id: uuid.UUID,
+    issue_id: uuid.UUID,
+    number: int,
+    status: str,
+    actor_id: uuid.UUID | None,
+    assignee_ids: list[uuid.UUID],
+    **data: Any,
+) -> Event:
+    """An issue changed (``issue.*``). Ids, its number and state — never its title or body."""
+    return Event(
+        type=event_type,
+        workspace_id=workspace_id,
+        project_id=project_id,
+        entity_id=issue_id,
+        data={
+            "issue_id": str(issue_id),
+            "number": number,
+            "status": status,
+            "actor_id": str(actor_id) if actor_id else None,
+            "assignee_ids": [str(a) for a in assignee_ids],
+            **data,
+        },
+    )
 
 def analysis_completed(
     *,

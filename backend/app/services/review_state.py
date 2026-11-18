@@ -49,6 +49,7 @@ from app.models import (
     Requirement,
 )
 from app.services.access import AccessContext
+from app.services import issues
 
 ReviewAction = Literal["confirm", "dismiss", "merge", "reclassify", "reopen", "escalate"]
 
@@ -184,7 +185,7 @@ def review(
         )
     )
     db.commit()
-
+    issues.on_finding_changed(db, finding, actor=ctx.user)
     sentence = narrator.reviewed(
         ctx.user.full_name,
         action,

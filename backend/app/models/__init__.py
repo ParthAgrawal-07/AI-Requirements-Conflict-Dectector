@@ -32,6 +32,7 @@ from app.models.enums import (
     Severity,
 )
 from app.models.graph import NodePosition
+from app.models.issue import Issue
 from app.models.join_code import JoinCode, JoinRequest
 from app.models.membership import Membership, ProjectMember
 from app.models.ownership import OwnershipRequest
@@ -66,6 +67,7 @@ __all__ = [
     "FindingCategory",
     "FindingStatus",
     "ImportMode",
+    "Issue",
     "JoinCode",
     "JoinCodeStatus",
     "JoinRequest",
