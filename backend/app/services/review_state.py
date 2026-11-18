@@ -31,7 +31,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Literal
 
-from sqlalchemy import func, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
 from app.core.errors import BadRequestError, ConflictError, ForbiddenError, NotFoundError
@@ -45,6 +45,7 @@ from app.models import (
     FindingCategory,
     FindingReview,
     FindingStatus,
+    Project,
     Requirement,
 )
 from app.services.access import AccessContext
@@ -104,7 +105,13 @@ def review(
     category: FindingCategory | None = None,
     merge_into: uuid.UUID | None = None,
 ) -> FindingReview:
-    finding = db.scalar(select(Finding).where(Finding.id == finding_id).with_for_update())
+    # A merge locks its target too, in id order with the source, so two opposite merges (A into
+    # B, B into A) neither deadlock nor both pass: the second sees the first's result.
+    ids = [finding_id]
+    if action == "merge" and merge_into is not None and merge_into != finding_id:
+        ids.append(merge_into)
+    locked = _locked(db, ctx, ids)
+    finding = locked.get(finding_id)
     if finding is None:
         raise NotFoundError("Finding not found")
     requirements = involved_requirements(db, finding)
@@ -135,7 +142,7 @@ def review(
     elif action == "dismiss":
         finding.status = F.DISMISSED
     elif action == "merge":
-        target = _merge_target(db, finding, merge_into)
+        target = _merge_target(finding, merge_into, locked)
         finding.status = F.MERGED
         finding.merged_into_id = target.id
     elif action == "reclassify":
@@ -194,12 +201,37 @@ def review(
     return record
 
 
-def _merge_target(db: Session, finding: Finding, merge_into: uuid.UUID | None) -> Finding:
+def _scoped(ctx: AccessContext) -> Select[Finding]:
+    """Findings of the caller's workspace (and project, when the request names one)."""
+    query = (
+        select(Finding)
+        .join(Project, Project.id == Finding.project_id)
+        .where(Project.workspace_id == ctx.workspace_id)
+    )
+    if ctx.project_id is not None:
+        query = query.where(Finding.project_id == ctx.project_id)
+    return query
+
+
+def _locked(db: Session, ctx: AccessContext, ids: list[uuid.UUID]) -> dict[uuid.UUID, Finding]:
+    rows = db.scalars(
+        _scoped(ctx)
+        .where(Finding.id.in_(ids))
+        .order_by(Finding.id)
+        .with_for_update(of=Finding)
+        .execution_options(populate_existing=True)
+    )
+    return {row.id: row for row in rows}
+
+
+def _merge_target(
+    finding: Finding, merge_into: uuid.UUID | None, locked: dict[uuid.UUID, Finding]
+) -> Finding:
     if merge_into is None:
         raise BadRequestError("Name the finding to merge into", code="merge_target_required")
     if merge_into == finding.id:
         raise BadRequestError("A finding cannot be merged into itself", code="merge_into_self")
-    target = db.get(Finding, merge_into)
+    target = locked.get(merge_into)
     # Another project's finding does not exist for this request (tenant isolation).
     if target is None or target.project_id != finding.project_id:
         raise NotFoundError("The finding to merge into was not found")
@@ -230,7 +262,9 @@ def _new_category(finding: Finding, category: FindingCategory | None) -> Finding
     return category
 
 
-def reviews_of(db: Session, finding_id: uuid.UUID) -> list[FindingReview]:
+def reviews_of(db: Session, ctx: AccessContext, finding_id: uuid.UUID) -> list[FindingReview]:
+    if db.scalar(_scoped(ctx).where(Finding.id == finding_id)) is None:
+        raise NotFoundError("Finding not found")
     return list(
         db.scalars(
             select(FindingReview)

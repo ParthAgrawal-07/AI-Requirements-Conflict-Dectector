@@ -200,6 +200,10 @@ CASES = [
         needs="baseline.manage",
     ),
     Case("POST", "/api/v1/requirements/{requirement_id}/signoff", lambda _: {"version": 1}),
+    # Sprint 3 — finding review (Affan, US-10): the world's finding is about an unprotected
+    # requirement, so a protected-only finding.review does not count (see the test below).
+    Case("POST", "/api/v1/findings/{finding_id}/review", lambda _: {"action": "confirm"}),
+    Case("GET", "/api/v1/findings/{finding_id}/reviews"),
     # Sprint 3 — ownership (Bansil, US-36). Deciding is for the owner or whoever may reassign; the
     # world's requirement has no owner, so it needs baseline.manage.
     Case("POST", "/api/v1/requirements/{requirement_id}/ownership-requests", lambda _: {}),

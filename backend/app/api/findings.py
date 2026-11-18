@@ -118,4 +118,4 @@ def list_reviews(
     ctx: Annotated[AccessContext, requires("view")],
     db: DbSession,
 ) -> list[FindingReviewRead]:
-    return [FindingReviewRead.from_model(r) for r in review_state.reviews_of(db, finding_id)]
+    return [FindingReviewRead.from_model(r) for r in review_state.reviews_of(db, ctx, finding_id)]

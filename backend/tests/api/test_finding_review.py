@@ -19,11 +19,14 @@ from app.models import (
     FindingStatus,
     Project,
     Requirement,
+    Role,
+    RolePermission,
     User,
     Workspace,
 )
 from app.realtime import bus
 from app.realtime.events import GRAPH_DELTA
+from app.services.membership import add_member
 from tests.api.conftest import headers_for
 
 
@@ -196,6 +199,24 @@ def test_merging_folds_a_finding_into_another_of_the_same_category(
     assert itself.json()["error"]["code"] == "merge_into_self"
 
 
+def test_two_findings_cannot_be_merged_into_each_other(
+    client: TestClient,
+    db_session: Session,
+    pair: tuple[Requirement, Requirement],
+    make_requirement: Callable[..., Requirement],
+    analyst: User,
+) -> None:
+    first = make_finding(db_session, *pair, category=FindingCategory.DUPLICATE)
+    third = make_requirement("Sessions end after 5 min.", source_req_id="REQ-032")
+    second = make_finding(db_session, pair[1], third, category=FindingCategory.DUPLICATE)
+
+    into_second = review(client, first, analyst, action="merge", merge_into=str(second.id))
+    back = review(client, second, analyst, action="merge", merge_into=str(first.id))
+
+    assert into_second.status_code == 200
+    assert back.status_code == 409 and back.json()["error"]["code"] == "merge_target_closed"
+
+
 def test_a_finding_cannot_be_merged_into_another_projects_finding(
     client: TestClient,
     db_session: Session,
@@ -305,6 +326,29 @@ def test_members_without_finding_review_are_refused(
     finding = make_finding(db_session, *pair)
 
     assert review(client, finding, make_user(role=role), action="confirm").status_code == 403
+
+
+def test_review_history_needs_view(
+    client: TestClient,
+    db_session: Session,
+    workspace: Workspace,
+    pair: tuple[Requirement, Requirement],
+    make_user: Callable[..., User],
+) -> None:
+    finding = make_finding(db_session, *pair)
+    role = Role(
+        workspace_id=workspace.id,
+        name="No view",
+        permissions=[RolePermission(permission="message.post")],
+    )
+    db_session.add(role)
+    db_session.commit()
+    member = make_user(role=None)
+    add_member(db_session, workspace_id=workspace.id, user_id=member.id, role_id=role.id)
+
+    history = client.get(f"/api/v1/findings/{finding.id}/reviews", headers=headers_for(member))
+
+    assert history.status_code == 403
 
 
 def test_another_workspaces_finding_is_a_404(
