@@ -155,7 +155,8 @@ def list_channels(
             Message.channel_id == Channel.id,
             Message.parent_id.is_(None),
             Message.deleted_at.is_(None),
-            Message.author_id != user.id,
+            # IS DISTINCT FROM: a system card (no author) is unread for everyone.
+            Message.author_id.is_distinct_from(user.id),
             or_(floor.is_(None), Message.created_at > floor),
         )
         .scalar_subquery()

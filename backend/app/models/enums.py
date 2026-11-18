@@ -133,6 +133,17 @@ class AuditAction(StrEnum):
     JOIN_REQUEST_DENIED = "join_request_denied"
     # Requirement posts (US-30 groundwork). Requirement, message and channel ids only.
     REQUIREMENT_POSTED = "requirement_posted"
+    # Lifecycle and review (US-37, US-10). States, versions and ids; reasons live in
+    # requirement_transitions / finding_reviews, not here.
+    STATE_CHANGED = "state_changed"
+    FINDING_REOPENED = "finding_reopened"
+    # Clarification questions (US-09). Ids only; the answer text is on the clarification.
+    CLARIFICATION_ANSWERED = "clarification_answered"
+    # Owners and groups (US-36). User ids and group names only.
+    OWNER_CHANGED = "owner_changed"
+    GROUP_CHANGED = "group_changed"
+    OWNERSHIP_REQUESTED = "ownership_requested"
+    OWNERSHIP_DECIDED = "ownership_decided"
     # Channels (US-28). Channel and user ids only — never names, topics or messages (CR-04).
     CHANNEL_CREATED = "channel_created"
     CHANNEL_UPDATED = "channel_updated"

@@ -31,10 +31,13 @@ from app.models.enums import (
     RequirementState,
     Severity,
 )
+from app.models.graph import NodePosition
 from app.models.join_code import JoinCode, JoinRequest
 from app.models.membership import Membership, ProjectMember
+from app.models.ownership import OwnershipRequest
 from app.models.project import Project
 from app.models.requirement import Requirement, RequirementVersion
+from app.models.review import FindingReview, RequirementTransition
 from app.models.role import Role, RolePermission
 from app.models.user import User
 from app.models.workspace import Workspace
@@ -59,6 +62,7 @@ __all__ = [
     "DocumentStatus",
     "Embedding",
     "Finding",
+    "FindingReview",
     "FindingCategory",
     "FindingStatus",
     "ImportMode",
@@ -69,6 +73,8 @@ __all__ = [
     "Membership",
     "Message",
     "MessageKind",
+    "NodePosition",
+    "OwnershipRequest",
     "PlatformRole",
     "Project",
     "ProjectContext",
@@ -78,6 +84,7 @@ __all__ = [
     "RequirementDraft",
     "RequirementOrigin",
     "RequirementState",
+    "RequirementTransition",
     "RequirementVersion",
     "Role",
     "RolePermission",

@@ -105,7 +105,11 @@ class Settings(BaseSettings):
     # Heet (US-05): neighbours per requirement sent to the classifier. Recall over cost: raise it
     # before lowering the similarity threshold.
     candidate_top_k: int = Field(default=10, ge=1, le=50)
-    llm_provider: Literal["gemini", "groq", "anthropic", "openai"] = "gemini"
+    # Heet (US-51, FR-83): the composer's "similar requirements" panel. Lower than the candidate
+    # threshold on purpose — a hint is cheap to ignore, a missed duplicate is not.
+    similar_hint_min_similarity: float = Field(default=0.5, ge=0, le=1)
+    similar_requests_per_minute: int = Field(default=60, ge=1, le=1000)
+    llm_provider: Literal["gemini", "groq"] = "gemini"
     llm_fallback_provider: Literal["groq", "none"] | None = "groq"
     gemini_api_key: SecretStr | None = None
     gemini_model: str = "gemini-2.5-flash"
@@ -118,6 +122,11 @@ class Settings(BaseSettings):
     llm_max_retries: int = Field(default=2, ge=0, le=6)  # transport retries (429, 5xx, network)
     # US-05: re-asks when a reply does not validate against the schema; then the pair is failed.
     llm_output_retries: int = Field(default=3, ge=0, le=5)
+    # Keval (NFR-28, US-31): "redis" counts every call against the project's monthly budget;
+    # "unlimited" switches the guard off (local experiments only).
+    llm_budget_backend: Literal["redis", "unlimited"] = "redis"
+    # Calls made outside any project (e.g. drafting a brief before a project exists) per month.
+    llm_platform_monthly_calls: int = Field(default=200, ge=0, le=100_000)
 
     # ── Validators ────────────────────────────────────────
     @field_validator("database_url")

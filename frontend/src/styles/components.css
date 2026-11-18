@@ -174,11 +174,19 @@
 .nav-link[aria-current="page"] { background: var(--ink); color: var(--paper-raised); }
 .main { overflow: auto; }
 
+/* ── Layout helpers ───────────────────────────────────────────── */
+.row { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.page-section { margin-bottom: var(--space-5); }
+.error-state { color: var(--danger); }
+.kit-page { min-height: 100%; }
+
 /* ── Auth screens (Sign in board) ────────────────────────────── */
 .auth-layout { display: grid; grid-template-columns: 1fr 1fr; min-height: 100%; }
 .auth-art { display: flex; flex-direction: column; justify-content: space-between; padding: var(--space-6); border-right: 1px solid var(--line); }
 .auth-panel { display: flex; align-items: center; justify-content: center; padding: var(--space-6); background: var(--paper-raised); }
 .auth-form { width: min(400px, 100%); }
+.auth-brand { display: flex; align-items: center; gap: var(--space-3); }
+.auth-tagline { font-size: 18px; max-width: 360px; }
 .auth-form h1 { margin: 0 0 var(--space-1); font-size: 30px; }
 @media (max-width: 860px) {
   .auth-layout { grid-template-columns: 1fr; }

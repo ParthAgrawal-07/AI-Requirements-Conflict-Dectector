@@ -142,6 +142,10 @@ Contract: [`docs/contracts/composer-and-context.md`](../contracts/composer-and-c
 
 ## 1. Endpoint Summary (10 planned)
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:8f67aa88621d1682ffbdb5966c9d769636f6081fe07d3551f00af7d25d5050e7 -->
+
 | # | Method & Path | Purpose | FR trace |
 |---|---|---|---|
 | 1 | `POST /auth/login` | Authenticate, issue JWT | FR-37 |
@@ -151,10 +155,14 @@ Contract: [`docs/contracts/composer-and-context.md`](../contracts/composer-and-c
 | 5 | `PATCH /requirements/{id}` | Correct extraction/segmentation, or edit text (triggers impact analysis) | FR-06, FR-24 |
 | 6 | `GET /projects/{p}/findings`, `GET /findings/{id}` | List or read classified findings (implemented — US-07) | FR-13, FR-14, FR-27 |
 | 7 | `PATCH /findings/{id}` | Confirm / dismiss / merge / reclassify a finding | FR-18, FR-20 |
-| 8 | `GET /findings/{id}/clarification` | Get or generate the clarification question | FR-22, FR-23 |
+| 8 | `GET /findings/{id}/clarification` | Read the stored question and answer; requires `view`; 200 or 404 if absent | FR-22, FR-23 |
+| 8a | `POST /findings/{id}/clarification` | Queue generation or retry posted-question delivery/card refresh; requires `finding.review`; 202 accepted, 409 ineligible/already asked, 503 queue unavailable | FR-22 |
+| 8b | `POST /clarifications/{id}/answer` | Answer a question; requires `req.comment`; 200 answered, 409 already answered, 422 invalid resolution | FR-23 |
 | 9 | `GET /requirements/{id}/impact` | Get change-impact analysis for a requirement | FR-24, FR-25 |
 | 10 | `GET /workspaces/{id}/dashboard` | Aggregated counts + graph data | FR-27, FR-29 |
 
+
+<!-- /coderabbit-ai-generated:v1 -->
 ## 2. Selected Endpoint Detail
 
 ### `POST /projects/{p}/documents`  *(implemented — US-01)*

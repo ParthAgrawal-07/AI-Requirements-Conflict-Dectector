@@ -73,6 +73,54 @@ def run_document_task(document_id: str) -> str | None:
         return str(run.id) if run else None
 
 
+@celery_app.task(
+    name="analysis.run_requirement",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=300,
+    max_retries=3,
+)
+def run_requirement_task(run_id: str) -> str | None:
+    """Live analysis of a posted requirement (US-31): embed it, pair it with its neighbours and
+    fan out. Returns the run id, or ``None`` if the run was not waiting to start. A failed start
+    hands the run back as queued, so the retry (or the project's next activation) starts it."""
+    from app.classification.llm_client import get_llm_client
+    from app.embeddings.model import get_embedder
+    from app.services.analysis_orchestrator import start_requirement_run
+
+    with session_scope() as db:
+        run = start_requirement_run(
+            db,
+            uuid.UUID(run_id),
+            llm_configured=get_llm_client() is not None,
+            embedder=get_embedder(),
+        )
+        return str(run.id) if run else None
+
+
+@celery_app.task(name="analysis.after_run")
+def after_run_task(run_id: str, transition: str = "closed") -> None:
+    """Follow-ups of a closed or parked run: map delta, result card, clarification questions."""
+    from app.services.analysis_orchestrator import after_run
+
+    with session_scope() as db:
+        after_run(db, uuid.UUID(run_id), transition)
+
+
+@celery_app.task(name="analysis.resume_waiting")
+def resume_waiting_task() -> list[str]:
+    """Resume runs parked for budget once their project has calls left (NFR-28, Celery beat)."""
+    from app.classification.budget import get_budget_guard
+    from app.classification.llm_client import get_llm_client
+    from app.services.analysis_orchestrator import resume_waiting
+
+    with session_scope() as db:
+        resumed = resume_waiting(
+            db, budget=get_budget_guard(), llm_configured=get_llm_client() is not None
+        )
+        return [str(run_id) for run_id in resumed]
+
+
 def _backoff(retries: int) -> int:
     return int(min(300, 10 * 2**retries))
 

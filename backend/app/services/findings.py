@@ -11,10 +11,11 @@ import uuid
 from dataclasses import dataclass
 
 from sqlalchemy import func, or_, select
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy.orm import Session, aliased, selectinload
 
 from app.core.errors import NotFoundError
 from app.models import (
+    AnalysisRun,
     AuditAction,
     AuditLog,
     CandidatePair,
@@ -25,7 +26,7 @@ from app.models import (
     Requirement,
     User,
 )
-from app.services.access import Scope, register_scope_resolver
+from app.services.access import AccessContext, Scope, register_scope_resolver
 
 
 @dataclass(frozen=True)
@@ -41,21 +42,46 @@ class FindingView:
 
 def _involved(db: Session, findings: list[Finding]) -> dict[uuid.UUID, list[Requirement]]:
     pair_ids = [f.candidate_pair_id for f in findings if f.candidate_pair_id]
+    project_ids = {f.project_id for f in findings}
+    a, b = aliased(Requirement), aliased(Requirement)
     pairs = {
         pair.id: pair
-        for pair in db.scalars(select(CandidatePair).where(CandidatePair.id.in_(pair_ids)))
+        for pair in db.scalars(
+            select(CandidatePair)
+            .join(a, a.id == CandidatePair.requirement_a_id)
+            .join(b, b.id == CandidatePair.requirement_b_id)
+            .where(
+                CandidatePair.id.in_(pair_ids),
+                a.project_id.in_(project_ids),
+                a.project_id == b.project_id,
+            )
+        )
     }
-    wanted: set[uuid.UUID] = {f.requirement_id for f in findings if f.requirement_id}
+    wanted = {f.requirement_id for f in findings if f.requirement_id}
     for pair in pairs.values():
-        wanted |= {pair.requirement_a_id, pair.requirement_b_id}
-    by_id = {r.id: r for r in db.scalars(select(Requirement).where(Requirement.id.in_(wanted)))}
+        wanted.update((pair.requirement_a_id, pair.requirement_b_id))
+    by_id = {
+        r.id: r
+        for r in db.scalars(
+            select(Requirement).where(
+                Requirement.id.in_(wanted), Requirement.project_id.in_(project_ids)
+            )
+        )
+    }
     involved: dict[uuid.UUID, list[Requirement]] = {}
     for finding in findings:
-        if finding.candidate_pair_id and (subject := pairs.get(finding.candidate_pair_id)):
-            ids = [subject.requirement_a_id, subject.requirement_b_id]
+        if finding.candidate_pair_id:
+            subject = pairs.get(finding.candidate_pair_id)
+            ids = [subject.requirement_a_id, subject.requirement_b_id] if subject else []
+            if not subject or any(
+                i not in by_id or by_id[i].project_id != finding.project_id for i in ids
+            ):
+                raise NotFoundError("Finding requirements not found")
         else:
             ids = [finding.requirement_id] if finding.requirement_id else []
-        involved[finding.id] = [by_id[i] for i in ids if i in by_id]
+        involved[finding.id] = [
+            by_id[i] for i in ids if i in by_id and by_id[i].project_id == finding.project_id
+        ]
     return involved
 
 
@@ -99,15 +125,58 @@ def list_findings(
     rows = list(
         db.scalars(
             select(Finding)
+            .options(selectinload(Finding.clarification))
             .where(*conditions)
             .order_by(Finding.confidence.desc(), Finding.created_at, Finding.id)
             .limit(limit)
             .offset(offset)
         )
     )
-    involved = _involved(db, rows)
-    views = [FindingView(f, involved[f.id], project.confidence_threshold) for f in rows]
+    # Keep strict individual lookup semantics while isolating corrupt rows in a page.
+    try:
+        involved = _involved(db, rows)
+    except NotFoundError:
+        involved = {}
+        for finding in rows:
+            try:
+                involved.update(_involved(db, [finding]))
+            except NotFoundError:
+                continue
+    views = [
+        FindingView(f, involved[f.id], project.confidence_threshold)
+        for f in rows
+        if f.id in involved
+    ]
     return views, total
+
+
+def run_findings(
+    db: Session, ctx: AccessContext, run_id: uuid.UUID
+) -> tuple[AnalysisRun, list[FindingView]]:
+    """One analysis run of the caller's project and its current findings, as finding cards
+    (US-31: the result card's data). A run of another project is not found."""
+    run = db.scalar(
+        select(AnalysisRun).where(
+            AnalysisRun.id == run_id, AnalysisRun.project_id == ctx.project_id
+        )
+    )
+    project = db.get(Project, run.project_id) if run is not None else None
+    if run is None or project is None:
+        raise NotFoundError("Analysis run not found")
+    findings = list(
+        db.scalars(
+            select(Finding)
+            .where(Finding.analysis_run_id == run.id, Finding.is_stale.is_(False))
+            .order_by(Finding.confidence.desc(), Finding.created_at, Finding.id)
+        )
+    )
+    return run, views_of(db, project, findings)
+
+
+def views_of(db: Session, project: Project, findings: list[Finding]) -> list[FindingView]:
+    """Finding cards for findings already loaded (e.g. one run's, US-31)."""
+    involved = _involved(db, findings)
+    return [FindingView(f, involved[f.id], project.confidence_threshold) for f in findings]
 
 
 def get_finding(
@@ -146,3 +215,8 @@ def _finding_scope(db: Session, finding_id: uuid.UUID) -> Scope | None:
 
 
 register_scope_resolver("finding_id", _finding_scope)
+
+
+def involved_requirements(db: Session, finding: Finding) -> list[Requirement]:
+    """Requirements addressed by one finding (US-09)."""
+    return _involved(db, [finding]).get(finding.id, [])

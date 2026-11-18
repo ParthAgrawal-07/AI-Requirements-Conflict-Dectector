@@ -48,10 +48,12 @@ AUTHENTICATED_ONLY = {
 
 
 # Routes that admit holders of a *protected-only* grant and check the requirement themselves
-# (``allow_protected_only=True``). None yet — the review guard for US-10 (Sprint 3) will be the first.
-# Adding one here is a conscious decision: the handler must call
+# (``allow_protected_only=True``). Adding one here is a conscious decision: the handler must call
 # ``ctx.can(permission, protected_requirement=requirement.is_protected)``.
-PROTECTED_ONLY_OPT_INS: set[tuple[str, str]] = set()
+PROTECTED_ONLY_OPT_INS: set[tuple[str, str]] = {
+    # US-10 / CR-19: ``app.services.review_state.may_review`` (tests/api/test_finding_review.py).
+    ("POST", "/api/v1/findings/{finding_id}/review"),
+}
 
 
 def _declarations(dependant: Dependant) -> list[AccessDeclaration]:
