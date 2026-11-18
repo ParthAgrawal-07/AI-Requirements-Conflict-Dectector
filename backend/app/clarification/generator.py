@@ -35,7 +35,7 @@ from app.classification.context_pack import ContextPackBuilder
 from app.classification.llm_client import LLMClient
 from app.core.config import get_settings
 from app.models import Clarification, Finding, FindingCategory, FindingStatus, Project
-from app.services.review_state import involved_requirements
+from app.services.findings import involved_requirements
 
 logger = logging.getLogger(__name__)
 
@@ -76,8 +76,21 @@ def check_specific(output: ClarificationOutput, labels: list[str], vague_terms: 
         raise GenericQuestionError("it is not a question")
     if _GENERIC.search(question):
         raise GenericQuestionError("it is a generic question that fits any requirement")
-    if not any(label in question for label in labels):
+    if not any(
+        re.search(r"(?<![\w-])" + re.escape(label) + r"(?![\w-])", question) for label in labels
+    ):
         raise GenericQuestionError(f"it does not name the requirements by ID ({', '.join(labels)})")
+    named = {
+        label
+        for label in labels
+        if re.search(r"(?<![\w-])" + re.escape(label) + r"(?![\w-])", question)
+    }
+    if set(output.requirement_ids) != named or not set(output.requirement_ids) <= set(labels):
+        raise GenericQuestionError(
+            "requirement_ids must match the supplied IDs named in the question"
+        )
+    if set(re.findall(r"\bREQ-\d+\b", question)) - set(labels):
+        raise GenericQuestionError("the question names unknown requirement IDs")
     if vague_terms and not any(term.lower() in question.lower() for term in vague_terms):
         raise GenericQuestionError(
             "it does not quote the vague wording (" + ", ".join(f'"{t}"' for t in vague_terms) + ")"
@@ -123,11 +136,12 @@ def generate(db: Session, llm: LLMClient, finding: Finding) -> Clarification | N
         question=output.question.strip(),
         addressed_to=output.addressed_to,
         prompt_version=PROMPT_VERSION,
-        llm_model=llm.model,
+        llm_model=llm.provenance,
     )
     try:
         with db.begin_nested():
             db.add(clarification)
+            finding.clarification = clarification
             db.flush()
     except IntegrityError:  # another delivery of the task stored one first
         return db.scalar(select(Clarification).where(Clarification.finding_id == finding.id))

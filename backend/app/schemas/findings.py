@@ -4,21 +4,36 @@
 
 import uuid
 from datetime import datetime
-from typing import Any, Literal, cast
+from typing import Any, Literal, Protocol, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models import (
     Clarification,
     FindingCategory,
-    FindingReview,
     FindingStatus,
     RequirementOrigin,
     RequirementState,
     Severity,
 )
 from app.services.findings import FindingView
-from app.services.review_state import ReviewAction
+
+ReviewAction = Literal["confirm", "dismiss", "merge", "reclassify"]
+
+
+class FindingReview(Protocol):
+    """Read interface for the review history supplied by US-10."""
+
+    id: uuid.UUID
+    action: str
+    actor_id: uuid.UUID
+    from_status: FindingStatus
+    to_status: FindingStatus
+    from_category: FindingCategory
+    to_category: FindingCategory
+    reason: str | None
+    merged_into_id: uuid.UUID | None
+    created_at: datetime
 
 
 class FindingRequirement(BaseModel):

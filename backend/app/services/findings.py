@@ -146,3 +146,8 @@ def _finding_scope(db: Session, finding_id: uuid.UUID) -> Scope | None:
 
 
 register_scope_resolver("finding_id", _finding_scope)
+
+
+def involved_requirements(db: Session, finding: Finding) -> list[Requirement]:
+    """Requirements addressed by one finding (US-09)."""
+    return _involved(db, [finding]).get(finding.id, [])

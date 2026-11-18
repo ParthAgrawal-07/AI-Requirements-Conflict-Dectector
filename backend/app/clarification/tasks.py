@@ -17,7 +17,7 @@ finding on request (``POST /findings/{id}/clarification``).
 import logging
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.clarification.generator import generate, needs_question
@@ -40,9 +40,11 @@ from app.models import (
     Finding,
     Message,
     MessageKind,
+    Project,
+    Requirement,
 )
 from app.services import messages as message_service
-from app.services.review_state import involved_requirements
+from app.services.findings import involved_requirements
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +60,25 @@ def questions_for_run(db: Session, run_id: uuid.UUID, llm: LLMClient) -> list[Cl
     run = db.get(AnalysisRun, run_id)
     if run is None:
         return []
+    # A dedicated connection keeps the session lock across generator commits.
+    with db.get_bind().engine.connect() as lock:
+        key = {"key": run.id.int % (2**63)}
+        lock.execute(text("SELECT pg_advisory_lock(:key)"), key)
+        try:
+            return _questions_for_run(db, run, llm)
+        finally:
+            lock.execute(text("SELECT pg_advisory_unlock(:key)"), key)
+
+
+def _questions_for_run(db: Session, run: AnalysisRun, llm: LLMClient) -> list[Clarification]:
+    used = (
+        db.scalar(
+            select(func.count(Clarification.id))
+            .join(Finding)
+            .where(Finding.analysis_run_id == run.id)
+        )
+        or 0
+    )
     findings = [
         f
         for f in db.scalars(
@@ -65,10 +86,14 @@ def questions_for_run(db: Session, run_id: uuid.UUID, llm: LLMClient) -> list[Cl
             .where(Finding.analysis_run_id == run.id)
             .order_by(Finding.confidence.desc(), Finding.created_at)
         )
-        if needs_question(f) and f.clarification is None
-    ][:MAX_AUTO_QUESTIONS_PER_RUN]
+        if needs_question(f)
+    ]
+    remaining = max(0, MAX_AUTO_QUESTIONS_PER_RUN - used)
     created: list[Clarification] = []
     for finding in findings:
+        if finding.clarification is None and remaining <= 0:
+            continue
+        existed = finding.clarification is not None
         try:
             clarification = _question(db, llm, finding)
         except BudgetExceededError:
@@ -76,6 +101,8 @@ def questions_for_run(db: Session, run_id: uuid.UUID, llm: LLMClient) -> list[Cl
             break
         if clarification is not None:
             created.append(clarification)
+            if not existed:
+                remaining -= 1
     if created and run.scope is AnalysisScope.REQUIREMENT:
         from app.classification.result_card import publish_card
 
@@ -98,7 +125,6 @@ def question_for_finding(
 def _question(db: Session, llm: LLMClient, finding: Finding) -> Clarification | None:
     """Generate (or find) the finding's question and post it once. Raises
     :class:`BudgetExceededError` (after rolling back) so a batch can stop."""
-    already = finding.clarification
     try:
         clarification = generate(db, llm, finding)
     except BudgetExceededError:
@@ -108,15 +134,31 @@ def _question(db: Session, llm: LLMClient, finding: Finding) -> Clarification | 
         db.rollback()
         logger.warning("No clarification for finding %s: %s", finding.id, type(error).__name__)
         return None
-    if clarification is not None and already is None and clarification.message_id is None:
+    if clarification is not None and clarification.message_id is None:
         post_in_thread(db, clarification, finding)
     return clarification
 
 
 def post_in_thread(db: Session, clarification: Clarification, finding: Finding) -> Message | None:
     """Reply in the thread of the posted requirement the finding is about, mentioning owners."""
+    locked = db.scalar(
+        select(Clarification)
+        .where(Clarification.id == clarification.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if locked is None:
+        return None
+    clarification = locked
+    if clarification.message_id is not None:
+        return db.get(Message, clarification.message_id)
     requirements = involved_requirements(db, finding)
-    posted = next((r for r in requirements if r.origin_message_id is not None), None)
+    run = db.get(AnalysisRun, finding.analysis_run_id) if finding.analysis_run_id else None
+    posted = (
+        db.get(Requirement, run.subject_id)
+        if run and run.scope is AnalysisScope.REQUIREMENT
+        else None
+    )
     if posted is None or posted.origin_message_id is None:
         return None
     root = db.get(Message, posted.origin_message_id)
@@ -137,9 +179,13 @@ def post_in_thread(db: Session, clarification: Clarification, finding: Finding) 
         kind=MessageKind.SYSTEM,
         parent_id=root.id,
         payload={"clarification_id": str(clarification.id), "finding_id": str(finding.id)},
+        commit=False,
     )
     clarification.message_id = message.id
     db.commit()
+    project = db.get(Project, channel.project_id)
+    if project is not None:
+        message_service.announce(message_service.MESSAGE_CREATED, project, channel, message)
     return message
 
 

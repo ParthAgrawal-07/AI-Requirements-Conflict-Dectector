@@ -14,7 +14,7 @@ Setup — unlike classification, which the ContextGate holds back.
 
 import logging
 import uuid
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 
 from sqlalchemy import select, text
@@ -117,10 +117,12 @@ def nearest_requirements(
     k: int = 10,
     min_similarity: float | None = None,
     exclude: set[uuid.UUID] | None = None,
+    exclude_states: Collection[RequirementState] | None = None,
     excluded_states: Sequence[RequirementState] | None = None,
     configure_hnsw: bool = True,
 ) -> list[Neighbour]:
-    """The ``k`` most similar requirements of ``project_id``, most similar first."""
+    """The ``k`` most similar requirements of ``project_id``, most similar first, leaving out
+    those in ``exclude_states`` (e.g. Rejected and Deprecated)."""
     if configure_hnsw:
         configure_hnsw_scan(db, ef_search=max(40, (k + len(exclude or ())) * 5, 100))
     distance = Embedding.vector.cosine_distance(vector)
@@ -131,8 +133,9 @@ def nearest_requirements(
         .order_by(distance)
         .limit(k + len(exclude or ()))
     )
-    if excluded_states:
-        query = query.where(Requirement.state.not_in(excluded_states))
+    states_to_exclude = exclude_states or excluded_states
+    if states_to_exclude:
+        query = query.where(Requirement.state.not_in(list(states_to_exclude)))
     if min_similarity is not None:
         query = query.where(distance <= 1 - min_similarity)
     neighbours = [

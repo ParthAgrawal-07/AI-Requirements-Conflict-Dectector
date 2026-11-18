@@ -190,3 +190,13 @@ def test_a_finding_without_a_question_says_so(
     response = client.get(f"/api/v1/findings/{finding.id}/clarification", headers=headers_for(user))
 
     assert response.status_code == 404
+
+
+@pytest.mark.parametrize("value", ["   ", " a ", " ab ", "x" * 2001])
+def test_answer_rejects_invalid_normalized_resolution(value: str) -> None:
+    from pydantic import ValidationError
+
+    from app.api.clarifications import AnswerRequest
+
+    with pytest.raises(ValidationError):
+        AnswerRequest(resolution=value)

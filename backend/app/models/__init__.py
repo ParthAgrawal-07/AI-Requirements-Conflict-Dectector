@@ -31,6 +31,7 @@ from app.models.enums import (
     RequirementState,
     Severity,
 )
+from app.models.graph import NodePosition
 from app.models.join_code import JoinCode, JoinRequest
 from app.models.membership import Membership, ProjectMember
 from app.models.project import Project
@@ -69,6 +70,7 @@ __all__ = [
     "Membership",
     "Message",
     "MessageKind",
+    "NodePosition",
     "PlatformRole",
     "Project",
     "ProjectContext",

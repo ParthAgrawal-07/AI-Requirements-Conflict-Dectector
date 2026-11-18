@@ -230,14 +230,17 @@ class FallbackTransport:
     def __init__(self, primary: LLMTransport, backup: LLMTransport | None = None) -> None:
         self.primary = primary
         self.backup = backup
+        self.last_transport = primary
 
     def send(self, system: str, user: str) -> str:
         try:
+            self.last_transport = self.primary
             return self.primary.send(system, user)
         except LLMUnavailableError as exc:
             if self.backup is None:
                 raise
             logger.warning("Primary LLM unavailable (%s), falling back to backup transport", exc)
+            self.last_transport = self.backup
             return self.backup.send(system, user)
 
 
@@ -260,6 +263,20 @@ class LLMClient:
         self._transport = transport
         self._budget = budget or UnlimitedBudget()
         self.calls = 0  # requests sent, for analysis-run accounting (llm_calls)
+
+    @property
+    def provenance(self) -> str:
+        """Provider/model that served the latest successful call (ADR-31)."""
+        transport = self._transport
+        if isinstance(transport, FallbackTransport):
+            transport = transport.last_transport
+        if isinstance(transport, GeminiTransport):
+            return f"gemini/{transport._model}"
+        if isinstance(transport, GroqTransport):
+            return f"groq/{transport._model}"
+        if isinstance(transport, AnthropicTransport):
+            return f"anthropic/{transport._model}"
+        return "fake/test" if isinstance(transport, FakeTransport) else "unknown/unknown"
 
     def complete_text(self, system: str, user: str, *, project_id: uuid.UUID | None = None) -> str:
         """A plain-text reply (the brief drafter validates its own JSON)."""

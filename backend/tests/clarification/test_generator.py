@@ -28,6 +28,7 @@ from app.intake import posts
 from app.intake.schemas import ComposerFields
 from app.models import (
     AnalysisRun,
+    AnalysisScope,
     CandidatePair,
     Channel,
     Clarification,
@@ -52,7 +53,11 @@ TIMEOUT_QUESTION = (
 
 def reply(question: str = TIMEOUT_QUESTION, ids: list[str] | None = None) -> str:
     return json.dumps(
-        {"question": question, "addressed_to": "owner", "requirement_ids": ids or ["REQ-014"]}
+        {
+            "question": question,
+            "addressed_to": "owner",
+            "requirement_ids": ids or ["REQ-014", "REQ-015"],
+        }
     )
 
 
@@ -248,7 +253,10 @@ def posted_run(
             "priority": "must",
         }
     )
-    run = posts.post_requirement(db_session, channel=channel, author=user, fields=fields).run
+    _, posted = posts.post_requirement(db_session, channel=channel, author=user, fields=fields)
+    posted.source_req_id = "REQ-015"
+    run = orchestrator.queue_requirement_run(db_session, posted)
+    db_session.commit()
     recorder = Recorder()
     orchestrator.start_requirement_run(
         db_session, run.id, llm_configured=True, embedder=HashingEmbedder(), dispatch=recorder
@@ -300,3 +308,83 @@ def test_automatic_questions_per_run_are_capped(
     created = questions_for_run(db_session, run.id, LLMClient(transport))
 
     assert created == [] and transport.calls == []
+
+
+def test_repeated_batches_share_the_persisted_run_limit(
+    db_session: Session,
+    posted_run: tuple[AnalysisRun, User],
+    make_requirement: Callable[..., Requirement],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    run, _ = posted_run
+    for index in range(25):
+        requirement = make_requirement(
+            f"The system shall support operation {index}.", source_req_id=f"REQ-{100 + index}"
+        )
+        finding = finding_about(db_session, requirement, category=FindingCategory.INCOMPLETE)
+        finding.analysis_run_id = run.id
+    db_session.commit()
+
+    def create(db: Session, llm: LLMClient, finding: Finding) -> Clarification:
+        if finding.clarification is not None:
+            return finding.clarification
+        row = Clarification(
+            finding_id=finding.id, question="Which limit applies to this requirement?"
+        )
+        db.add(row)
+        db.commit()
+        return row
+
+    monkeypatch.setattr(clarification_tasks, "_question", create)
+    # Document runs have no result card to publish.
+
+    run.scope = AnalysisScope.DOCUMENT
+    db_session.commit()
+    llm = LLMClient(FakeTransport([]))
+    questions_for_run(db_session, run.id, llm)
+    questions_for_run(db_session, run.id, llm)
+    assert (
+        len(
+            list(
+                db_session.scalars(
+                    select(Clarification).join(Finding).where(Finding.analysis_run_id == run.id)
+                )
+            )
+        )
+        == 20
+    )
+
+
+@pytest.mark.parametrize(
+    ("question", "ids"),
+    [
+        ("Which limit applies to REQ-0140?", ["REQ-014"]),
+        ("Which limit applies to REQ-014?", ["REQ-999"]),
+        ("Which limit applies to REQ-014 and REQ-999?", ["REQ-014"]),
+    ],
+)
+def test_requirement_ids_must_identify_the_supplied_subjects(question: str, ids: list[str]) -> None:
+    with pytest.raises(GenericQuestionError):
+        check_specific(
+            ClarificationOutput(question=question, addressed_to="owner", requirement_ids=ids),
+            ["REQ-014"],
+            [],
+        )
+
+
+def test_existing_question_without_linkage_is_published_once(
+    db_session: Session,
+    posted_run: tuple[AnalysisRun, User],
+) -> None:
+    run, _ = posted_run
+    finding = db_session.scalar(select(Finding).where(Finding.analysis_run_id == run.id))
+    assert finding is not None
+    clarification = generate(db_session, LLMClient(FakeTransport([reply()])), finding)
+    assert clarification is not None and clarification.message_id is None
+    for _ in range(2):
+        assert (
+            clarification_tasks._question(db_session, LLMClient(FakeTransport([])), finding)
+            is not None
+        )
+    messages = list(db_session.scalars(select(Message).where(Message.kind == MessageKind.SYSTEM)))
+    assert len(messages) == 1 and clarification.message_id == messages[0].id

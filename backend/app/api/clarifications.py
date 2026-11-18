@@ -26,7 +26,7 @@ from app.schemas.common import ErrorResponse
 from app.schemas.findings import ClarificationRead
 from app.services import analysis_orchestrator
 from app.services.access import AccessContext, Scope, register_scope_resolver
-from app.services.review_state import involved_requirements
+from app.services.findings import involved_requirements
 
 router = APIRouter(tags=["clarifications"])
 
@@ -38,7 +38,7 @@ _ERRORS: dict[int | str, dict[str, Any]] = {
 
 
 class AnswerRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     resolution: str = Field(min_length=3, max_length=2000)
 
