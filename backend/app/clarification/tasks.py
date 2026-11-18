@@ -1,0 +1,252 @@
+"""Clarification tasks (Madhav — US-09, FR-22; design update §3.1).
+
+``clarifications.generate_for_run`` runs after an analysis run closes (queued by
+``analysis.after_run``): one question per Conflicting, Ambiguous and Incomplete finding of the run
+(``app.clarification.generator``). For a **posted** requirement the question is then posted as a
+reply in its thread, @mentioning the owners of the requirements involved (US-36), and the result
+card is rewritten to show it (US-31). Findings about extracted requirements have no thread: the
+question shows on the finding card; for a conflict issue it becomes the first comment (S4).
+
+At most :data:`MAX_AUTO_QUESTIONS_PER_RUN` questions are generated per run, most confident
+finding first. An exhausted budget stops the batch (the rest wait for the next run or a manual
+request); a model that keeps answering invalid or generic output skips that finding. An
+unavailable provider retries the task with backoff. ``clarifications.generate_for_finding`` does the same for one
+finding on request (``POST /findings/{id}/clarification``).
+"""
+
+import logging
+import sys
+import uuid
+
+from sqlalchemy import func, select, text
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import Session
+
+from app.clarification.delivery import posted_subject
+from app.clarification.generator import generate, needs_question
+from app.classification.budget import BudgetExceededError
+from app.classification.llm_client import (
+    LLMClient,
+    LLMOutputError,
+    LLMRefusedError,
+    LLMUnavailableError,
+    get_llm_client,
+)
+from app.core.celery_app import celery_app
+from app.core.database import session_scope
+from app.core.errors import NotFoundError
+from app.graph.deltas import label_of
+from app.models import (
+    AnalysisRun,
+    AnalysisScope,
+    Channel,
+    Clarification,
+    Finding,
+    Message,
+    MessageKind,
+    Project,
+)
+from app.services import messages as message_service
+from app.services.findings import involved_requirements
+
+logger = logging.getLogger(__name__)
+
+GENERATE_FOR_RUN = "clarifications.generate_for_run"
+GENERATE_FOR_FINDING = "clarifications.generate_for_finding"
+# Each question can take several LLM calls (generic and invalid replies are re-asked), so a run
+# over a whole document would otherwise spend the project's monthly budget on questions alone
+# (NFR-28). The most confident findings are asked first; the rest on request from the finding.
+MAX_AUTO_QUESTIONS_PER_RUN = 20
+
+
+def questions_for_run(db: Session, run_id: uuid.UUID, llm: LLMClient | None) -> list[Clarification]:
+    run = db.get(AnalysisRun, run_id)
+    if run is None:
+        return []
+    # A dedicated connection keeps the session lock across generator commits.
+    with db.get_bind().engine.connect() as lock:
+        key = {"key": run.id.int % (2**63)}
+        lock.execute(text("SELECT pg_advisory_lock(:key)"), key)
+        try:
+            return _questions_for_run(db, run, llm)
+        finally:
+            lock.execute(text("SELECT pg_advisory_unlock(:key)"), key)
+
+
+def _questions_for_run(db: Session, run: AnalysisRun, llm: LLMClient | None) -> list[Clarification]:
+    used = (
+        db.scalar(
+            select(func.count(Clarification.id))
+            .join(Finding)
+            .where(Finding.analysis_run_id == run.id)
+        )
+        or 0
+    )
+    findings = [
+        f
+        for f in db.scalars(
+            select(Finding)
+            .where(Finding.analysis_run_id == run.id)
+            .order_by(Finding.confidence.desc(), Finding.created_at)
+        )
+        if needs_question(f)
+    ]
+    remaining = max(0, MAX_AUTO_QUESTIONS_PER_RUN - used)
+    created: list[Clarification] = []
+    try:
+        for finding in findings:
+            if finding.clarification is None and remaining <= 0:
+                continue
+            existed = finding.clarification is not None
+            try:
+                clarification = _question(db, llm, finding)
+            except NotFoundError:
+                db.rollback()
+                logger.warning("Skipping invalid finding %s", finding.id)
+                continue
+            except BudgetExceededError:
+                logger.info("Clarifications for project %s wait for budget", finding.project_id)
+                break
+            if clarification is not None:
+                created.append(clarification)
+                if not existed:
+                    remaining -= 1
+    finally:
+        if created and run.scope is AnalysisScope.REQUIREMENT:
+            from app.classification.result_card import publish_card
+
+            active_error = sys.exc_info()[0] is not None
+            try:
+                publish_card(db, run)
+            except Exception:
+                if not active_error:
+                    raise
+                db.rollback()
+                logger.exception("Card refresh failed while a provider retry was pending")
+    return created
+
+
+def question_for_finding(
+    db: Session, finding_id: uuid.UUID, llm: LLMClient | None
+) -> Clarification | None:
+    finding = db.get(Finding, finding_id)
+    if finding is None:
+        return None
+    try:
+        result = _question(db, llm, finding)
+        run = db.get(AnalysisRun, finding.analysis_run_id) if finding.analysis_run_id else None
+        if result is not None and run and run.scope is AnalysisScope.REQUIREMENT:
+            from app.classification.result_card import publish_card
+
+            publish_card(db, run)
+        return result
+    except BudgetExceededError:
+        return None
+
+
+def _question(db: Session, llm: LLMClient | None, finding: Finding) -> Clarification | None:
+    # Session advisory claims survive generation commits and release on every failure.
+    with db.get_bind().engine.connect() as claim:
+        key = {"key": -(finding.id.int % (2**63 - 1)) - 1}
+        claim.execute(text("SELECT pg_advisory_lock(:key)"), key)
+        try:
+            return _claimed_question(db, llm, finding)
+        finally:
+            claim.execute(text("SELECT pg_advisory_unlock(:key)"), key)
+
+
+def _claimed_question(db: Session, llm: LLMClient | None, finding: Finding) -> Clarification | None:
+    """Generate (or find) the finding's question and post it once. Raises
+    :class:`BudgetExceededError` (after rolling back) so a batch can stop."""
+    try:
+        clarification = db.scalar(
+            select(Clarification).where(Clarification.finding_id == finding.id)
+        )
+        if clarification is None:
+            client = llm or get_llm_client()
+            if client is None:
+                return None
+            clarification = generate(db, client, finding)
+    except BudgetExceededError:
+        db.rollback()
+        raise
+    except (LLMOutputError, LLMRefusedError) as error:
+        db.rollback()
+        logger.warning("No clarification for finding %s: %s", finding.id, type(error).__name__)
+        return None
+    if clarification is not None and clarification.message_id is None:
+        post_in_thread(db, clarification, finding)
+    return clarification
+
+
+def post_in_thread(db: Session, clarification: Clarification, finding: Finding) -> Message | None:
+    """Reply in the thread of the posted requirement the finding is about, mentioning owners."""
+    locked = db.scalar(
+        select(Clarification)
+        .where(Clarification.id == clarification.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if locked is None:
+        return None
+    clarification = locked
+    if clarification.message_id is not None:
+        return db.get(Message, clarification.message_id)
+    requirements = involved_requirements(db, finding)
+    posted = posted_subject(db, finding)
+    if posted is None or posted.origin_message_id is None:
+        return None
+    root = db.get(Message, posted.origin_message_id)
+    channel = db.get(Channel, root.channel_id) if root is not None else None
+    if root is None or channel is None:
+        return None
+    owners: list[uuid.UUID] = []
+    for requirement in requirements:
+        if requirement.owner_id is not None and requirement.owner_id not in owners:
+            owners.append(requirement.owner_id)
+    names = " and ".join(label_of(r) for r in requirements)
+    mentions = " ".join(f"<@{owner}>" for owner in owners)
+    body = f"Clarification needed on {names} ({finding.category.value}): {clarification.question}"
+    message = message_service.post_system_message(
+        db,
+        channel=channel,
+        body=f"{body} {mentions}".strip(),
+        kind=MessageKind.SYSTEM,
+        parent_id=root.id,
+        payload={"clarification_id": str(clarification.id), "finding_id": str(finding.id)},
+        commit=False,
+    )
+    clarification.message_id = message.id
+    db.commit()
+    project = db.get(Project, channel.project_id)
+    if project is not None:
+        message_service.announce(message_service.MESSAGE_CREATED, project, channel, message)
+    return message
+
+
+@celery_app.task(
+    name=GENERATE_FOR_RUN,
+    autoretry_for=(LLMUnavailableError,),
+    retry_backoff=True,
+    retry_backoff_max=300,
+    max_retries=5,
+)
+def generate_for_run_task(run_id: str) -> int:
+    with session_scope() as db:
+        return len(questions_for_run(db, uuid.UUID(run_id), None))
+
+
+@celery_app.task(
+    name=GENERATE_FOR_FINDING,
+    # A transient database error (e.g. while refreshing the result card after the reply was
+    # committed) retries too: the task is idempotent — the stored, linked question is reused and
+    # only the card is published again (FR-57).
+    autoretry_for=(LLMUnavailableError, OperationalError),
+    retry_backoff=True,
+    retry_backoff_max=300,
+    max_retries=5,
+)
+def generate_for_finding_task(finding_id: str) -> str | None:
+    with session_scope() as db:
+        clarification = question_for_finding(db, uuid.UUID(finding_id), None)
+        return str(clarification.id) if clarification else None

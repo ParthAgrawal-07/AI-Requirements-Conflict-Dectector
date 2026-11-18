@@ -179,6 +179,14 @@ class Clarification(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         ForeignKey("findings.id", ondelete="CASCADE"), unique=True
     )
     question: Mapped[str] = mapped_column(Text)
+    # Sprint 3 (US-09, migration 0006h): "owner" or "stakeholders", and how it was written.
+    addressed_to: Mapped[str | None] = mapped_column(String(16))
+    prompt_version: Mapped[str | None] = mapped_column(String(16))
+    llm_model: Mapped[str | None] = mapped_column(String(80))
+    # The thread reply it was posted as (posted requirements only).
+    message_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("messages.id", ondelete="SET NULL")
+    )
     resolution: Mapped[str | None] = mapped_column(Text)
     resolved_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL")

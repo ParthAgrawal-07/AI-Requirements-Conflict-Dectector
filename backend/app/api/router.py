@@ -17,6 +17,7 @@ from app.api import (
     analysis_runs,
     auth,
     channels,
+    clarifications,
     context,
     documents,
     drafts,
@@ -60,6 +61,7 @@ for _router in (
     messages.router,
     graph_api.router,
     findings.router,
+    clarifications.router,
     analysis_runs.router,
     search_similar.router,
 ):

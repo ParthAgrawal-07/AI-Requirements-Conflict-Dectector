@@ -35,6 +35,7 @@ from app.models import (
     AnalysisRunStatus,
     AnalysisScope,
     Channel,
+    Clarification,
     Document,
     DocumentFormat,
     Finding,
@@ -91,6 +92,7 @@ class World:
     message: Message  # a chat message by the Owner in `channel`
     finding: Finding  # an Ambiguous finding about a requirement of `document`
     run: AnalysisRun  # a finished analysis of `document`
+    clarification: Clarification  # the question about `finding`
     ownership_request: OwnershipRequest  # `target` asks to own that requirement
     db: Session
 
@@ -206,6 +208,16 @@ CASES = [
         needs="baseline.manage",
     ),
     Case("POST", "/api/v1/requirements/{requirement_id}/signoff", lambda _: {"version": 1}),
+    # Sprint 3 — clarification questions (Madhav, US-09). The world's finding already has one,
+    # so requesting another is a 409 — past the permission check.
+    Case("GET", "/api/v1/findings/{finding_id}/clarification"),
+    Case("POST", "/api/v1/findings/{finding_id}/clarification"),
+    Case(
+        "POST",
+        "/api/v1/clarifications/{clarification_id}/answer",
+        lambda _: {"resolution": "Under 2 seconds at p95"},
+        needs="req.comment",
+    ),
     # Sprint 3 — finding review (Affan, US-10): the world's finding is about an unprotected
     # requirement, so a protected-only finding.review does not count (see the test below).
     Case("POST", "/api/v1/findings/{finding_id}/review", lambda _: {"action": "confirm"}),
@@ -330,6 +342,15 @@ def world(
     ownership_request = OwnershipRequest(requirement_id=vague.id, requester_id=target.id)
     db_session.add(ownership_request)
     db_session.commit()
+    run = AnalysisRun(
+        project_id=project.id,
+        scope=AnalysisScope.DOCUMENT,
+        subject_id=document.id,
+        status=AnalysisRunStatus.DONE,
+    )
+    clarification = Clarification(finding_id=finding.id, question="What does 'fast' mean?")
+    db_session.add_all([run, clarification])
+    db_session.commit()
     return World(
         workspace=workspace,
         project=project,
@@ -343,6 +364,7 @@ def world(
         message=message,
         finding=finding,
         run=run,
+        clarification=clarification,
         ownership_request=ownership_request,
         db=db_session,
     )
@@ -382,6 +404,7 @@ def _call(api: TestClient, case: Case, world: World, user: User) -> int:
         role_id=world.custom_role.id,
         analysis_run_id=world.run.id,
         requirement_id=world.finding.requirement_id,
+        clarification_id=world.clarification.id,
         ownership_request_id=world.ownership_request.id,
     )
     headers = {"Authorization": f"Bearer {security.create_access_token(user.id)[0]}"}

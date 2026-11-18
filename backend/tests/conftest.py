@@ -105,7 +105,14 @@ def followups(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, list[str]]]:
     from app.services import analysis_orchestrator
 
     sent: list[tuple[str, list[str]]] = []
-    monkeypatch.setattr(analysis_orchestrator, "send", lambda name, args: sent.append((name, args)))
+    monkeypatch.setattr(
+        analysis_orchestrator, "send", lambda name, args, **options: sent.append((name, args))
+    )
+    from app.api.clarifications import celery_app
+
+    monkeypatch.setattr(
+        celery_app, "send_task", lambda name, args, **options: sent.append((name, args))
+    )
     return sent
 
 

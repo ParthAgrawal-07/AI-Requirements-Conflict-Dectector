@@ -9,6 +9,7 @@ from typing import Any, Literal, cast
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models import (
+    Clarification,
     FindingCategory,
     FindingReview,
     FindingStatus,
@@ -33,6 +34,41 @@ class FindingRequirement(BaseModel):
     location: str | None
     document_id: uuid.UUID | None
     origin_message_id: uuid.UUID | None  # the post a posted requirement came from
+
+
+class ClarificationRead(BaseModel):
+    """A finding's clarification question (US-09) — AI-written, answered by a person (FR-23)."""
+
+    id: uuid.UUID
+    finding_id: uuid.UUID
+    source: Literal["AI"] = "AI"
+    question: str
+    addressed_to: str | None  # "owner" or "stakeholders"
+    answered: bool
+    resolution: str | None
+    resolved_by: uuid.UUID | None
+    resolved_at: datetime | None
+    message_id: uuid.UUID | None  # the thread reply it was posted as
+    prompt_version: str | None
+    llm_model: str | None
+    created_at: datetime
+
+    @classmethod
+    def from_model(cls, row: Clarification) -> "ClarificationRead":
+        return cls(
+            id=row.id,
+            finding_id=row.finding_id,
+            question=row.question,
+            addressed_to=row.addressed_to,
+            answered=row.resolved_at is not None,
+            resolution=row.resolution,
+            resolved_by=row.resolved_by,
+            resolved_at=row.resolved_at,
+            message_id=row.message_id,
+            prompt_version=row.prompt_version,
+            llm_model=row.llm_model,
+            created_at=row.created_at,
+        )
 
 
 class EvidenceSpan(BaseModel):
@@ -70,6 +106,9 @@ class FindingRead(BaseModel):
     merged_into_id: uuid.UUID | None = None
     reviewed_by: uuid.UUID | None = None
     reviewed_at: datetime | None = None
+    # US-09: the question, once generated. US-10: "resolved" = accepted and its question answered.
+    clarification: ClarificationRead | None = None
+    resolved: bool = False
 
     @classmethod
     def from_view(cls, view: FindingView) -> "FindingRead":
@@ -113,6 +152,14 @@ class FindingRead(BaseModel):
             merged_into_id=finding.merged_into_id,
             reviewed_by=finding.reviewed_by,
             reviewed_at=finding.reviewed_at,
+            clarification=(
+                ClarificationRead.from_model(finding.clarification)
+                if finding.clarification is not None
+                else None
+            ),
+            resolved=finding.status is FindingStatus.CONFIRMED
+            and finding.clarification is not None
+            and finding.clarification.resolved_at is not None,
         )
 
 

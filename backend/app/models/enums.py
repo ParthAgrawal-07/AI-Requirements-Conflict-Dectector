@@ -137,6 +137,8 @@ class AuditAction(StrEnum):
     # requirement_transitions / finding_reviews, not here.
     STATE_CHANGED = "state_changed"
     FINDING_REOPENED = "finding_reopened"
+    # Clarification questions (US-09). Ids only; the answer text is on the clarification.
+    CLARIFICATION_ANSWERED = "clarification_answered"
     # Owners and groups (US-36). User ids and group names only.
     OWNER_CHANGED = "owner_changed"
     GROUP_CHANGED = "group_changed"

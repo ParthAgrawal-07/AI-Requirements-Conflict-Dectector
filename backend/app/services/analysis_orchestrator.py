@@ -72,6 +72,7 @@ RUN_REQUIREMENT = "analysis.run_requirement"
 CLASSIFY_PAIR = "analysis.classify_pair"
 CHECK_REQUIREMENT = "analysis.check_requirement"
 AFTER_RUN = "analysis.after_run"
+CLARIFY_RUN = "clarifications.generate_for_run"
 CLOSED = "closed"
 PARKED = "parked"
 NOT_ANALYSED = (RequirementState.REJECTED, RequirementState.DEPRECATED)
@@ -346,9 +347,10 @@ def _close(db: Session, run: AnalysisRun, *, error: str | None = None) -> None:
 
 def after_run(db: Session, run_id: uuid.UUID, transition: str = CLOSED) -> None:
     """Follow-ups of a run that closed or parked for budget (``analysis.after_run``): the live-map
-    delta once it is done, and the result card in a posted requirement's thread (Keval, US-31) —
-    "waiting for budget" first, rewritten with the results when the run finishes. Each step is
-    best effort — a failed follow-up never reopens the run.
+    delta once it is done, the result card in a posted requirement's thread (Keval, US-31) —
+    "waiting for budget" first, rewritten with the results when the run finishes — and the
+    clarification questions, queued as their own task because each is an LLM call (Madhav, US-09).
+    Each step is best effort — a failed follow-up never reopens the run.
 
     ``transition`` is the change that queued the job. Only the closing job sends the map delta: a
     park job delivered after the resumed run finished also sees ``done`` and must not send a
@@ -366,6 +368,8 @@ def after_run(db: Session, run_id: uuid.UUID, transition: str = CLOSED) -> None:
         except Exception:
             db.rollback()
             logger.exception("Map delta for run %s failed", run_id)
+        if run.error_message is None:  # Madhav (US-09): questions for its findings, queued
+            send(CLARIFY_RUN, [str(run.id)])
     if run.status in (AnalysisRunStatus.DONE, AnalysisRunStatus.WAITING_BUDGET):
         try:
             publish_card(db, run)
