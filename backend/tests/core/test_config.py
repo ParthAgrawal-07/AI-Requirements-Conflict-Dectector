@@ -120,3 +120,9 @@ class TestRefreshCookie:
         with pytest.raises(ValidationError, match="REFRESH_COOKIE_SAMESITE"):
             make(environment="development", refresh_cookie_samesite="none")
         make(environment="production", refresh_cookie_samesite="none")  # secure by default: fine
+
+
+@pytest.mark.parametrize("provider", ["anthropic", "openai", "unknown"])
+def test_unsupported_provider_is_rejected_at_startup(provider: str) -> None:
+    with pytest.raises(ValidationError):
+        make(llm_provider=provider)

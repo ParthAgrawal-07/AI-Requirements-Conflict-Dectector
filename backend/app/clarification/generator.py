@@ -89,7 +89,9 @@ def check_specific(output: ClarificationOutput, labels: list[str], vague_terms: 
         raise GenericQuestionError(
             "requirement_ids must match the supplied IDs named in the question"
         )
-    if set(re.findall(r"(?<![\w-])REQ-[\w]+(?:-[\w]+)*(?![\w-])", question)) - set(labels):
+    if set(
+        re.findall(r"(?<![\w-])(?:REQ-[\w]+(?:-[\w]+)*|item-[0-9a-fA-F]{8})(?![\w-])", question)
+    ) - set(labels):
         raise GenericQuestionError("the question names unknown requirement IDs")
     if vague_terms and not any(term.lower() in question.lower() for term in vague_terms):
         raise GenericQuestionError(

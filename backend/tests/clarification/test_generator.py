@@ -496,3 +496,70 @@ def test_pair_with_endpoint_outside_finding_project_is_rejected(
     db_session.commit()
     with pytest.raises(NotFoundError):
         clarification_tasks.involved_requirements(db_session, finding)
+
+
+def test_item_references_are_validated_against_labels() -> None:
+    accepted = ClarificationOutput(
+        question="Which limit applies to item-aabb0011?",
+        addressed_to="owner",
+        requirement_ids=["item-aabb0011"],
+    )
+    check_specific(accepted, ["item-aabb0011"], [])
+    rejected = accepted.model_copy(
+        update={"question": "Which limit applies to item-aabb0011 and item-deadbeef?"}
+    )
+    with pytest.raises(GenericQuestionError):
+        check_specific(rejected, ["item-aabb0011"], [])
+
+
+def test_stored_question_delivery_does_not_require_llm(
+    db_session: Session, posted_run: tuple[AnalysisRun, User], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run, _ = posted_run
+    finding = db_session.scalar(select(Finding).where(Finding.analysis_run_id == run.id))
+    assert finding is not None
+    question = generate(db_session, LLMClient(FakeTransport([reply()])), finding)
+    assert question is not None
+
+    def no_provider():
+        raise AssertionError("Stored delivery must not request a provider")
+
+    monkeypatch.setattr(clarification_tasks, "get_llm_client", no_provider)
+    result = clarification_tasks.question_for_finding(db_session, finding.id, None)
+    assert result is not None and result.message_id is not None
+    message_id = result.message_id
+    result = clarification_tasks.question_for_finding(db_session, finding.id, None)
+    assert result is not None and result.message_id == message_id
+
+
+def test_generation_claim_releases_after_provider_failure(
+    db_session: Session, pair: tuple[Requirement, Requirement]
+) -> None:
+    from app.classification.llm_client import LLMUnavailableError
+
+    finding = finding_about(db_session, *pair)
+    with pytest.raises(LLMUnavailableError):
+        clarification_tasks._question(db_session, LLMClient(FakeTransport([])), finding)
+    assert (
+        clarification_tasks._question(db_session, LLMClient(FakeTransport([reply()])), finding)
+        is not None
+    )
+
+
+def test_card_skips_large_entry_and_keeps_later_small_entry(
+    db_session: Session, posted_run: tuple[AnalysisRun, User]
+) -> None:
+    from app.classification.result_card import publish_card
+
+    run, _ = posted_run
+    finding = db_session.scalar(select(Finding).where(Finding.analysis_run_id == run.id))
+    assert finding is not None
+    finding.explanation = "x" * 5000
+    requirement = clarification_tasks.involved_requirements(db_session, finding)[0]
+    extra = finding_about(db_session, requirement, category=FindingCategory.INCOMPLETE)
+    extra.analysis_run_id = run.id
+    extra.explanation = "A small later entry"
+    db_session.commit()
+    card = publish_card(db_session, run)
+    assert card is not None and len(card.body) <= 4000
+    assert "A small later entry" in card.body and card.body.count("findings view") == 1

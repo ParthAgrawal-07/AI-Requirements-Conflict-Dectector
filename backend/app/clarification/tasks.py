@@ -15,11 +15,13 @@ finding on request (``POST /findings/{id}/clarification``).
 """
 
 import logging
+import sys
 import uuid
 
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
+from app.clarification.delivery import posted_subject
 from app.clarification.generator import generate, needs_question
 from app.classification.budget import BudgetExceededError
 from app.classification.llm_client import (
@@ -31,6 +33,7 @@ from app.classification.llm_client import (
 )
 from app.core.celery_app import celery_app
 from app.core.database import session_scope
+from app.core.errors import NotFoundError
 from app.graph.deltas import label_of
 from app.models import (
     AnalysisRun,
@@ -41,7 +44,6 @@ from app.models import (
     Message,
     MessageKind,
     Project,
-    Requirement,
 )
 from app.services import messages as message_service
 from app.services.findings import involved_requirements
@@ -56,7 +58,7 @@ GENERATE_FOR_FINDING = "clarifications.generate_for_finding"
 MAX_AUTO_QUESTIONS_PER_RUN = 20
 
 
-def questions_for_run(db: Session, run_id: uuid.UUID, llm: LLMClient) -> list[Clarification]:
+def questions_for_run(db: Session, run_id: uuid.UUID, llm: LLMClient | None) -> list[Clarification]:
     run = db.get(AnalysisRun, run_id)
     if run is None:
         return []
@@ -70,7 +72,7 @@ def questions_for_run(db: Session, run_id: uuid.UUID, llm: LLMClient) -> list[Cl
             lock.execute(text("SELECT pg_advisory_unlock(:key)"), key)
 
 
-def _questions_for_run(db: Session, run: AnalysisRun, llm: LLMClient) -> list[Clarification]:
+def _questions_for_run(db: Session, run: AnalysisRun, llm: LLMClient | None) -> list[Clarification]:
     used = (
         db.scalar(
             select(func.count(Clarification.id))
@@ -97,6 +99,10 @@ def _questions_for_run(db: Session, run: AnalysisRun, llm: LLMClient) -> list[Cl
             existed = finding.clarification is not None
             try:
                 clarification = _question(db, llm, finding)
+            except NotFoundError:
+                db.rollback()
+                logger.warning("Skipping invalid finding %s", finding.id)
+                continue
             except BudgetExceededError:
                 logger.info("Clarifications for project %s wait for budget", finding.project_id)
                 break
@@ -108,12 +114,19 @@ def _questions_for_run(db: Session, run: AnalysisRun, llm: LLMClient) -> list[Cl
         if created and run.scope is AnalysisScope.REQUIREMENT:
             from app.classification.result_card import publish_card
 
-            publish_card(db, run)
+            active_error = sys.exc_info()[0] is not None
+            try:
+                publish_card(db, run)
+            except Exception:
+                if not active_error:
+                    raise
+                db.rollback()
+                logger.exception("Card refresh failed while a provider retry was pending")
     return created
 
 
 def question_for_finding(
-    db: Session, finding_id: uuid.UUID, llm: LLMClient
+    db: Session, finding_id: uuid.UUID, llm: LLMClient | None
 ) -> Clarification | None:
     finding = db.get(Finding, finding_id)
     if finding is None:
@@ -130,11 +143,29 @@ def question_for_finding(
         return None
 
 
-def _question(db: Session, llm: LLMClient, finding: Finding) -> Clarification | None:
+def _question(db: Session, llm: LLMClient | None, finding: Finding) -> Clarification | None:
+    # Session advisory claims survive generation commits and release on every failure.
+    with db.get_bind().engine.connect() as claim:
+        key = {"key": -(finding.id.int % (2**63 - 1)) - 1}
+        claim.execute(text("SELECT pg_advisory_lock(:key)"), key)
+        try:
+            return _claimed_question(db, llm, finding)
+        finally:
+            claim.execute(text("SELECT pg_advisory_unlock(:key)"), key)
+
+
+def _claimed_question(db: Session, llm: LLMClient | None, finding: Finding) -> Clarification | None:
     """Generate (or find) the finding's question and post it once. Raises
     :class:`BudgetExceededError` (after rolling back) so a batch can stop."""
     try:
-        clarification = generate(db, llm, finding)
+        clarification = db.scalar(
+            select(Clarification).where(Clarification.finding_id == finding.id)
+        )
+        if clarification is None:
+            client = llm or get_llm_client()
+            if client is None:
+                return None
+            clarification = generate(db, client, finding)
     except BudgetExceededError:
         db.rollback()
         raise
@@ -161,12 +192,7 @@ def post_in_thread(db: Session, clarification: Clarification, finding: Finding) 
     if clarification.message_id is not None:
         return db.get(Message, clarification.message_id)
     requirements = involved_requirements(db, finding)
-    run = db.get(AnalysisRun, finding.analysis_run_id) if finding.analysis_run_id else None
-    posted = (
-        db.get(Requirement, run.subject_id)
-        if run and run.scope is AnalysisScope.REQUIREMENT
-        else None
-    )
+    posted = posted_subject(db, finding)
     if posted is None or posted.origin_message_id is None:
         return None
     root = db.get(Message, posted.origin_message_id)
@@ -205,11 +231,8 @@ def post_in_thread(db: Session, clarification: Clarification, finding: Finding) 
     max_retries=5,
 )
 def generate_for_run_task(run_id: str) -> int:
-    llm = get_llm_client()
-    if llm is None:
-        return 0
     with session_scope() as db:
-        return len(questions_for_run(db, uuid.UUID(run_id), llm))
+        return len(questions_for_run(db, uuid.UUID(run_id), None))
 
 
 @celery_app.task(
@@ -220,9 +243,6 @@ def generate_for_run_task(run_id: str) -> int:
     max_retries=5,
 )
 def generate_for_finding_task(finding_id: str) -> str | None:
-    llm = get_llm_client()
-    if llm is None:
-        return None
     with session_scope() as db:
-        clarification = question_for_finding(db, uuid.UUID(finding_id), llm)
+        clarification = question_for_finding(db, uuid.UUID(finding_id), None)
         return str(clarification.id) if clarification else None

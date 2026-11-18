@@ -131,8 +131,21 @@ def list_findings(
             .offset(offset)
         )
     )
-    involved = _involved(db, rows)
-    views = [FindingView(f, involved[f.id], project.confidence_threshold) for f in rows]
+    # Keep strict individual lookup semantics while isolating corrupt rows in a page.
+    try:
+        involved = _involved(db, rows)
+    except NotFoundError:
+        involved = {}
+        for finding in rows:
+            try:
+                involved.update(_involved(db, [finding]))
+            except NotFoundError:
+                continue
+    views = [
+        FindingView(f, involved[f.id], project.confidence_threshold)
+        for f in rows
+        if f.id in involved
+    ]
     return views, total
 
 

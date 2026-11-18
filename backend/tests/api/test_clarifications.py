@@ -231,3 +231,37 @@ def test_generation_reports_broker_failure(
     )
     assert response.status_code == 503
     assert response.headers["Retry-After"] == "5"
+
+
+def test_existing_clarification_requires_view_for_custom_member(
+    client: TestClient,
+    db_session: Session,
+    finding: Finding,
+    clarification: Clarification,
+    make_user: Callable[..., User],
+) -> None:
+    from app.models import Membership, Role
+
+    member = make_user(role=DefaultRole.DEVELOPER)
+    membership = db_session.scalar(select(Membership).where(Membership.user_id == member.id))
+    assert membership is not None
+    role = Role(workspace_id=membership.workspace_id, name="No view", permissions=[])
+    db_session.add(role)
+    db_session.flush()
+    membership.role_id = role.id
+    db_session.commit()
+    assert (
+        client.get(
+            f"/api/v1/findings/{finding.id}/clarification", headers=headers_for(member)
+        ).status_code
+        == 403
+    )
+
+
+def test_nul_answer_is_rejected_before_storage(
+    client: TestClient, clarification: Clarification, user: User
+) -> None:
+    response = answer(client, clarification, user, "valid\\x00answer".replace("\\x00", "\x00"))
+    assert response.status_code == 422
+    assert "Answers cannot contain NUL characters" in response.text
+    assert clarification.resolved_at is None

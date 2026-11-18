@@ -1,7 +1,7 @@
 """Analysis result cards for posted requirements (US-31, US-09; NFR-17)."""
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models import (
     AnalysisRun,
@@ -31,7 +31,14 @@ def publish_card(db: Session, run: AnalysisRun) -> Message | None:
     channel = db.get(Channel, root.channel_id) if root is not None else None
     if root is None or channel is None:
         return None
-    findings = list(db.scalars(select(Finding).where(Finding.analysis_run_id == run.id)))
+    findings = list(
+        db.scalars(
+            select(Finding)
+            .where(Finding.analysis_run_id == run.id)
+            .options(selectinload(Finding.clarification))
+            .execution_options(populate_existing=True)
+        )
+    )
     if run.status is AnalysisRunStatus.WAITING_BUDGET:
         body = "AI analysis is waiting for budget."
     elif run.error_message:
@@ -39,14 +46,17 @@ def publish_card(db: Session, run: AnalysisRun) -> Message | None:
     elif findings:
         body = "AI analysis findings:"
         notice = "\nMore entries are available in the findings view."
+        omitted = False
         for finding in findings:
             entry = f"\n{finding.category.value}: {finding.explanation or finding.rationale}"
             if finding.clarification:
                 entry += f"\nClarification: {finding.clarification.question}"
             if len(body) + len(entry) + len(notice) > messages.MAX_MESSAGE_CHARS:
-                body += notice
-                break
+                omitted = True
+                continue
             body += entry
+        if omitted:
+            body += notice
     else:
         body = "No issues detected by analysis — analysis can miss conflicts."
     payload = {"analysis_run_id": str(run.id), "status": run.status.value}

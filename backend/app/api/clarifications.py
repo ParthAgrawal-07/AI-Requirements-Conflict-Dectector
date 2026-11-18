@@ -18,19 +18,17 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import DbSession, requires
+from app.clarification.delivery import posted_subject
 from app.clarification.generator import needs_question
 from app.clarification.tasks import GENERATE_FOR_FINDING
 from app.core.celery_app import celery_app
 from app.core.errors import AppError, ConflictError, NotFoundError
 from app.models import (
-    AnalysisRun,
-    AnalysisScope,
     AuditAction,
     AuditLog,
     Clarification,
     Finding,
     Project,
-    Requirement,
 )
 from app.schemas.common import ErrorResponse
 from app.schemas.findings import ClarificationRead
@@ -54,6 +52,8 @@ class AnswerRequest(BaseModel):
     @field_validator("resolution", mode="before")
     @classmethod
     def normalize(cls, value: Any) -> Any:
+        if isinstance(value, str) and "\x00" in value:
+            raise ValueError("Answers cannot contain NUL characters")
         return value.strip() if isinstance(value, str) else value
 
 
@@ -97,16 +97,9 @@ def request_clarification(
             "Only open Conflicting, Ambiguous and Incomplete findings get a question",
             code="no_question_needed",
         )
-    run = db.get(AnalysisRun, finding.analysis_run_id) if finding.analysis_run_id else None
-    subject = (
-        db.get(Requirement, run.subject_id)
-        if run and run.scope is AnalysisScope.REQUIREMENT
-        else None
-    )
-    needs_reply = subject is not None and subject.origin_message_id is not None
-    if finding.clarification is not None and (
-        finding.clarification.message_id is not None or not needs_reply
-    ):
+    # Posted questions may need either reply delivery or card-refresh recovery.
+    needs_reply = posted_subject(db, finding) is not None
+    if finding.clarification is not None and not needs_reply:
         raise ConflictError("This finding already has a question", code="already_asked")
     try:
         celery_app.send_task(GENERATE_FOR_FINDING, args=[str(finding.id)])
