@@ -5,12 +5,16 @@
   by ``state``, ``origin``, ``owner``, ``document_id`` and a free-text ``q`` (case-insensitive,
   over text and printed ID).
 * ``GET /requirements/{id}`` (``view``) — the drawer: detail, allowed moves, approval readiness.
-* ``PATCH /requirements/{id}`` — a lifecycle move (US-37). Different moves need different
-  permissions (``baseline.manage``, ``req.implement``, or ``req.propose`` for the author's
-  withdrawal), so the route admits any of them and ``app.services.lifecycle`` checks the one the
-  requested move needs.
+* ``PATCH /requirements/{id}`` — a lifecycle move (US-37) and/or a new owner or group (US-36,
+  Bansil). Different changes need different permissions (``baseline.manage``, ``req.implement``,
+  or ``req.propose`` for the author's withdrawal), so the route admits any of them and
+  ``app.services.lifecycle`` / ``app.intake.ownership`` check the one the change needs.
 * ``POST /requirements/{id}/signoff`` (``protected.signoff``) — sign off a protected requirement's
   current text (FR-21).
+* ``POST /requirements/{id}/ownership-requests`` (``req.propose``), ``GET`` the same (``view``) and
+  ``POST /ownership-requests/{id}/decision`` — ask to own a requirement; its owner or a member with
+  ``baseline.manage`` decides (US-36, Bansil). Deciding admits ``baseline.manage`` or
+  ``req.propose`` and ``app.intake.ownership.decide`` checks the caller owns it or may reassign.
 """
 
 import uuid
@@ -21,10 +25,18 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import DbSession, requires, requires_any
 from app.core.errors import BadRequestError, NotFoundError
+from app.intake import ownership
 from app.models import AuditAction, AuditLog, Requirement, RequirementOrigin, RequirementState
 from app.schemas.common import ErrorResponse, Page
 from app.schemas.documents import RequirementRead
-from app.schemas.requirements import RequirementDetail, RequirementUpdate, SignOffRequest
+from app.schemas.requirements import (
+    OwnershipDecision,
+    OwnershipRequestCreate,
+    OwnershipRequestRead,
+    RequirementDetail,
+    RequirementUpdate,
+    SignOffRequest,
+)
 from app.services import lifecycle
 from app.services import requirements as requirement_service
 from app.services.access import AccessContext
@@ -135,17 +147,39 @@ def update_requirement(
     ctx: Annotated[AccessContext, requires_any("baseline.manage", "req.implement", "req.propose")],
     db: DbSession,
 ) -> RequirementDetail:
-    if body.state is None or body.version is None:
+    sent = body.model_fields_set
+    reassigning = bool(sent & {"owner_id", "stakeholder_group"})
+    moving = body.state is not None and body.version is not None
+    if not moving and not reassigning:
         raise BadRequestError("Nothing to change", code="nothing_to_change")
-    lifecycle.transition(
-        db,
-        ctx,
-        requirement_id,
-        body.state,
-        version=body.version,
-        reason=body.reason,
-        accepted_risk=body.accepted_risk,
-    )
+    staged: list[str] = []
+    if reassigning:
+        staged = ownership.reassign(
+            db,
+            ctx,
+            requirement_id,
+            owner_id=body.owner_id,
+            set_owner="owner_id" in sent,
+            group=body.stakeholder_group,
+            set_group="stakeholder_group" in sent,
+            commit=not moving,
+        )
+    if body.state is None or body.version is None:
+        return _detail(db, ctx, requirement_id)
+    try:
+        lifecycle.transition(
+            db,
+            ctx,
+            requirement_id,
+            body.state,
+            version=body.version,
+            reason=body.reason,
+            accepted_risk=body.accepted_risk,
+        )
+    except Exception:
+        db.rollback()  # a refused move takes the staged reassignment with it
+        raise
+    ownership.announce(db, ctx, requirement_id, staged)  # the transition's commit carried it
     return _detail(db, ctx, requirement_id)
 
 
@@ -163,3 +197,60 @@ def sign_off(
 ) -> RequirementDetail:
     lifecycle.sign_off(db, ctx, requirement_id, version=body.version)
     return _detail(db, ctx, requirement_id)
+
+
+@router.post(
+    "/requirements/{requirement_id}/ownership-requests",
+    response_model=OwnershipRequestRead,
+    status_code=201,
+    summary="Ask to own a requirement (US-36)",
+    responses={
+        **_ONE,
+        403: {"model": ErrorResponse},
+        409: {"model": ErrorResponse, "description": "Already the owner, or already asked"},
+    },
+)
+def request_ownership(
+    requirement_id: uuid.UUID,
+    body: OwnershipRequestCreate,
+    ctx: Annotated[AccessContext, requires("req.propose")],
+    db: DbSession,
+) -> OwnershipRequestRead:
+    request = ownership.request_ownership(db, ctx, requirement_id, note=body.note)
+    return OwnershipRequestRead.model_validate(request)
+
+
+@router.get(
+    "/requirements/{requirement_id}/ownership-requests",
+    response_model=list[OwnershipRequestRead],
+    summary="A requirement's ownership requests, oldest first (US-36)",
+    responses=_ONE,
+)
+def list_ownership_requests(
+    requirement_id: uuid.UUID,
+    ctx: Annotated[AccessContext, requires("view")],
+    db: DbSession,
+) -> list[OwnershipRequestRead]:
+    return [
+        OwnershipRequestRead.model_validate(r) for r in ownership.list_requests(db, requirement_id)
+    ]
+
+
+@router.post(
+    "/ownership-requests/{ownership_request_id}/decision",
+    response_model=OwnershipRequestRead,
+    summary="Accept or decline an ownership request (US-36)",
+    responses={
+        404: {"model": ErrorResponse, "description": "Not a member, or no such request"},
+        403: {"model": ErrorResponse, "description": "Neither the owner nor a manager"},
+        409: {"model": ErrorResponse, "description": "Already decided"},
+    },
+)
+def decide_ownership(
+    ownership_request_id: uuid.UUID,
+    body: OwnershipDecision,
+    ctx: Annotated[AccessContext, requires_any("baseline.manage", "req.propose")],
+    db: DbSession,
+) -> OwnershipRequestRead:
+    request = ownership.decide(db, ctx, ownership_request_id, accept=body.accept)
+    return OwnershipRequestRead.model_validate(request)

@@ -34,6 +34,7 @@ from app.models.enums import (
 from app.models.graph import NodePosition
 from app.models.join_code import JoinCode, JoinRequest
 from app.models.membership import Membership, ProjectMember
+from app.models.ownership import OwnershipRequest
 from app.models.project import Project
 from app.models.requirement import Requirement, RequirementVersion
 from app.models.review import FindingReview, RequirementTransition
@@ -73,6 +74,7 @@ __all__ = [
     "Message",
     "MessageKind",
     "NodePosition",
+    "OwnershipRequest",
     "PlatformRole",
     "Project",
     "ProjectContext",
