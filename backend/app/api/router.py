@@ -18,6 +18,7 @@ from app.api import (
     auth,
     channels,
     clarifications,
+    concerns,
     context,
     documents,
     drafts,
@@ -64,6 +65,7 @@ for _router in (
     clarifications.router,
     analysis_runs.router,
     search_similar.router,
+    concerns.router,
 ):
     api_router.include_router(_router, dependencies=_authenticated, responses=_unauthorized)
 
