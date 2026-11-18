@@ -23,16 +23,16 @@ Every story appears in exactly one epic. Requirement traces use the canonical nu
 | **EP-01** | Platform Foundation and Access | US-19 + Sprint 0 enablers | 5 | S0, S1 | Parth, Pranshu, Dhavni didi | 🟡 skeleton ✅ |
 | **EP-02** | Document Ingestion and Processing Visibility | US-01, 02, 03, 04 | 16 | S1 | Parth, Bansil, Pranshu, Dhavni didi | 🟡 backend ✅ for US-01, US-04 |
 | **EP-03** | **Issue Detection Engine** (core value) | US-05, 07, 06, 58 | 28 | S2, S5 | Heet, Keval, Abhyudit, Affan | ⬜ |
-| **EP-04** | Clarification, Triage and Human Review (AI, rule and **human-raised** findings) | US-08, 09, 10, 15, 56 | 19 | S3, S4, S6 | Parth, Keval, Madhav, Abhyudit, Affan | ⬜ |
+| **EP-04** | Clarification, Triage and Human Review (AI, rule and **human-raised** findings) | US-08, 09, 10, 15, 56 | 19 | S3, S4, S6 | Parth, Keval, Madhav, Pranshu, Abhyudit, Affan | ⬜ |
 | **EP-05** | Change Impact and Version History | US-11, 12 | 11 | S4 | Heet, Affan | ⬜ |
 | **EP-06** | Insight and Reporting | US-13, 16, 44 | 15 (5 scheduled) | S5 | Abhyudit | ⬜ |
-| **EP-07** | Compliance and Governance *(conditional)* | US-18 | 5 | S6 | Abhijeet | ⬜ guard in US-10, US-35 |
+| **EP-07** | Compliance and Governance *(conditional)* | US-18 | 5 | S6 | Abhijeet, Dhavni didi | ⬜ guard in US-10, US-35 |
 | **EP-08** | Validation, Hardening and Delivery | US-22 + delivery enablers | 3 | S2, S7 | Abhyudit, Affan, Dhavni didi | ⬜ |
 | **EP-09** | Enterprise Integration and Outcomes *(post-MVP)* | US-17, 20, 21, 23 | 21 | none | none | ⏸ |
 | **EP-10** | **Workspace, Joining and Roles** | US-24, 25, 26, 27, 28, 29, 46, 49, 60 | 36 (33 scheduled) | S1, S2 | Parth, Madhav, Bansil, Keval, Dhavni didi, Pranshu, Abhijeet | ⬜ |
 | **EP-11** | **Requirement Authoring and Actions** | US-30, 31, 32, 36, 37, 47, 51, 53 | 37 (27 scheduled) | S3, S5, S6 | Parth, Bansil, Pranshu, Heet, Keval, Abhyudit, Affan | ⬜ |
 | **EP-12** | **Issues, AI Suggestions, Decision Rules and PR-Style Change Requests** | US-33, 34, 35, 45, 48, 52, 54, 57 | 39 (31 scheduled) | S4, S5, S6 | Parth, Dhavni didi, Bansil, Pranshu, Heet, Keval, Madhav, Abhijeet, Abhyudit, Affan | ⬜ |
-| **EP-13** | Notifications and Activity | US-38, 39, 42 | 11 (8 scheduled) | S5, S6 | Abhijeet, Abhyudit | ⬜ |
+| **EP-13** | Notifications and Activity | US-38, 39, 42 | 11 (8 scheduled) | S5, S6 | Abhijeet, Dhavni didi, Abhyudit | ⬜ |
 | **EP-14** | Baselines, **Updated SRS** and Knowledge | US-40, 41, 43, 59, 61 | 22 (17 scheduled) | S5, S6 | Bansil, Pranshu, Keval, Abhyudit | ⬜ |
 | **EP-15** | **Live Requirements Map** *(new)* | US-14, 50, 55 | 16 | S3, S6 | Dhavni didi, Heet, Keval, Abhijeet | ⬜ |
 | | **Total** | **61 stories** | **284** (224 scheduled) | | | |

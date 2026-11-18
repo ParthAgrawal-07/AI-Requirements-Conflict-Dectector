@@ -95,12 +95,12 @@ Owners are listed primary first. Enablers are 0-point tasks inside the sprint. D
 | Story | Pts | Owners |
 |---|---|---|
 | US-45 AI resolution suggestions with human feedback | 5 | Madhav (suggestion service and feedback), Keval (prompts), Abhyudit (suggestion panel), Bansil (change request from a suggestion) |
-| US-38 Inbox and notifications | 5 | Abhijeet (notifications, inbox, bell) |
+| US-38 Inbox and notifications | 5 | Abhijeet (notifications backend), Dhavni didi (bell and inbox UI) |
 | US-13 Quality dashboard | 5 | Abhyudit (aggregation and dashboard) |
 | US-40 Baseline snapshots and comparison | 5 | Pranshu (backend and UI) |
 | US-57 Decision rules and decision owners | 3 | Parth (rules engine), Affan (decision owners, rules tab, project settings) |
 | US-58 Rule-based cross-checks (extends the S2 extractor; strongest signals become `source = rule` findings — ADR-30) | 5 | Heet (attribute index, rule checks), Keval (attribute extraction), Abhyudit (recall measurement) |
-| US-51 Live lint, similar hints, pre-flight, AI wording | 5 | Keval (lint, pre-flight, AI wording), Bansil (authoring panel, composer wiring) |
+| US-51 Live lint, similar hints, pre-flight, AI wording | 5 | Keval (lint engine, pre-flight, AI wording), Pranshu (authoring-aids API, lint tests), Bansil (authoring panel, composer wiring) |
 | US-06 Tune thresholds per project | 5 | Heet (threshold preview, re-analysis), Keval, Affan (settings page) |
 
 **Load test (Affan, Dhavni didi):** NFR-24, NFR-25, NFR-26, NFR-32, NFR-33.
@@ -109,15 +109,15 @@ Owners are listed primary first. Enablers are 0-point tasks inside the sprint. D
 
 | Story | Pts | Owners |
 |---|---|---|
-| US-18 Protect compliance-critical requirements (conditional) | 5 | Abhijeet (backend and UI) |
-| US-61 Generate the updated SRS with the LLM and review it | 5 | Bansil (generator, readiness, fidelity check, publishing), Keval (section prompts), Pranshu (SRS API, section review, SRS screen) |
+| US-18 Protect compliance-critical requirements (conditional) | 5 | Abhijeet (backend), Dhavni didi (compliance UI) |
+| US-61 Generate the updated SRS with the LLM and review it | 5 | Bansil (generator, readiness, fidelity check, publishing), Pranshu (SRS API), Keval (section prompts, section review, SRS screen) |
 | US-41 Export the updated SRS (DOCX, PDF, Markdown) | 5 | Bansil (DOCX, PDF, Markdown exporters), Pranshu (export API) |
 | US-59 Open-items report beside the approved baseline | 2 | Abhyudit |
 | US-50 Map preview layer and time slider | 5 | Dhavni didi (preview layer, revisions, history), Heet (time slider) |
 | US-08 Assign severity | 3 | Abhyudit (backend and UI) |
 | US-53 Discussion, votes, watch and links | 3 | Affan (backend and UI) |
-| US-55 Written change log and summaries for the map | 3 | Heet (change-log backend, Changes panel), Dhavni didi (changes API), Keval (summary paragraph) |
-| US-15 Feedback loop | 3 | Keval (backend and UI) |
+| US-55 Written change log and summaries for the map | 3 | Heet (change-log backend, Changes panel), Abhijeet (changes API, change-summary route, change kinds), Keval (summary paragraph) |
+| US-15 Feedback loop | 3 | Keval (feedback loop and view), Pranshu (AI feedback API) |
 | US-42 Requirement activity timeline | 3 | Abhyudit (backend and UI) |
 
 No stretch item. **Feature freeze at the end of Week 13**; anything unfinished returns to the backlog.

@@ -65,13 +65,13 @@ person. Full rules, line counts and roles: [Sprint Plan §2](../planning/v5/IT31
 | Member | Role from Sprint 3 | Features they own (backend + UI + tests) |
 |---|---|---|
 | **Parth** | Backend lead, integration lead; reviews every migration and permission change | US-37 lifecycle · US-35 merge and agreement guard · US-57 decision rules engine |
-| **Dhavni didi** | Real-time, map backend, DevOps | US-14 deltas and narrator · US-52 auto issues · US-50 preview layer and history · US-55 changes API · S5 load test |
+| **Dhavni didi** | Real-time, map backend, DevOps | US-14 deltas and narrator · US-52 auto issues · US-38 bell and inbox UI · US-50 preview layer and history · US-18 compliance UI · S5 load test |
 | **Bansil** | Authoring and the updated SRS | US-36 ownership · US-33 change editor · US-51 authoring panel · US-61 SRS generation and fidelity · US-41 exporters |
-| **Pranshu** | Composer, change requests, baselines, SRS review; app shell | US-30 composer · US-33 change-request page · US-40 baselines · US-61 SRS API and screen · US-41 export API |
+| **Pranshu** | Composer, change requests, baselines, SRS API; app shell | US-30 composer · US-33 change-request page · US-40 baselines · US-51 authoring-aids API · US-61 SRS API · US-41 export API · US-15 AI feedback API |
 | **Heet** | Retrieval, impact, reviews, change log | US-31 retrieval · US-11 impact · US-35 reviews · US-58 rule checks · US-06 thresholds · US-55 change log · US-50 time slider |
-| **Keval** | LLM and AI quality; reviews every LLM call | US-31 classification · US-34 narrative · US-51 lint and pre-flight · US-58 extraction · US-15 feedback loop · US-61 prompts |
+| **Keval** | LLM and AI quality; reviews every LLM call | US-31 classification · US-34 narrative · US-51 lint engine and pre-flight · US-58 extraction · US-15 feedback loop and view · US-61 prompts and SRS screen |
 | **Madhav** | Clarification and consequences | US-09 clarification · US-34 consequence checks · US-45 suggestion service · S6 security tests |
-| **Abhijeet** | Map UI, issues, notifications, compliance | US-14 map UI · US-52 issue pages · US-38 notifications · US-18 compliance |
+| **Abhijeet** | Map UI, issues, notifications and compliance backends, changes API | US-14 map UI · US-52 issue pages · US-38 notifications backend · US-18 compliance backend · US-55 changes API |
 | **Abhyudit** | Testing (accuracy) + features | US-31 requirement runs · US-56 concerns · US-13 dashboard · US-45 suggestion panel · US-42 timeline · US-59 open items · US-08 severity |
 | **Affan** | Testing (E2E, security) + features | US-10 finding review · US-12 version history · US-35 merge box · US-57 decision owners · US-53 discussion and votes |
 

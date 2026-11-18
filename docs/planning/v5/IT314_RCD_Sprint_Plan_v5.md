@@ -49,19 +49,25 @@ the same load. The rules:
 6. **Merge order follows dependencies.** Each sprint's work ships as one PR per owner, in the order in
    `SprintN-zips/MERGE_ORDER.md`. Testers open a feature PR mid-sprint and a `-tests` PR last. Heet has a
    second PR in S4 (reviews, after Madhav's migration) and in S6 (change-log UI and tests, after Dhavni's map
-   history), because his work sits on both sides of someone else's.
+   history), because his work sits on both sides of someone else's. In S6 Dhavni didi and Keval also open a
+   second, UI-only PR: the compliance screens after Abhijeet's compliance backend, and the SRS screen after
+   Pranshu's SRS API.
+7. **Backend for every developer.** In S5–S6 the frontend-leaning members take backend features too:
+   Pranshu the authoring-aids API (lint, pre-flight and wording routes) and the AI feedback API, Abhijeet the
+   notifications and compliance backends and the changes API. In return Dhavni didi builds the bell, inbox
+   and compliance screens and Keval the SRS screen, which keeps the balance above.
 
 | Member | S2 (done) | S3 | S4 | S5 | S6 | Total | vs average |
 |---|---|---|---|---|---|---|---|
 | Parth | 2,659 | 1,184 | 1,344 | 1,571 | 0 (integration, release prep) | 6,758 | +2.7% |
-| Dhavni didi | 1,504 | 1,630 | 1,493 | 652 | 1,459 | 6,738 | +2.4% |
+| Dhavni didi | 1,504 | 1,630 | 1,493 | 720 | 1,207 | 6,554 | −0.4% |
 | Bansil | 868 | 873 | 1,561 | 979 | 2,061 | 6,342 | −3.6% |
-| Pranshu | 1,215 | 1,692 | 815 | 890 | 2,094 | 6,706 | +1.9% |
+| Pranshu | 1,215 | 1,692 | 815 | 1,455 | 1,312 | 6,489 | −1.4% |
 | Heet | 345 | 617 | 1,720 | 1,607 | 2,202 | 6,491 | −1.4% |
-| Keval | 1,369 | 1,329 | 455 | 1,916 | 1,283 | 6,352 | −3.5% |
+| Keval | 1,369 | 1,329 | 455 | 1,351 | 1,965 | 6,469 | −1.7% |
 | Madhav | 1,566 | 1,157 | 1,681 | 1,897 | 445 (security tests with Affan) | 6,746 | +2.5% |
-| Abhijeet | 1,310 | 1,288 | 1,363 | 1,091 | 1,485 | 6,537 | −0.7% |
-| Abhyudit | 371 | 800 | 1,144 | 1,909 | 2,295 | 6,519 | −0.9% |
+| Abhijeet | 1,310 | 1,288 | 1,363 | 1,028 | 1,837 | 6,826 | +3.7% |
+| Abhyudit | 371 | 800 | 1,144 | 1,904 | 2,295 | 6,514 | −1.0% |
 | Affan | 196 | 1,711 | 1,098 | 745 | 2,870 | 6,620 | +0.6% |
 
 ### 2.2 Roles from Sprint 3
@@ -69,13 +75,13 @@ the same load. The rules:
 | Member | Role | Features they own (backend + UI + tests) | Also |
 |---|---|---|---|
 | **Parth** | Backend lead, integration lead | US-37 lifecycle and the review/lifecycle tables · US-35 merge, needs-update, agreement guard · US-57 decision rules engine | Reviews every migration and permission change; S6 integration and release prep |
-| **Dhavni didi** | Real-time, map backend, DevOps | US-14 graph revisions, deltas, narrator · US-52 auto conflict issues · US-50 preview layer, revisions, history · US-55 changes API | S5 load test; CI/CD, Docker, deployment |
+| **Dhavni didi** | Real-time, map backend, DevOps | US-14 graph revisions, deltas, narrator · US-52 auto conflict issues · US-38 bell and inbox UI · US-50 preview layer, revisions, history · US-18 compliance UI | S5 load test; CI/CD, Docker, deployment |
 | **Bansil** | Authoring and the updated SRS | US-36 owners and ownership requests · US-33 change editor · US-51 authoring panel · US-45 change request from a suggestion · US-61 SRS generation, readiness, fidelity check, publishing · US-41 DOCX, PDF and Markdown exporters | Scrum Master S3; demo data S7 |
-| **Pranshu** | Composer, change requests, baselines, SRS review | US-30 composer · US-33 change-request list and page · US-40 baselines · US-61 SRS API, section review and SRS screen · US-41 export API | App shell, component kit, shared styles; Scrum Master S4 |
+| **Pranshu** | Composer, change requests, baselines, SRS API | US-30 composer · US-33 change-request list and page · US-40 baselines · US-51 authoring-aids API (lint, pre-flight, wording routes) and lint tests · US-61 SRS API · US-41 export API · US-15 AI feedback API | App shell, component kit, shared styles; Scrum Master S4 |
 | **Heet** | Retrieval, impact, reviews, change log | US-31 retrieval and hints · US-11 impact and relationship queries · US-35 reviews · US-58 rule checks · US-06 thresholds · US-55 change-log backend, Changes panel and tests · US-50 time slider | Scrum Master S5 |
-| **Keval** | LLM and AI quality | US-31 classification, budget, result card · US-34 narrative · US-51 lint, pre-flight, AI wording · US-58 attribute extraction · US-45 prompts · US-15 feedback loop · US-55 summary · US-61 section prompts | Reviews every LLM call; Scrum Master S6 |
+| **Keval** | LLM and AI quality | US-31 classification, budget, result card · US-34 narrative · US-51 lint engine, pre-flight, AI wording · US-58 attribute extraction · US-45 prompts · US-15 feedback loop and view · US-55 summary paragraph · US-61 section prompts, section review and SRS screen | Reviews every LLM call; Scrum Master S6 |
 | **Madhav** | Clarification and consequences | US-09 clarification questions · US-34 consequence checks and Checks tab · US-45 suggestion service | S6 injection and rate-limit tests with Affan; Scrum Master S7 |
-| **Abhijeet** | Map UI, issues, notifications, compliance | US-14 map UI, changes feed, applying live deltas · US-52 issue API, list, page, comments · US-38 notifications, inbox, bell · US-18 compliance | Demo script S7 |
+| **Abhijeet** | Map UI, issues, notifications and compliance backends, changes API | US-14 map UI, changes feed, applying live deltas; graph service fixes and gateway tests · US-52 issue API, list, page, comments · US-38 notifications backend · US-18 compliance backend · US-55 changes API, change-summary route, change kinds | Demo script S7 |
 | **Abhyudit** | Testing (accuracy, backend) + features | US-31 requirement runs · US-56 raise a concern · US-13 dashboard · US-45 suggestion panel · US-42 timeline · US-59 open-items report · US-08 severity and severity sort | CP1 and CP2 accuracy and recall reports, regression, SRS fidelity tests |
 | **Affan** | Testing (E2E, performance, security) + features | US-10 finding review · US-12 version history · US-35 merge box · US-57 decision owners and settings page · US-53 discussion, votes, watch, links and link edges on the map | CP1 and CP2 E2E, merge-rule tests, security, accessibility, smoke; bug bash lead |
 
@@ -190,12 +196,12 @@ Each member owned one primary area as code owner and reviewer. Everyone writes u
 | Story | Pts | Owners |
 |---|---|---|
 | US-45 **AI resolution suggestions with human feedback** | 5 | Madhav (suggestion service and feedback), Keval (prompts), Abhyudit (suggestion panel), Bansil (change request from a suggestion) |
-| US-38 Inbox and notifications | 5 | Abhijeet (notifications, inbox, bell) |
+| US-38 Inbox and notifications | 5 | Abhijeet (notifications backend), Dhavni didi (bell and inbox UI) |
 | US-13 Quality dashboard | 5 | Abhyudit (aggregation and dashboard) |
 | US-40 Baseline snapshots and comparison | 5 | Pranshu (backend and UI) |
 | US-57 **Decision rules and decision owners** | 3 | Parth (rules engine), Affan (decision owners, rules tab, project settings) |
 | US-58 **Rule-based cross-checks** (conflicts the similarity filter misses) | 5 | Heet (attribute index, rule checks), Keval (attribute extraction), Abhyudit (recall measurement) |
-| US-51 Live lint, similar hints, pre-flight, AI wording | 5 | Keval (lint, pre-flight, AI wording), Bansil (authoring panel, composer wiring) |
+| US-51 Live lint, similar hints, pre-flight, AI wording | 5 | Keval (lint engine, pre-flight, AI wording), Pranshu (authoring-aids API, lint tests), Bansil (authoring panel, composer wiring) |
 | US-06 Tune thresholds per project | 5 | Heet (threshold preview, re-analysis), Keval, Affan (settings page) |
 
 **Load test (Affan, Dhavni didi):** NFR-24 (messages), NFR-25 (live analysis), NFR-26 (checks), **NFR-32 (map freshness)**, **NFR-33 (map with 500 nodes)**.
@@ -212,15 +218,15 @@ Each member owned one primary area as code owner and reviewer. Everyone writes u
 
 | Story | Pts | Owners | Notes |
 |---|---|---|---|
-| US-18 Protect compliance-critical requirements | 5 | Abhijeet (backend and UI) | Conditional |
-| US-61 **Generate the updated SRS with the LLM and review it** | 5 | Bansil (generator, readiness, fidelity check, publishing), Keval (section prompts), Pranshu (SRS API, section review, SRS screen) | Readiness checklist, verbatim requirements, fidelity check |
+| US-18 Protect compliance-critical requirements | 5 | Abhijeet (backend), Dhavni didi (compliance UI) | Conditional |
+| US-61 **Generate the updated SRS with the LLM and review it** | 5 | Bansil (generator, readiness, fidelity check, publishing), Pranshu (SRS API), Keval (section prompts, section review, SRS screen) | Readiness checklist, verbatim requirements, fidelity check |
 | US-41 Export the updated SRS (DOCX, PDF, Markdown) | 5 | Bansil (DOCX, PDF, Markdown exporters), Pranshu (export API) | |
 | US-59 **Open-items report** beside the approved baseline | 2 | Abhyudit | |
 | US-50 Map preview layer and time slider | 5 | Dhavni didi (preview layer, revisions, history), Heet (time slider) | |
 | US-08 Assign severity | 3 | Abhyudit (backend and UI) | |
 | US-53 Discussion, votes, watch and links | 3 | Affan (backend and UI) | |
-| US-55 **Written change log and summaries for the map** | 3 | Heet (change-log backend, Changes panel), Dhavni didi (changes API), Keval (summary paragraph) | |
-| US-15 Feedback loop | 3 | Keval (backend and UI) | |
+| US-55 **Written change log and summaries for the map** | 3 | Heet (change-log backend, Changes panel), Abhijeet (changes API, change-summary route, change kinds), Keval (summary paragraph) | |
+| US-15 Feedback loop | 3 | Keval (feedback loop and view), Pranshu (AI feedback API) | |
 | US-42 Requirement activity timeline | 3 | Abhyudit (backend and UI) | |
 
 There is no stretch item. **Feature freeze at the end of Week 13.** Anything unfinished returns to the backlog, not into Sprint 7.
@@ -244,13 +250,13 @@ Primary work per member per sprint (story numbers; *E* = enabler or test work). 
 | Member | S0 | S1 | S2 | S3 | S4 | S5 | S6 | S7 |
 |---|---|---|---|---|---|---|---|---|
 | Parth | E: tenancy and permission migration, contracts | 19, 27, 24, 01, 04 | 26, 49; E: G1, orchestration | 37 (lifecycle) | 35 (merge, needs-update, agreement guard) | 57 (rules engine) | Integration, migration review, release prep | Fixes, deploy |
-| Dhavni didi | E: WebSocket and map spikes, CI | 03; E: event bus | 29; E: graph API v0 | 14 (revisions, deltas, narrator) | 52 (auto issues, issues client) | E: load test | 50 (preview layer, revisions, history), 55 (changes API) | Deploy freeze |
+| Dhavni didi | E: WebSocket and map spikes, CI | 03; E: event bus | 29; E: graph API v0 | 14 (revisions, deltas, narrator) | 52 (auto issues, issues client) | 38 (bell and inbox UI); E: load test | 50 (preview layer, revisions, history), 18 (compliance UI) | Deploy freeze |
 | Bansil | E: composer schema, EARS, brief schema, G3 plan | 02, 60 | E: post backend, drafts, G3 | 36 (owners, ownership requests) | 33 (intake, change editor, diff) | 51 (authoring panel), 45 (change request from a suggestion) | 61 (generator, readiness, fidelity, publishing), 41 (DOCX, PDF, Markdown exporters) | Demo data |
-| Pranshu | E: shell, component kit | 19, 01, 03, 04 (UI) | 28, 29 (UI) | 30 (composer) | 33 (change-request list and page) | 40 (baselines) | 61 (SRS API, section review, SRS screen), 41 (export API) | Demo script |
+| Pranshu | E: shell, component kit | 19, 01, 03, 04 (UI) | 28, 29 (UI) | 30 (composer) | 33 (change-request list and page) | 40 (baselines), 51 (authoring-aids API) | 61 (SRS API), 41 (export API), 15 (AI feedback API) | Demo script |
 | Heet | E: embedding contract, hint latency | E: embedding stage | 05 (candidates) | 31 (retrieval, hints) | 11 (impact, relations), 33 (change-request client), 35 (reviews) | 58 (rule checks), 06 (thresholds) | 55 (change log, Changes panel), 50 (time slider); E: recall tuning for 58 | Final report |
-| Keval | E: LLM adapter, lint catalogue | 60 (context pack); E: classifier skeleton | 05 (classification), 07 | 31 (classify, budget, result card) | 34 (narrative) | 51 (lint, pre-flight, AI), 45 (prompts), 58 (extraction) | 15 (feedback loop and view), 55 (summary), 61 (section prompts) | Final report |
+| Keval | E: LLM adapter, lint catalogue | 60 (context pack); E: classifier skeleton | 05 (classification), 07 | 31 (classify, budget, result card) | 34 (narrative) | 51 (lint engine, pre-flight, AI), 45 (prompts), 58 (extraction) | 15 (feedback loop and view), 55 (summary), 61 (section prompts, SRS screen) | Final report |
 | Madhav | E: join codes, checks schema | 25 | 28; E: question prompts | 09 | 34 (checks, delta, risk, Checks tab) | 45 (suggestion service) | E: injection and rate-limit tests with Affan | Final report |
-| Abhijeet | E: prototypes, map spike | 24, 25, 60 (UI) | 07, 26, 49 (UI); 22 prototypes | 14 (map UI, applying live deltas) | 52 (issue API, list, page, comments) | 38 (notifications, inbox, bell) | 18 (compliance) | Demo script |
+| Abhijeet | E: prototypes, map spike | 24, 25, 60 (UI) | 07, 26, 49 (UI); 22 prototypes | 14 (map UI, applying live deltas) | 52 (issue API, list, page, comments) | 38 (notifications backend); graph fixes | 18 (compliance backend), 55 (changes API) | Demo script |
 | Abhyudit | E: benchmark v2 plan | E: labelling, API tests | 05 accuracy; 22 sessions | 31 (requirement runs); CP1 accuracy report | 56 (raise a concern); affected sets, auto-issue owners | 13 (dashboard), 45 (suggestion panel); CP2 recall report, suggestion rating | 42 (timeline), 59 (open items), 08 (severity); regression, final accuracy | Demo data |
 | Affan | E: Playwright, permission matrix | 27 tests; join-code abuse; E2E | 22 sessions; WebSocket tests | 10 (finding review); CP1 E2E, map freshness | 12 (version history), 35 (merge box); merge-rule tests | 57 (decision owners, settings page); CP2 E2E | 53 (discussion, votes, watch, links); isolation, accessibility, smoke | Bug bash lead |
 

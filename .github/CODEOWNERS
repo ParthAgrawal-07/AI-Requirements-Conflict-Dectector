@@ -64,7 +64,6 @@
 # Dhavni
 /backend/alembic/versions/20261121_0006d_graph_cards.py      @DC-01051 @ParthAgrawal-07
 /backend/alembic/versions/20261205_0007_issues.py            @DC-01051 @ParthAgrawal-07
-/backend/app/graph/changes_api.py                            @DC-01051
 /backend/app/graph/deltas.py                                 @DC-01051
 /backend/app/graph/narrator.py                               @DC-01051
 /backend/app/graph/positions.py                              @DC-01051
@@ -74,15 +73,17 @@
 /backend/app/models/issue.py                                 @DC-01051
 /backend/app/services/issues.py                              @DC-01051
 /backend/tests/analysis_helpers.py                           @DC-01051
-/backend/tests/api/test_changes.py                           @DC-01051
 /backend/tests/api/test_system_messages.py                   @DC-01051
 /backend/tests/graph/__init__.py                             @DC-01051
 /backend/tests/graph/test_deltas.py                          @DC-01051
 /backend/tests/graph/test_narrator.py                        @DC-01051
 /backend/tests/services/test_issues.py                       @DC-01051
+/frontend/src/api/download.ts                                @DC-01051
+/frontend/src/features/compliance/                           @DC-01051
 /frontend/src/features/issues/api.ts                         @DC-01051
 /frontend/src/features/map/PreviewLayer.tsx                  @DC-01051
 /frontend/src/features/map/history.ts                        @DC-01051
+/frontend/src/features/notifications/                        @DC-01051
 /load/analysis.js                                            @DC-01051
 /load/checks.js                                              @DC-01051
 /load/lib.js                                                 @DC-01051
@@ -118,16 +119,20 @@
 /frontend/src/features/requirements/OwnershipRequestDialog.tsx @Bansil08
 /frontend/tests/authoring.test.tsx                           @Bansil08
 # Pranshu
+/backend/app/api/ai_feedback.py                              @pranshu-chovatiya
 /backend/app/api/baselines.py                                @pranshu-chovatiya
 /backend/app/api/exports.py                                  @pranshu-chovatiya
 /backend/app/api/requirements_compose.py                     @pranshu-chovatiya
 /backend/app/api/srs.py                                      @pranshu-chovatiya
+/backend/app/lint/api.py                                     @pranshu-chovatiya
 /backend/app/models/baseline.py                              @pranshu-chovatiya
 /backend/app/services/baselines.py                           @pranshu-chovatiya
+/backend/tests/api/test_authoring_aids.py                    @pranshu-chovatiya
 /backend/tests/api/test_baselines.py                         @pranshu-chovatiya
 /backend/tests/api/test_composer.py                          @pranshu-chovatiya
 /backend/tests/api/test_exports.py                           @pranshu-chovatiya
 /backend/tests/api/test_srs.py                               @pranshu-chovatiya
+/backend/tests/lint/                                         @pranshu-chovatiya
 /frontend/src/features/baselines/                            @pranshu-chovatiya
 /frontend/src/features/changes/ChangeRequestList.tsx         @pranshu-chovatiya
 /frontend/src/features/changes/ChangeRequestPage.tsx         @pranshu-chovatiya
@@ -137,10 +142,8 @@
 /frontend/src/features/composer/SlotFields.tsx               @pranshu-chovatiya
 /frontend/src/features/composer/api.ts                       @pranshu-chovatiya
 /frontend/src/features/composer/ears.ts                      @pranshu-chovatiya
-/frontend/src/features/srs/                                  @pranshu-chovatiya
 /frontend/tests/change-requests.test.tsx                     @pranshu-chovatiya
 /frontend/tests/composer.test.tsx                            @pranshu-chovatiya
-/frontend/tests/srs.test.tsx                                 @pranshu-chovatiya
 # Heet
 /backend/alembic/versions/20261205_0007c_reviews.py          @the-heet-shah @ParthAgrawal-07
 /backend/alembic/versions/20261219_0010b_trust_rules.py      @the-heet-shah @ParthAgrawal-07
@@ -169,9 +172,7 @@
 # Keval
 /backend/alembic/versions/20261121_0006g_finding_model.py    @kevaldarji6126 @ParthAgrawal-07
 /backend/alembic/versions/20270102_0009a_severity_feedback.py @kevaldarji6126 @ParthAgrawal-07
-/backend/app/api/ai_feedback.py                              @kevaldarji6126
 /backend/app/api/analysis_runs.py                            @kevaldarji6126
-/backend/app/api/change_summary.py                           @kevaldarji6126
 /backend/app/classification/attributes.py                    @kevaldarji6126
 /backend/app/classification/change_summary.py                @kevaldarji6126
 /backend/app/classification/feedback_loop.py                 @kevaldarji6126
@@ -194,9 +195,7 @@
 /backend/app/classification/srs_sections.py                  @kevaldarji6126
 /backend/app/classification/suggest.py                       @kevaldarji6126
 /backend/app/classification/wording.py                       @kevaldarji6126
-/backend/app/lint/api.py                                     @kevaldarji6126
 /backend/app/lint/engine.py                                  @kevaldarji6126
-/backend/tests/api/test_authoring_aids.py                    @kevaldarji6126
 /backend/tests/classification/test_attributes.py             @kevaldarji6126
 /backend/tests/classification/test_budget_guard.py           @kevaldarji6126
 /backend/tests/classification/test_change_summary.py         @kevaldarji6126
@@ -205,11 +204,12 @@
 /backend/tests/classification/test_srs_sections.py           @kevaldarji6126
 /backend/tests/classification/test_suggest.py                @kevaldarji6126
 /backend/tests/classification/test_wording.py                @kevaldarji6126
-/backend/tests/lint/                                         @kevaldarji6126
 /frontend/src/features/channels/ResultCard.tsx               @kevaldarji6126
 /frontend/src/features/channels/runs.ts                      @kevaldarji6126
 /frontend/src/features/feedback/                             @kevaldarji6126
+/frontend/src/features/srs/                                  @kevaldarji6126
 /frontend/tests/result-card.test.tsx                         @kevaldarji6126
+/frontend/tests/srs.test.tsx                                 @kevaldarji6126
 # Madhav
 /backend/alembic/versions/20261121_0006h_clarifications.py   @PrimeNotFound @ParthAgrawal-07
 /backend/alembic/versions/20261205_0007b_consequence_reports.py @PrimeNotFound @ParthAgrawal-07
@@ -238,17 +238,18 @@
 /frontend/src/features/changes/ChecksTab.tsx                 @PrimeNotFound
 # Abhijeet
 /backend/alembic/versions/20270102_0010d_protection.py       @aprk05 @ParthAgrawal-07
+/backend/app/api/change_summary.py                           @aprk05
 /backend/app/api/compliance.py                               @aprk05
 /backend/app/api/issues.py                                   @aprk05
+/backend/app/graph/changes_api.py                            @aprk05
 /backend/app/models/notification.py                          @aprk05
 /backend/app/notifications/                                  @aprk05
 /backend/app/services/compliance.py                          @aprk05
+/backend/tests/api/test_changes.py                           @aprk05
 /backend/tests/api/test_compliance.py                        @aprk05
 /backend/tests/api/test_issues.py                            @aprk05
 /backend/tests/api/test_notifications.py                     @aprk05
-/frontend/src/api/download.ts                                @aprk05
 /frontend/src/components/SourceBadge.tsx                     @aprk05
-/frontend/src/features/compliance/                           @aprk05
 /frontend/src/features/issues/IssueList.tsx                  @aprk05
 /frontend/src/features/issues/IssuePage.tsx                  @aprk05
 /frontend/src/features/map/ChangesFeed.tsx                   @aprk05
@@ -259,7 +260,6 @@
 /frontend/src/features/map/TableView.tsx                     @aprk05
 /frontend/src/features/map/api.ts                            @aprk05
 /frontend/src/features/map/useGraphDeltas.ts                 @aprk05
-/frontend/src/features/notifications/                        @aprk05
 /frontend/tests/issues.test.tsx                              @aprk05
 /frontend/tests/map.test.tsx                                 @aprk05
 # Abhyudit
