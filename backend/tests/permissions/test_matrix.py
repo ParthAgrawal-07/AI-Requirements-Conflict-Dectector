@@ -23,7 +23,12 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.core import security
-from app.core.permissions import DEFAULT_ROLE_PERMISSIONS, PERMISSIONS, DefaultRole
+from app.core.permissions import (
+    DEFAULT_ROLE_PERMISSIONS,
+    PERMISSIONS,
+    PROTECTED_ONLY_GRANTS,
+    DefaultRole,
+)
 from app.embeddings.model import HashingEmbedder, get_embedder
 from app.models import (
     Channel,
@@ -130,19 +135,6 @@ CASES = [
         "/api/v1/workspaces/{workspace_id}/join-requests/{join_request_id}/decision",
         lambda _: {"approve": False},
     ),
-    # Sprint 2 — requirement posts (US-30 backend)
-    Case(
-        "POST",
-        "/api/v1/channels/{channel_id}/requirement-posts",
-        lambda _: {
-            "fields": {
-                "template": "free_text",
-                "slots": {"statement": "The system shall keep audit logs for seven years."},
-                "type": "functional",
-                "priority": "must",
-            }
-        },
-    ),
     # Sprint 2 — channels (US-28)
     Case("POST", "/api/v1/projects/{project_id}/channels", lambda _: {"name": "new-one"}),
     Case("GET", "/api/v1/projects/{project_id}/channels"),
@@ -179,7 +171,34 @@ CASES = [
     Case("PATCH", "/api/v1/messages/{message_id}", lambda _: {"body": "edited"}, own_message=True),
     Case("DELETE", "/api/v1/messages/{message_id}", own_message=True),
     Case("GET", "/api/v1/projects/{project_id}/graph"),
-    # Sprint 3 — live map shared layout (US-14)
+    # Sprint 2 — requirement posts (US-30 backend)
+    Case(
+        "POST",
+        "/api/v1/channels/{channel_id}/requirement-posts",
+        lambda _: {
+            "fields": {
+                "template": "free_text",
+                "slots": {"statement": "The system shall keep audit logs for seven years."},
+                "type": "functional",
+                "priority": "must",
+            }
+        },
+    ),
+    # Sprint 2 — findings (US-07)
+    Case("GET", "/api/v1/projects/{project_id}/findings"),
+    Case("GET", "/api/v1/findings/{finding_id}"),
+    # Sprint 3 — lifecycle and sign-off (Parth, US-37). The world's requirement is Proposed and not
+    # protected: holders of baseline.manage may start its review; the sign-off is refused with 409
+    # (not protected) — past the permission check.
+    Case("GET", "/api/v1/requirements/{requirement_id}"),
+    Case(
+        "PATCH",
+        "/api/v1/requirements/{requirement_id}",
+        lambda _: {"state": "Under_Review", "version": 1},
+        needs="baseline.manage",
+    ),
+    Case("POST", "/api/v1/requirements/{requirement_id}/signoff", lambda _: {"version": 1}),
+    # Sprint 3 — the live map's shared layout (Dhavni, US-14)
     Case(
         "PUT",
         "/api/v1/projects/{project_id}/graph/positions",
@@ -187,9 +206,6 @@ CASES = [
             "positions": [{"requirement_id": str(w.finding.requirement_id), "x": 1, "y": 2}]
         },
     ),
-    # Sprint 2 — findings (US-07)
-    Case("GET", "/api/v1/projects/{project_id}/findings"),
-    Case("GET", "/api/v1/findings/{finding_id}"),
     # Sprint 3 — similar-requirement hints (Heet, FR-83)
     Case("POST", "/api/v1/projects/{project_id}/similar", lambda _: {"text": "audit logs"}),
 ]
@@ -317,6 +333,7 @@ def _call(api: TestClient, case: Case, world: World, user: User) -> int:
         channel_id=world.channel.id,
         user_id=world.target.id,
         role_id=world.custom_role.id,
+        requirement_id=world.finding.requirement_id,
     )
     headers = {"Authorization": f"Bearer {security.create_access_token(user.id)[0]}"}
     body = case.body(world)
@@ -342,7 +359,10 @@ def test_route_is_allowed_exactly_for_holders_of_its_permission(
 
     status = _call(api, case, world, member)
 
-    if needed in DEFAULT_ROLE_PERMISSIONS[role]:
+    # A protected-only grant (the Compliance Reviewer's finding.review) does not count here: the
+    # world's requirement is not protected.
+    held = {p for p in DEFAULT_ROLE_PERMISSIONS[role] if (role, p) not in PROTECTED_ONLY_GRANTS}
+    if needed in held:
         assert status not in (401, 403, 404), f"{role.value} should pass, got {status}"
     else:
         assert status == 403, f"{role.value} should be refused, got {status}"

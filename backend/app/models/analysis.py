@@ -94,6 +94,9 @@ class Finding(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         # requirement (Incomplete/Ambiguous) — exactly one of the two references is set.
         CheckConstraint("num_nonnulls(candidate_pair_id, requirement_id) = 1", name="subject"),
         CheckConstraint("confidence BETWEEN 0 AND 1", name="confidence_range"),
+        CheckConstraint(
+            "merged_into_id IS NULL OR merged_into_id <> id", name="not_merged_into_itself"
+        ),
         Index("ix_findings_document_id_status", "document_id", "status"),
         Index("ix_findings_document_id_category", "document_id", "category"),
         Index("ix_findings_project_id_status", "project_id", "status"),
@@ -151,6 +154,10 @@ class Finding(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("users.id", ondelete="SET NULL")
     )
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # A merged finding was folded into this one (US-10, FR-18); its history is in finding_reviews.
+    merged_into_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("findings.id", ondelete="SET NULL")
+    )
     # The project context version the classifier was given (FR-105, migration 0011).
     context_version: Mapped[int | None]
 

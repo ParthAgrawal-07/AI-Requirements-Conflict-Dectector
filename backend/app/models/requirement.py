@@ -113,6 +113,13 @@ class Requirement(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     req_type: Mapped[str | None] = mapped_column(String(32))
     priority: Mapped[str | None] = mapped_column(String(32))
     composer_fields: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    # A compliance reviewer's sign-off on this exact version of a protected requirement (FR-21,
+    # migration 0006e). Approving a protected requirement needs it to equal current_version.
+    signed_off_version: Mapped[int | None]
+    signed_off_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    signed_off_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     document: Mapped[Document | None] = relationship(back_populates="requirements")
     owner: Mapped[User | None] = relationship(foreign_keys=[owner_id])

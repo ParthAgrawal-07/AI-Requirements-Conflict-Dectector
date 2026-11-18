@@ -133,6 +133,10 @@ class AuditAction(StrEnum):
     JOIN_REQUEST_DENIED = "join_request_denied"
     # Requirement posts (US-30 groundwork). Requirement, message and channel ids only.
     REQUIREMENT_POSTED = "requirement_posted"
+    # Lifecycle and review (US-37, US-10). States, versions and ids; reasons live in
+    # requirement_transitions / finding_reviews, not here.
+    STATE_CHANGED = "state_changed"
+    FINDING_REOPENED = "finding_reopened"
     # Channels (US-28). Channel and user ids only — never names, topics or messages (CR-04).
     CHANNEL_CREATED = "channel_created"
     CHANNEL_UPDATED = "channel_updated"
