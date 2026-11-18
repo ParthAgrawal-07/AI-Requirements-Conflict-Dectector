@@ -144,4 +144,5 @@ def edge_of(finding: Finding, pair: CandidatePair | None) -> GraphEdge | None:
         status=cast(EdgeStatus, finding.status.value),
         severity=cast(EdgeSeverity, finding.severity.value) if finding.severity else None,
         confidence=finding.confidence,
+        found_by=cast(Literal["ai", "rule", "person"], finding.source),
     )
