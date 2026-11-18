@@ -27,6 +27,7 @@ from app.api import (
     projects,
     reports,
     requirements,
+    requirements_compose,
     roles,
     workspaces,
 )
@@ -50,6 +51,7 @@ for _router in (
     context.router,
     documents.router,
     requirements.router,
+    requirements_compose.router,
     intake.router,
     drafts.router,
     join_codes.router,

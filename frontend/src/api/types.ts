@@ -122,7 +122,8 @@ export type RequirementOrigin = "document" | "post" | "change_request";
 export interface RequirementRead {
   requirement_id: UUID;
   project_id: UUID;
-  document_id: UUID;
+  document_id: UUID | null; // null for a posted requirement (US-30)
+  // The ID printed in the document, or the REQ-n a post was given when it was posted.
   source_req_id: string | null;
   body: string;
   location: string | null;
