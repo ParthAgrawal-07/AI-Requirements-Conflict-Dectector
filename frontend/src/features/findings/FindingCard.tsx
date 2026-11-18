@@ -1,5 +1,5 @@
 import { Badge } from "../../components/Badge";
-import { CATEGORY_ICONS, type Finding } from "./api";
+import { CATEGORY_ICONS, STATUS_LABEL, type Finding } from "./api";
 
 export interface FindingCardProps {
   finding: Finding;
@@ -20,7 +20,7 @@ export function FindingCard({ finding, onOpen }: FindingCardProps) {
           {finding.confidence_percent}% confidence
         </span>
         <Badge tone="ai">AI analysis</Badge>
-        {finding.status !== "flagged" && <Badge tone="neutral">{finding.status}</Badge>}
+        {finding.status !== "flagged" && <Badge tone="neutral">{STATUS_LABEL[finding.status]}</Badge>}
       </header>
       {finding.low_confidence && (
         <p className="low-confidence" role="note">
