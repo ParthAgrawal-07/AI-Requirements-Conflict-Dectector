@@ -12,21 +12,25 @@
   "Closes ISS-n" in the reason. They must be open issues of the same project; merging the request
   closes them (``resolved_by_merge``).
 
-A rejected or deprecated requirement takes no change requests. ``draft=true`` keeps the request
-out of review until its proposer opens it. The consequence checks start when it is opened
-(Madhav, US-34). Every request is audited (ids only) and announced as ``change_request.opened``.
+A rejected or deprecated requirement takes no change requests, and neither does a project still in
+Setup (409 ``project_in_setup``, FR-103). ``draft=true`` keeps the request out of review until its
+proposer opens it. The consequence checks start when it is opened (Madhav, US-34). Every request is
+audited (ids only) and announced as ``change_request.opened``.
 """
 
+import logging
 import re
 import uuid
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, tuple_
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.core.errors import BadRequestError, ConflictError
+from app.context.service import ensure_analysis_allowed
+from app.core.errors import AppError, BadRequestError, ConflictError
 from app.graph import deltas, narrator
 from app.models import (
     AuditAction,
@@ -45,6 +49,8 @@ from app.models.change_request import DEPRECATE, DRAFT, MODIFY, OPEN
 from app.realtime import bus
 from app.realtime.events import CHANGE_REQUEST_OPENED, change_request_event
 from app.services.access import AccessContext
+
+logger = logging.getLogger(__name__)
 
 CLOSED_TO_CHANGE = (RequirementState.REJECTED, RequirementState.DEPRECATED)
 DEPRECATABLE = (RequirementState.APPROVED, RequirementState.IMPLEMENTED)
@@ -91,16 +97,66 @@ def resolves(db: Session, change_request_id: uuid.UUID) -> list[Issue]:
 
 
 def view(db: Session, change_request: ChangeRequest) -> ChangeRequestView:
-    requirement = db.get(Requirement, change_request.requirement_id)
-    if requirement is None:  # pragma: no cover — CASCADE removes the request with it
-        raise LookupError(change_request.requirement_id)
-    return ChangeRequestView(
-        change_request,
-        requirement,
-        db.get(User, change_request.proposer_id),
-        body_at(db, requirement, change_request.base_version),
-        resolves(db, change_request.id),
-    )
+    return views(db, [change_request])[0]
+
+
+def views(db: Session, change_requests: Sequence[ChangeRequest]) -> list[ChangeRequestView]:
+    """Views of a page of requests with a fixed number of queries, whatever the page size."""
+    if not change_requests:
+        return []
+    requirements = {
+        r.id: r
+        for r in db.scalars(
+            select(Requirement).where(
+                Requirement.id.in_({cr.requirement_id for cr in change_requests})
+            )
+        )
+    }
+    proposers = {
+        u.id: u
+        for u in db.scalars(
+            select(User).where(User.id.in_({cr.proposer_id for cr in change_requests}))
+        )
+    }
+    snapshots: dict[tuple[uuid.UUID, int], str | None] = {
+        (row.requirement_id, row.version_no): row.body_snapshot
+        for row in db.execute(
+            select(
+                RequirementVersion.requirement_id,
+                RequirementVersion.version_no,
+                RequirementVersion.body_snapshot,
+            ).where(
+                tuple_(RequirementVersion.requirement_id, RequirementVersion.version_no).in_(
+                    {(cr.requirement_id, cr.base_version) for cr in change_requests}
+                )
+            )
+        )
+    }
+    linked: dict[uuid.UUID, list[Issue]] = {cr.id: [] for cr in change_requests}
+    for change_request_id, issue in db.execute(
+        select(ChangeRequestIssue.change_request_id, Issue)
+        .join(Issue, ChangeRequestIssue.issue_id == Issue.id)
+        .where(ChangeRequestIssue.change_request_id.in_(linked))
+        .order_by(Issue.number)
+    ):
+        linked[change_request_id].append(issue)
+
+    result: list[ChangeRequestView] = []
+    for cr in change_requests:
+        requirement = requirements.get(cr.requirement_id)
+        if requirement is None:  # pragma: no cover — CASCADE removes the request with it
+            raise LookupError(cr.requirement_id)
+        snapshot = snapshots.get((cr.requirement_id, cr.base_version))
+        result.append(
+            ChangeRequestView(
+                cr,
+                requirement,
+                proposers.get(cr.proposer_id),
+                snapshot if snapshot is not None else requirement.body,
+                linked[cr.id],
+            )
+        )
+    return result
 
 
 def list_change_requests(
@@ -119,7 +175,7 @@ def list_change_requests(
         query = query.where(ChangeRequest.requirement_id == requirement_id)
     total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
     rows = db.scalars(query.order_by(ChangeRequest.number.desc()).limit(limit).offset(offset))
-    return [view(db, row) for row in rows], total
+    return views(db, list(rows)), total
 
 
 def _issues(db: Session, project_id: uuid.UUID, numbers: list[int]) -> list[Issue]:
@@ -131,16 +187,15 @@ def _issues(db: Session, project_id: uuid.UUID, numbers: list[int]) -> list[Issu
             select(Issue).where(Issue.project_id == project_id, Issue.number.in_(numbers))
         )
     }
-    missing = [n for n in numbers if n not in found]
-    if missing:
+    # The messages never repeat the submitted numbers (AGENTS.md: no submitted values in errors).
+    if any(n not in found for n in numbers):
         raise BadRequestError(
-            f"No issue {', '.join(f'ISS-{n}' for n in missing)} in this project",
+            "An issue to resolve is not in this project; check the ISS numbers",
             code="unknown_issue",
         )
-    closed = [n for n in numbers if found[n].status != "open"]
-    if closed:
+    if any(found[n].status != "open" for n in numbers):
         raise BadRequestError(
-            f"{', '.join(f'ISS-{n}' for n in closed)} is already closed", code="issue_not_open"
+            "An issue to resolve is already closed; leave it out", code="issue_not_open"
         )
     return [found[n] for n in numbers]
 
@@ -160,6 +215,11 @@ def open_change_request(
 ) -> ChangeRequest:
     """Open (or draft) RCR-n — committed, then announced."""
     db.refresh(requirement, with_for_update=True)
+    project = db.get(Project, requirement.project_id)
+    if project is None:  # pragma: no cover
+        raise LookupError(requirement.project_id)
+    # The ContextGate (FR-103): opening starts the consequence checks, so not while in Setup.
+    ensure_analysis_allowed(db, project)
     if requirement.state in CLOSED_TO_CHANGE:
         raise ConflictError(
             f"A {requirement.state.value.lower()} requirement takes no change requests",
@@ -167,8 +227,8 @@ def open_change_request(
         )
     if base_version is not None and base_version != requirement.current_version:
         raise ConflictError(
-            f"The requirement is at version {requirement.current_version} now, not "
-            f"{base_version}: read it again before proposing a change",
+            f"The requirement is at version {requirement.current_version} now: read it again "
+            "before proposing a change",
             code="base_version_moved",
         )
     text = (proposed_body or "").strip()
@@ -188,9 +248,6 @@ def open_change_request(
     else:  # pragma: no cover — the schema allows only the two kinds
         raise BadRequestError("Unknown kind", code="unknown_kind")
 
-    project = db.get(Project, requirement.project_id)
-    if project is None:  # pragma: no cover
-        raise LookupError(requirement.project_id)
     linked = _issues(db, project.id, resolved_numbers(reason, resolves_numbers))
     db.execute(select(Project.id).where(Project.id == project.id).with_for_update())
     number = (
@@ -199,6 +256,50 @@ def open_change_request(
         )
         or 0
     ) + 1
+    try:
+        change_request = _store(
+            db,
+            ctx,
+            project,
+            requirement,
+            number=number,
+            kind=kind,
+            text=text,
+            reason=reason,
+            proposed_fields=proposed_fields,
+            linked=linked,
+            draft=draft,
+        )
+    except SQLAlchemyError:
+        db.rollback()
+        # ``from None``: the driver error carries the bound proposal text and reason, which must
+        # not reach the error log (AGENTS.md §6). The code and the request id are enough.
+        logger.error("Storing a change request for %s failed", requirement.id)
+        raise AppError("The change request could not be saved; try again") from None
+    try:
+        announce_opened(db, change_request, project, requirement, ctx.user)
+    except Exception:
+        # The request is committed: a failed announcement must not turn into a 500 that invites
+        # a second RCR on retry. Clients re-read on reconnect; the map catches up on its next delta.
+        db.rollback()
+        logger.exception("Announcing %s failed", key(change_request))
+    return change_request
+
+
+def _store(
+    db: Session,
+    ctx: AccessContext,
+    project: Project,
+    requirement: Requirement,
+    *,
+    number: int,
+    kind: str,
+    text: str,
+    reason: str,
+    proposed_fields: dict[str, Any] | None,
+    linked: list[Issue],
+    draft: bool,
+) -> ChangeRequest:
     change_request = ChangeRequest(
         project_id=project.id,
         requirement_id=requirement.id,
@@ -243,7 +344,6 @@ def open_change_request(
         )
     )
     db.commit()
-    announce_opened(db, change_request, project, requirement, ctx.user)
     return change_request
 
 

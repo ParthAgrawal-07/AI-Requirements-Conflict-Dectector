@@ -9,11 +9,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.permissions import DefaultRole
+from app.graph import deltas
 from app.models import (
     AuditLog,
+    ChangeRequest,
     ChangeRequestRevision,
     Issue,
     Project,
+    ProjectStatus,
     Requirement,
     RequirementState,
     RequirementVersion,
@@ -167,6 +170,7 @@ def test_resolves_issues_named_in_the_reason_or_listed(
     assert [i["key"] for i in ok.json()["resolves"]] == ["ISS-1", "ISS-2"]
     assert closed.json()["error"]["code"] == "issue_not_open"
     assert unknown.json()["error"]["code"] == "unknown_issue"
+    assert "9" not in unknown.json()["error"]["message"]  # never echoes submitted values
 
 
 def test_a_draft_stays_quiet(
@@ -204,3 +208,100 @@ def test_a_viewer_cannot_propose(
     client: TestClient, approved: Requirement, make_user: Callable[..., User]
 ) -> None:
     assert propose(client, approved, make_user(role=DefaultRole.VIEWER)).status_code == 403
+
+
+def test_the_base_text_stays_when_the_requirement_moves_on(
+    client: TestClient, approved: Requirement, developer: User, db_session: Session
+) -> None:
+    created = propose(client, approved, developer, base_version=1).json()
+    approved.body, approved.current_version = "Sessions shall expire after 20 minutes.", 2
+    db_session.add(
+        RequirementVersion(requirement_id=approved.id, version_no=2, body_snapshot=approved.body)
+    )
+    db_session.commit()
+
+    body = client.get(
+        f"/api/v1/change-requests/{created['id']}", headers=headers_for(developer)
+    ).json()
+
+    assert (body["base_version"], body["base_body"]) == (1, TEXT)
+    assert (body["requirement"]["current_version"], body["current_body"]) == (2, approved.body)
+
+
+def test_a_project_in_setup_takes_no_change_requests(
+    client: TestClient,
+    approved: Requirement,
+    developer: User,
+    project: Project,
+    db_session: Session,
+) -> None:
+    project.status = ProjectStatus.SETUP
+    db_session.commit()
+    response = propose(client, approved, developer)
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "project_in_setup"
+    assert db_session.scalar(select(ChangeRequest)) is None
+
+
+@pytest.mark.parametrize("reason", ["   ", "ok\x00"])
+def test_a_blank_or_unstorable_reason_is_refused(
+    client: TestClient, approved: Requirement, developer: User, reason: str
+) -> None:
+    assert propose(client, approved, developer, reason=reason).status_code == 422
+
+
+def test_reading_a_protected_requirement_s_request_is_audited(
+    client: TestClient,
+    approved: Requirement,
+    developer: User,
+    project: Project,
+    db_session: Session,
+) -> None:
+    created = propose(client, approved, developer).json()
+    approved.is_protected = True
+    db_session.commit()
+
+    client.get(f"/api/v1/change-requests/{created['id']}", headers=headers_for(developer))
+    client.get(f"/api/v1/projects/{project.id}/change-requests", headers=headers_for(developer))
+
+    audits = db_session.scalars(
+        select(AuditLog).where(
+            AuditLog.action == "viewed_protected", AuditLog.requirement_id == approved.id
+        )
+    ).all()
+    assert len(audits) == 2 and all(a.details in (None, {}) for a in audits)  # ids only
+
+
+def test_a_failed_announcement_does_not_fail_the_request(
+    client: TestClient,
+    approved: Requirement,
+    developer: User,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def broken(*_: object, **__: object) -> None:
+        raise RuntimeError("map down")
+
+    monkeypatch.setattr(deltas, "publish", broken)
+    response = propose(client, approved, developer)
+    assert response.status_code == 201, response.text
+    assert len(db_session.scalars(select(ChangeRequest)).all()) == 1  # a retry is not needed
+
+
+def test_non_members_get_404_on_every_route(
+    client: TestClient,
+    approved: Requirement,
+    developer: User,
+    project: Project,
+    make_user: Callable[..., User],
+) -> None:
+    created = propose(client, approved, developer).json()
+    outsider = make_user(role=None)
+
+    responses = [
+        propose(client, approved, outsider),
+        client.get(f"/api/v1/projects/{project.id}/change-requests", headers=headers_for(outsider)),
+        client.get(f"/api/v1/change-requests/{created['id']}", headers=headers_for(outsider)),
+    ]
+
+    assert [r.status_code for r in responses] == [404, 404, 404]

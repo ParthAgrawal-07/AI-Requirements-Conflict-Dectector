@@ -109,6 +109,9 @@ class Case:
     needs: str | None = None
     # Author-only routes: {message_id} is a message the calling member posted just before.
     own_message: bool = False
+    # The status a holder of the permission must get, when the request is meant to succeed; so a
+    # 500 inside the route cannot pass as "allowed".
+    ok: int | None = None
 
 
 CASES = [
@@ -262,9 +265,10 @@ CASES = [
         "POST",
         "/api/v1/requirements/{requirement_id}/change-requests",
         lambda _: {"proposed_body": "It shall answer within 2 s.", "reason": "Make it measurable"},
+        ok=201,
     ),
-    Case("GET", "/api/v1/projects/{project_id}/change-requests"),
-    Case("GET", "/api/v1/change-requests/{change_request_id}"),
+    Case("GET", "/api/v1/projects/{project_id}/change-requests", ok=200),
+    Case("GET", "/api/v1/change-requests/{change_request_id}", ok=200),
 ]
 
 
@@ -459,6 +463,8 @@ def test_route_is_allowed_exactly_for_holders_of_its_permission(
     held = {p for p in DEFAULT_ROLE_PERMISSIONS[role] if (role, p) not in PROTECTED_ONLY_GRANTS}
     if needed in held:
         assert status not in (401, 403, 404), f"{role.value} should pass, got {status}"
+        if case.ok is not None:
+            assert status == case.ok, f"{role.value} should get {case.ok}, got {status}"
     else:
         assert status == 403, f"{role.value} should be refused, got {status}"
 
@@ -509,6 +515,8 @@ def test_a_custom_role_gets_exactly_its_permissions(
 
     if needed in held:
         assert status not in (401, 403, 404), f"{name} should pass, got {status}"
+        if case.ok is not None:
+            assert status == case.ok, f"{name} should get {case.ok}, got {status}"
     else:
         assert status == 403, f"{name} should be refused, got {status}"
 

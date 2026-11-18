@@ -32,9 +32,16 @@ export function ChangeEditor() {
       </p>
     );
   }
-  if (requirement.isLoading || isLoading) return <p className="page muted">Loading the requirement…</p>;
-  if (requirement.isError || !requirement.data) {
+  // Cached data stays on screen through a failed background refresh: the form keeps the draft.
+  if (!requirement.data) {
+    if (requirement.isLoading || isLoading) return <p className="page muted">Loading the requirement…</p>;
     return <p className="page" role="alert">This requirement could not be loaded.</p>;
+  }
+  if (isLoading) return <p className="page muted">Loading the requirement…</p>;
+  if (requirement.data.project_id !== projectId) {
+    // Opened with another project's requirement id: the request (and its ISS numbers) would land
+    // in that project, so the editor refuses it here.
+    return <p className="page" role="alert">This requirement belongs to another project.</p>;
   }
   if (!can("rcr.open")) {
     return <p className="page" role="alert">Your role cannot propose changes in this project.</p>;
@@ -42,24 +49,51 @@ export function ChangeEditor() {
   const preselected = Number(search.get("resolves"));
   return (
     <div className="page change-editor-page">
-      <NewChangeForm requirement={requirement.data} preselected={Number.isInteger(preselected) && preselected > 0 ? [preselected] : []} />
+      {requirement.isError && (
+        <p className="banner" role="alert">
+          The requirement could not be refreshed. Your text is kept; try again before opening the request.
+        </p>
+      )}
+      {/* Keyed by requirement: another requirement starts a fresh form, a refresh of this one does not. */}
+      <NewChangeForm
+        key={requirement.data.requirement_id}
+        requirement={requirement.data}
+        preselected={Number.isInteger(preselected) && preselected > 0 ? [preselected] : []}
+        blocked={requirement.isError}
+      />
     </div>
   );
 }
 
-function NewChangeForm({ requirement, preselected }: { requirement: RequirementDetail; preselected: number[] }) {
+function NewChangeForm({
+  requirement,
+  preselected,
+  blocked,
+}: {
+  requirement: RequirementDetail;
+  preselected: number[];
+  blocked: boolean;
+}) {
   const { workspaceId = "", projectId = "" } = useParams();
   const navigate = useNavigate();
   const notify = useToast();
   const open = useOpenChangeRequest(requirement.requirement_id);
+  // The version and text the author is editing. A refresh to a newer version does not move it:
+  // the author decides when to take the new text as the base (the server refuses a stale base).
+  const [base, setBase] = useState({ version: requirement.current_version, body: requirement.body });
   const [kind, setKind] = useState<ChangeKind>("modify");
   const [text, setText] = useState(requirement.body);
   const [reason, setReason] = useState("");
   const [resolves, setResolves] = useState<number[]>(preselected);
   const issues = useIssues(projectId, { status: "open", requirement: requirement.requirement_id, limit: 50, offset: 0 });
+  const listed = new Set((issues.data?.items ?? []).map((issue) => issue.number));
+  // Selected but not on the list (e.g. ?resolves= named another issue): shown so it can be removed.
+  const unlisted = issues.isSuccess ? resolves.filter((n) => !listed.has(n)) : [];
   const label = requirement.source_req_id ?? "the requirement";
-  const unchanged = kind === "modify" && text.trim() === requirement.body.trim();
-  const base = `/w/${workspaceId}/p/${projectId}`;
+  const blank = kind === "modify" && !text.trim();
+  const unchanged = kind === "modify" && text.trim() === base.body.trim();
+  const moved = requirement.current_version !== base.version;
+  const root = `/w/${workspaceId}/p/${projectId}`;
 
   const submit = (draft: boolean) =>
     open.mutate(
@@ -67,14 +101,14 @@ function NewChangeForm({ requirement, preselected }: { requirement: RequirementD
         kind,
         proposed_body: kind === "modify" ? text.trim() : undefined,
         reason: reason.trim(),
-        base_version: requirement.current_version,
+        base_version: base.version,
         resolves,
         draft,
       },
       {
         onSuccess: (change) => {
           notify(`${change.key} ${draft ? "saved as a draft" : "opened"}`, "success");
-          navigate(`${base}/changes/${change.id}`);
+          navigate(`${root}/changes/${change.id}`);
         },
         onError: (error) => notify(error instanceof ApiError ? error.message : "Could not open the change request", "error"),
       },
@@ -90,12 +124,21 @@ function NewChangeForm({ requirement, preselected }: { requirement: RequirementD
       }}
     >
       <p>
-        <Link to={`${base}/changes`}>← Change requests</Link>
+        <Link to={`${root}/changes`}>← Change requests</Link>
       </p>
       <h1>
         Propose a change to <span className="mono">{label}</span>{" "}
-        <span className="muted small">(base v{requirement.current_version})</span>
+        <span className="muted small">(base v{base.version})</span>
       </h1>
+      {moved && (
+        <p className="banner" role="status">
+          {label} is at v{requirement.current_version} now. Read the current text, then take it as your base; your
+          proposal is kept.{" "}
+          <Button size="sm" variant="ghost" onClick={() => setBase({ version: requirement.current_version, body: requirement.body })}>
+            Use v{requirement.current_version} as the base
+          </Button>
+        </p>
+      )}
       <fieldset className="decision">
         <legend>Kind</legend>
         <label className="checkbox">
@@ -106,7 +149,7 @@ function NewChangeForm({ requirement, preselected }: { requirement: RequirementD
         </label>
       </fieldset>
       {kind === "modify" ? (
-        <ProposalText current={requirement.body} text={text} onChange={setText} />
+        <ProposalText current={base.body} text={text} onChange={setText} />
       ) : (
         <p className="muted">
           {label} leaves the baseline when this merges; its text stays in the version history.
@@ -133,16 +176,33 @@ function NewChangeForm({ requirement, preselected }: { requirement: RequirementD
           ))}
         </fieldset>
       )}
+      {unlisted.length > 0 && (
+        <fieldset>
+          <legend>Also resolves</legend>
+          {unlisted.map((number) => (
+            <label key={number} className="checkbox">
+              <input type="checkbox" checked onChange={() => setResolves(resolves.filter((n) => n !== number))} />{" "}
+              <span className="mono">ISS-{number}</span>{" "}
+              <span className="muted small">(not one of this requirement&apos;s open issues; uncheck to leave it out)</span>
+            </label>
+          ))}
+        </fieldset>
+      )}
       <Preflight requirement={requirement} kind={kind} resolving={resolves.length} />
       <div className="row-actions">
-        <Button disabled={unchanged || reason.trim().length < 3} loading={open.isPending} onClick={() => submit(true)}>
+        <Button
+          disabled={blocked || blank || unchanged || reason.trim().length < 3}
+          loading={open.isPending}
+          onClick={() => submit(true)}
+        >
           Save as draft
         </Button>
-        <Button type="submit" variant="primary" disabled={unchanged} loading={open.isPending}>
+        <Button type="submit" variant="primary" disabled={blocked || blank || unchanged} loading={open.isPending}>
           Open change request
         </Button>
       </div>
-      {unchanged && <p className="muted small">Change the text to propose a modification.</p>}
+      {blank && <p className="muted small">Write the proposed text, or choose Deprecate.</p>}
+      {!blank && unchanged && <p className="muted small">Change the text to propose a modification.</p>}
     </form>
   );
 }

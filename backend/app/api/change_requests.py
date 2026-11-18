@@ -5,22 +5,31 @@
 * ``GET /change-requests/{id}`` (``view``) — the proposal, the text it was written against
   (``base_body``) and the current text, so the page can show both diffs.
 
-Another workspace's change request is a 404 (NFR-27).
+Another workspace's change request is a 404 (NFR-27). Reading a request about a protected
+requirement is audited (``viewed_protected``, NFR-13), as reading the requirement itself is.
 """
 
 import uuid
+from collections.abc import Iterable
 from datetime import datetime
 from typing import Annotated, Any, Literal, cast
 
 from fastapi import APIRouter, Query, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import DbSession, requires
 from app.core.errors import NotFoundError
 from app.intake import change_intake
-from app.models import ChangeRequest, Project, Requirement, RequirementState
+from app.models import (
+    AuditAction,
+    AuditLog,
+    ChangeRequest,
+    Project,
+    Requirement,
+    RequirementState,
+)
 from app.schemas.common import ErrorResponse, Page
 from app.services.access import AccessContext, Scope, register_scope_resolver
 
@@ -125,8 +134,20 @@ class ChangeRequestRead(BaseModel):
         )
 
 
+def _has_nul(value: object) -> bool:
+    """PostgreSQL stores no NUL character in ``text`` or ``jsonb``: refuse it as invalid input."""
+    if isinstance(value, str):
+        return "\x00" in value
+    if isinstance(value, dict):
+        return any(_has_nul(k) or _has_nul(v) for k, v in value.items())
+    if isinstance(value, list):
+        return any(_has_nul(v) for v in value)
+    return False
+
+
 class ChangeRequestCreate(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    # Whitespace is stripped before the length checks, so "   " is not a three-character reason.
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     kind: Kind = "modify"
     proposed_body: str | None = Field(default=None, max_length=4000)
@@ -135,6 +156,13 @@ class ChangeRequestCreate(BaseModel):
     base_version: int | None = Field(default=None, ge=1, description="The version you read")
     resolves: list[int] = Field(default_factory=list, max_length=20, description="ISS numbers")
     draft: bool = False
+
+    @field_validator("proposed_body", "reason", "proposed_fields", mode="before")
+    @classmethod
+    def _no_nul(cls, value: object) -> object:
+        if _has_nul(value):
+            raise ValueError("Text cannot contain NUL characters")
+        return value
 
 
 def change_request_or_404(db: Session, change_request_id: uuid.UUID) -> ChangeRequest:
@@ -193,6 +221,7 @@ def list_change_requests(
     views, total = change_intake.list_change_requests(
         db, project_id, status=status_, requirement_id=requirement, limit=limit, offset=offset
     )
+    _audit_protected(db, ctx, (v.requirement for v in views))
     return Page[ChangeRequestRead](
         items=[ChangeRequestRead.from_view(v) for v in views],
         total=total,
@@ -212,9 +241,27 @@ def get_change_request(
     ctx: Annotated[AccessContext, requires("view")],
     db: DbSession,
 ) -> ChangeRequestRead:
-    return ChangeRequestRead.from_view(
-        change_intake.view(db, change_request_or_404(db, change_request_id))
+    item = change_intake.view(db, change_request_or_404(db, change_request_id))
+    _audit_protected(db, ctx, [item.requirement])
+    return ChangeRequestRead.from_view(item)
+
+
+def _audit_protected(db: Session, ctx: AccessContext, requirements: Iterable[Requirement]) -> None:
+    """NFR-13: a read that returns a protected requirement's text (``base_body``,
+    ``current_body``) is recorded once per protected requirement, ids only."""
+    protected = {r.id for r in requirements if r.is_protected}
+    if not protected:
+        return
+    db.add_all(
+        AuditLog(
+            workspace_id=ctx.workspace_id,
+            actor_id=ctx.user.id,
+            requirement_id=requirement_id,
+            action=AuditAction.VIEWED_PROTECTED,
+        )
+        for requirement_id in sorted(protected)
     )
+    db.commit()
 
 
 def _change_request_scope(db: Session, change_request_id: uuid.UUID) -> Scope | None:

@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { type RefObject, useRef, useState } from "react";
 import { WordDiff } from "../../components/WordDiff";
 import type { ChangeRequest, InlineComment, Review } from "./api";
 
@@ -29,6 +29,71 @@ function selectedRange(container: HTMLElement): Quote | null {
   return text.trim() ? { start_offset: start, end_offset: start + text.length, text } : null;
 }
 
+/** Select words with the mouse and press the button; or, from the keyboard (no selection), press it
+ *  and type the words to quote — their first occurrence in the proposal is quoted. */
+function QuotePicker({
+  proposed,
+  container,
+  onQuote,
+}: {
+  proposed: string;
+  container: RefObject<HTMLParagraphElement | null>;
+  onQuote: (quote: Quote) => void;
+}) {
+  const [typing, setTyping] = useState(false);
+  const [words, setWords] = useState("");
+  const [missing, setMissing] = useState(false);
+
+  if (typing) {
+    return (
+      <form
+        className="row-actions"
+        aria-label="Quote words"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const text = words.trim();
+          const start = text ? proposed.indexOf(text) : -1;
+          if (start < 0) {
+            setMissing(true);
+            return;
+          }
+          onQuote({ start_offset: start, end_offset: start + text.length, text });
+          setTyping(false);
+          setWords("");
+          setMissing(false);
+        }}
+      >
+        <label>
+          Words to quote
+          <input className="input" autoFocus value={words} onChange={(e) => setWords(e.target.value)} />
+        </label>
+        <button type="submit" className="link-button small">
+          Quote
+        </button>
+        {missing && (
+          <span className="field-error small" role="alert">
+            Those words are not in the proposed text.
+          </span>
+        )}
+      </form>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className="link-button small"
+      onMouseDown={(event) => event.preventDefault()} // keep the selection while clicking
+      onClick={() => {
+        const quote = container.current && selectedRange(container.current);
+        if (quote) onQuote(quote);
+        else setTyping(true); // keyboard users have no selection to give
+      }}
+    >
+      Comment on the selected words
+    </button>
+  );
+}
+
 function quoted(body: string, comment: InlineComment): string | null {
   if (comment.start_offset === null || comment.end_offset === null) return null;
   return body.slice(comment.start_offset, comment.end_offset) || null;
@@ -40,7 +105,8 @@ function quoted(body: string, comment: InlineComment): string | null {
 export function DiffView({ change, reviews = [], onQuote }: DiffViewProps) {
   const proposalRef = useRef<HTMLParagraphElement>(null);
   const label = change.requirement.label ?? "The requirement";
-  const moved = change.current_body !== change.base_body;
+  // By version, not text: a later version can restore the same words and still be a new base.
+  const moved = change.base_version !== change.requirement.current_version;
   // Offsets of a dismissed review point into an earlier proposal text: no quote for those.
   const comments = reviews.flatMap((review) =>
     review.comments.map((comment) => ({
@@ -70,6 +136,9 @@ export function DiffView({ change, reviews = [], onQuote }: DiffViewProps) {
             Changed underneath: v{change.base_version} → v{change.requirement.current_version}
           </h3>
           <WordDiff before={change.base_body} after={change.current_body} label="Merged since this request was written" />
+          {change.base_body === change.current_body && (
+            <p className="muted small">The statement reads the same; the version still moved.</p>
+          )}
         </div>
       )}
       <div className="diff-block">
@@ -83,19 +152,7 @@ export function DiffView({ change, reviews = [], onQuote }: DiffViewProps) {
         <p ref={proposalRef} className="requirement-quote proposal-text">
           {proposed}
         </p>
-        {onQuote && (
-          <button
-            type="button"
-            className="link-button small"
-            onMouseDown={(event) => event.preventDefault()} // keep the selection while clicking
-            onClick={() => {
-              const quote = proposalRef.current && selectedRange(proposalRef.current);
-              if (quote) onQuote(quote);
-            }}
-          >
-            Comment on the selected words
-          </button>
-        )}
+        {onQuote && <QuotePicker proposed={proposed} container={proposalRef} onQuote={onQuote} />}
       </div>
       {comments.length > 0 && (
         <div className="diff-block">
