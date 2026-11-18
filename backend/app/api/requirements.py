@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import DbSession, requires, requires_any
 from app.core.errors import BadRequestError, NotFoundError
 from app.intake import ownership
-from app.models import Requirement, RequirementOrigin, RequirementState
+from app.models import AuditAction, AuditLog, Requirement, RequirementOrigin, RequirementState
 from app.schemas.common import ErrorResponse, Page
 from app.schemas.documents import RequirementRead
 from app.schemas.requirements import (
@@ -90,6 +90,16 @@ def _detail(db: Session, ctx: AccessContext, requirement_id: uuid.UUID) -> Requi
     if requirement is None:
         raise NotFoundError("Requirement not found")
     db.refresh(requirement)
+    if requirement.is_protected:
+        db.add(
+            AuditLog(
+                workspace_id=ctx.workspace_id,
+                actor_id=ctx.user.id,
+                requirement_id=requirement.id,
+                action=AuditAction.VIEWED_PROTECTED,
+            )
+        )
+        db.commit()
     return RequirementDetail.build(
         requirement,
         allowed=lifecycle.allowed_moves(db, ctx, requirement),
