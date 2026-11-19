@@ -23,7 +23,8 @@ router = APIRouter(tags=["findings"])
 
 
 class ConcernCreate(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    # Stripped before the length checks, so ten spaces are not a ten-character explanation.
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     category: FindingCategory
     requirement_ids: list[uuid.UUID] = Field(min_length=1, max_length=2)

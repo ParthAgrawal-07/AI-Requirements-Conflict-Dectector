@@ -64,7 +64,15 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute("DELETE FROM findings WHERE source = 'person'")
+    raised = op.get_bind().scalar(sa.text("SELECT count(*) FROM findings WHERE source = 'person'"))
+    if raised:
+        # Each concern has an audit row, and audit_log is append-only with RESTRICT foreign keys
+        # (FR-19, NFR-13): the finding cannot be deleted, and without ``source`` it would read as
+        # the AI's. Refuse, as 0006b does for posted requirements.
+        raise RuntimeError(
+            f"Cannot downgrade 0010a: {raised} concern(s) raised by people are referenced by the "
+            "append-only audit log."
+        )
     op.drop_index("uq_findings_live_pair", table_name="findings")
     op.create_index(
         "uq_findings_live_pair",

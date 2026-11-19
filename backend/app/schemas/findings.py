@@ -121,6 +121,10 @@ class FindingRead(BaseModel):
         return cls(
             id=finding.id,
             project_id=finding.project_id,
+            source=_SOURCE.get(finding.source, "AI"),
+            raised_by=finding.raised_by,
+            external_ref=finding.external_ref,
+            ai_miss=finding.ai_miss,
             category=finding.category,
             status=finding.status,
             severity=finding.severity,
@@ -165,6 +169,14 @@ class FindingRead(BaseModel):
             and finding.clarification is not None
             and finding.clarification.resolved_at is not None,
         )
+
+
+# The stored source (``ai``, ``rule``, ``person``) as the API spells it (ADR-25).
+_SOURCE: dict[str, Literal["AI", "Rule", "Person"]] = {
+    "ai": "AI",
+    "rule": "Rule",
+    "person": "Person",
+}
 
 
 def _category(value: object) -> FindingCategory | None:
