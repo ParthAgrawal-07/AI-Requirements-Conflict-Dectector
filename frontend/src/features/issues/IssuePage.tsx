@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { SuggestionPanel } from "../findings/SuggestionPanel";
 import { Link, useParams } from "react-router-dom";
 import { ApiError } from "../../api/client";
 import { useProjectRealtime } from "../../app/socket";
@@ -63,6 +64,7 @@ function IssueDetail({ issue, workspaceId, projectId }: { issue: Issue; workspac
         </span>
       </p>
       {issue.body && <p className="issue-body">{issue.body}</p>}
+      {issue.finding_id && issue.status === "open" && <SuggestionPanel findingId={issue.finding_id} />}
 
       <section aria-label="Requirements">
         <h2 className="eyebrow">Requirements</h2>
