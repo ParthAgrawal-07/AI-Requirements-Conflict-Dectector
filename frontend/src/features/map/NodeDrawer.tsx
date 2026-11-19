@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link, useParams } from "react-router-dom";
 import { ApiError } from "../../api/client";
 import type { RequirementState } from "../../api/types";
 import { usePermissions } from "../../app/usePermissions";
@@ -45,6 +46,7 @@ export function NodeDrawer({ projectId, requirementId, names, onClose }: NodeDra
 
 function Detail({ detail, projectId, names }: { detail: RequirementDetail; projectId: string; names: Map<string, string> }) {
   const { can } = usePermissions({ projectId });
+  const { workspaceId = "" } = useParams();
   const notify = useToast();
   const move = useMoveRequirement(detail.requirement_id, projectId);
   const findings = useFindings(projectId, { requirement: detail.requirement_id, limit: 50, offset: 0 });
@@ -90,7 +92,12 @@ function Detail({ detail, projectId, names }: { detail: RequirementDetail; proje
         <OwnerChip ownerName={detail.owner_name} group={detail.stakeholder_group} />{" "}
         <Button size="sm" variant="ghost" onClick={() => setOwnership(true)}>
           Ownership…
-        </Button>
+        </Button>{" "}
+        {can("rcr.open") && (
+          <Link className="btn btn-ghost btn-sm" to={`/w/${workspaceId}/p/${projectId}/changes/new?requirement=${detail.requirement_id}`}>
+            Propose change
+          </Link>
+        )}
       </p>
       {detail.rationale && (
         <p>

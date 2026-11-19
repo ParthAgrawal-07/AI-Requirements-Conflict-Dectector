@@ -15,7 +15,9 @@ export interface ApiErrorBody {
     code: string;
     message: string;
     request_id: string | null;
-    details?: { field: string; message: string; type: string }[];
+    // Validation errors (422): field, message, type. Other errors may carry their own entries,
+    // e.g. a blocked merge's unmet conditions (code, message — US-35).
+    details?: { field?: string; message: string; type?: string; code?: string }[];
   };
 }
 

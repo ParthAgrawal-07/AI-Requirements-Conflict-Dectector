@@ -243,6 +243,18 @@ export function applyEvent(queryClient: QueryClient, event: RealtimeEvent): void
         void queryClient.invalidateQueries({ queryKey: ["issue-comments", event.entity_id] });
       }
     }
+  } else if (event.type.startsWith("change_request.") && event.project_id) {
+    // US-33–US-35: the lists and everything about the request (reviews, agreement, checks); a
+    // merge also moves the requirement, its version history and the issues it resolves.
+    void queryClient.invalidateQueries({ queryKey: ["change-requests", event.project_id] });
+    if (event.entity_id) void queryClient.invalidateQueries({ queryKey: ["change-request", event.entity_id] });
+    const requirementId = typeof event.data.requirement_id === "string" ? event.data.requirement_id : null;
+    if (event.type === "change_request.merged" && requirementId) {
+      void queryClient.invalidateQueries({ queryKey: ["requirement", requirementId] });
+      void queryClient.invalidateQueries({ queryKey: ["versions", requirementId] });
+      void queryClient.invalidateQueries({ queryKey: ["requirements", event.project_id] });
+      void queryClient.invalidateQueries({ queryKey: ["issues", event.project_id] });
+    }
   } else if (event.type === "membership.revoked") {
     void queryClient.invalidateQueries({ queryKey: ["members", event.workspace_id] });
   }
