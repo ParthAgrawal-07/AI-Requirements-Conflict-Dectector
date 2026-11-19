@@ -22,6 +22,7 @@ from typing import Any, cast
 from sqlalchemy import CursorResult, select, update
 from sqlalchemy.orm import Session
 
+from app.classification import narrative
 from app.classification.llm_client import LLMClient, get_llm_client
 from app.consequences import checks as consequence_checks
 from app.consequences.delta import build_delta, open_partners
@@ -98,11 +99,14 @@ def mark_stale(db: Session, project_id: uuid.UUID) -> int:
     active = select(ChangeRequest.id).where(
         ChangeRequest.project_id == project_id, ChangeRequest.status.in_(ACTIVE)
     )
+    # The baseline is read inside the UPDATE: a merge committed after this function started must
+    # not leave a report computed against the newest baseline marked stale.
+    current = select(Project.baseline_revision).where(Project.id == project_id).scalar_subquery()
     result = db.execute(
         update(ConsequenceReport)
         .where(
             ConsequenceReport.change_request_id.in_(active),
-            ConsequenceReport.baseline_revision != project.baseline_revision,
+            ConsequenceReport.baseline_revision != current,
             ConsequenceReport.is_stale.is_(False),
         )
         .values(is_stale=True)
@@ -162,6 +166,13 @@ def build_report(
         current.checks_base_version = base_version
         current.updated_at = datetime.now(UTC)
     db.commit()
+    if llm is not None:  # Keval (US-34): the AI summary, kept only if it agrees with the checks
+        try:
+            narrative.attach(db, report, change_request, llm)
+        except Exception:
+            # Optional: the report and markers are committed, so the checked event still goes out.
+            db.rollback()
+            logger.exception("Narrative for report %s failed", report.id)
     bus.publish(
         change_request_event(
             CHANGE_REQUEST_CHECKED,

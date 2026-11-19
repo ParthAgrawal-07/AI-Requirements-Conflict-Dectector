@@ -1,6 +1,9 @@
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { usePermissions } from "../../app/usePermissions";
 import { Badge } from "../../components/Badge";
 import { CATEGORY_ICONS } from "../findings/api";
+import { RaiseConcernDialog } from "../issues/RaiseConcernDialog";
 import type { Message } from "./api";
 import { useAnalysisRun, type AnalysisRun, type RunFinding } from "./runs";
 
@@ -9,12 +12,15 @@ export const CLEAN_RESULT = "No issues detected by analysis — analysis can mis
 /** The result card of a posted requirement's live analysis (US-31, interface design §10): each
  *  finding with its category, the other requirement, severity, confidence, rationale and
  *  clarification question; "waiting for budget"; or the clean result — which never says
- *  "verified" (DR-21). Falls back to the card's plain text if the run cannot be read. */
+ *  "verified" (DR-21) and lets a member raise a concern the analysis missed (US-56). Falls back
+ *  to the card's plain text if the run cannot be read. */
 export function ResultCard({ message }: { message: Message }) {
   const { workspaceId, projectId } = useParams();
   const runId = typeof message.payload?.run_id === "string" ? message.payload.run_id : null;
   const requirementId =
     typeof message.payload?.requirement_id === "string" ? message.payload.requirement_id : null;
+  const { can } = usePermissions(projectId ? { projectId } : null);
+  const [raising, setRaising] = useState(false);
   const run = useAnalysisRun(runId, message.edited_at ?? message.created_at);
   const mapLink =
     workspaceId && projectId && requirementId
@@ -28,7 +34,11 @@ export function ResultCard({ message }: { message: Message }) {
         {run.data && <RunStatusLine run={run.data} />}
       </header>
       {run.data ? (
-        <RunBody run={run.data} subjectId={requirementId} />
+        <RunBody
+          run={run.data}
+          subjectId={requirementId}
+          onRaise={projectId && can("issue.open") ? () => setRaising(true) : null}
+        />
       ) : (
         <p className="message-body">{message.body}</p>
       )}
@@ -38,6 +48,14 @@ export function ResultCard({ message }: { message: Message }) {
             View on map
           </Link>
         </footer>
+      )}
+      {raising && projectId && (
+        <RaiseConcernDialog
+          open
+          onClose={() => setRaising(false)}
+          projectId={projectId}
+          requirementId={requirementId ?? undefined}
+        />
       )}
     </section>
   );
@@ -59,7 +77,15 @@ function RunStatusLine({ run }: { run: AnalysisRun }) {
   return seconds !== null ? <span className="muted small">{seconds} s</span> : null;
 }
 
-function RunBody({ run, subjectId }: { run: AnalysisRun; subjectId: string | null }) {
+function RunBody({
+  run,
+  subjectId,
+  onRaise,
+}: {
+  run: AnalysisRun;
+  subjectId: string | null;
+  onRaise: (() => void) | null;
+}) {
   if (run.status === "waiting_budget") {
     return (
       <p className="message-body">
@@ -90,14 +116,11 @@ function RunBody({ run, subjectId }: { run: AnalysisRun; subjectId: string | nul
       {run.status === "done" && run.findings.length === 0 && !run.error_message && (
         <p className="message-body">
           {CLEAN_RESULT}{" "}
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            disabled
-            title="Raising a concern arrives with US-56 (Sprint 4)"
-          >
-            Raise a concern
-          </button>
+          {onRaise && (
+            <button type="button" className="btn btn-ghost btn-sm" onClick={onRaise}>
+              Raise a concern
+            </button>
+          )}
         </p>
       )}
     </div>

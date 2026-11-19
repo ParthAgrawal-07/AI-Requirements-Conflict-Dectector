@@ -12,6 +12,7 @@ The probe classifies the proposed text against REQ-031, then REQ-040 (the direct
 order), then on its own; scripted replies follow that order.
 """
 
+import json
 from collections.abc import Callable
 
 import pytest
@@ -184,7 +185,16 @@ def test_impact_of_a_deprecation_names_the_broken_dependency(g: Graph) -> None:
 # ── checks, delta, risk (US-34) ─────────────────────────────────────────────────────────────
 def test_a_change_that_resolves_one_conflict_and_creates_another(g: Graph) -> None:
     cr = g.request()
-    report = g.build(cr, llm(pair_reply("None"), pair_reply("Conflicting"), single_reply("None")))
+    summary = json.dumps(
+        {
+            "summary": "RCR-1 has high risk: the new text conflicts with REQ-040, and REQ-040 "
+            "depends on REQ-014. It would resolve the conflict with REQ-031.",
+            "points": [],
+            "cited_ids": ["RCR-1", "REQ-040", "REQ-014", "REQ-031"],
+        }
+    )
+    replies = (pair_reply("None"), pair_reply("Conflicting"), single_reply("None"), summary)
+    report = g.build(cr, llm(*replies))
 
     checks = checks_of(report)
     assert checks["stale"][0] == "pass"
@@ -206,7 +216,8 @@ def test_a_change_that_resolves_one_conflict_and_creates_another(g: Graph) -> No
     }
     assert report.risk_level == "high"
     assert "The new text conflicts with REQ-040" in report.risk_reasons
-    assert report.llm_calls == 3
+    assert report.llm_calls == 4  # three comparisons and Keval's narrative
+    assert report.narrative is not None and report.narrative["label"] == "AI"
     g.db.refresh(cr)
     assert (cr.checks_proposal_revision, cr.checks_base_version) == (1, 1)
 
@@ -237,7 +248,7 @@ def test_without_a_model_nothing_pretends_to_have_run(g: Graph) -> None:
 
 
 def test_a_deprecation_resolves_its_findings_and_breaks_its_dependants(g: Graph) -> None:
-    report = g.build(g.request(kind="deprecate"), llm())
+    report = g.build(g.request(kind="deprecate"), None)
 
     checks = checks_of(report)
     assert checks["dependency"] == (
