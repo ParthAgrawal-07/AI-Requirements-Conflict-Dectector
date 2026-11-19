@@ -299,6 +299,18 @@ def list_versions(
     db: DbSession,
 ) -> list[RequirementVersionRead]:
     rows = change_requests.versions(db, requirement_id)
+    requirement = db.get(Requirement, requirement_id)
+    if requirement is not None and requirement.is_protected:
+        # Every version's text is returned: audited like reading the requirement (NFR-13).
+        db.add(
+            AuditLog(
+                workspace_id=ctx.workspace_id,
+                actor_id=ctx.user.id,
+                requirement_id=requirement.id,
+                action=AuditAction.VIEWED_PROTECTED,
+            )
+        )
+        db.commit()
     authors = {
         u.id: u
         for u in db.scalars(

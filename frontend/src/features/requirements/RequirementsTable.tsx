@@ -95,6 +95,8 @@ export function RequirementsTable({
   const total = data?.total ?? 0;
   const [ownership, setOwnership] = useState<RequirementRead | null>(null);
   const [history, setHistory] = useState<RequirementRead | null>(null);
+  // Only a requirement of the project on screen: going Back to another project closes the drawer.
+  const historyShown = history && history.project_id === projectId ? history : null;
   // The dialog follows the refreshed row (an accepted request changes the owner); the clicked
   // copy only stands in while the row is off the current page.
   const selected = ownership
@@ -251,11 +253,11 @@ export function RequirementsTable({
       )}
 
       <Drawer
-        open={history !== null}
+        open={historyShown !== null}
         onClose={() => setHistory(null)}
-        title={`History of ${history?.source_req_id ?? "requirement"}`}
+        title={`History of ${historyShown?.source_req_id ?? "requirement"}`}
       >
-        {history && <VersionHistory requirementId={history.requirement_id} />}
+        {historyShown && <VersionHistory requirementId={historyShown.requirement_id} />}
       </Drawer>
 
       {selected && (

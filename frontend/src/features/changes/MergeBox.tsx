@@ -44,6 +44,7 @@ export function MergeBox({ change, canMerge, isProposer }: MergeBoxProps) {
   const [riskReason, setRiskReason] = useState("");
   const [closing, setClosing] = useState(false);
   const [closeReason, setCloseReason] = useState("");
+  const [closeError, setCloseError] = useState("");
   const [refused, setRefused] = useState<Unmet[]>([]);
 
   if (!active) {
@@ -70,6 +71,14 @@ export function MergeBox({ change, canMerge, isProposer }: MergeBoxProps) {
       <h2 className="eyebrow">Merge into the baseline</h2>
       {agreement.isLoading ? (
         <p className="muted small">Checking the agreement rules…</p>
+      ) : agreement.isError && !agreement.data ? (
+        // Never an empty, all-clear checklist: without the rules' answer nothing is known (FR-98).
+        <p role="alert">
+          The agreement rules could not be checked.{" "}
+          <Button size="sm" variant="ghost" onClick={() => void agreement.refetch()}>
+            Try again
+          </Button>
+        </p>
       ) : (
         <ul className="readiness" aria-label="Agreement conditions">
           {unmet
@@ -165,6 +174,12 @@ export function MergeBox({ change, canMerge, isProposer }: MergeBoxProps) {
           aria-label="Close without merging"
           onSubmit={(event) => {
             event.preventDefault();
+            // The browser checks the untrimmed text, so three spaces would pass minLength.
+            if (closeReason.trim().length < 3) {
+              setCloseError("Say why it is closed (at least 3 characters).");
+              return;
+            }
+            setCloseError("");
             close.mutate(closeReason.trim(), {
               onSuccess: (next) => {
                 setClosing(false);
@@ -177,6 +192,11 @@ export function MergeBox({ change, canMerge, isProposer }: MergeBoxProps) {
           <label>
             Why is it not going in?
             <textarea rows={2} required minLength={3} maxLength={2000} value={closeReason} onChange={(e) => setCloseReason(e.target.value)} />
+            {closeError && (
+              <span className="field-error small" role="alert">
+                {closeError}
+              </span>
+            )}
           </label>
           <div className="row-actions">
             <Button variant="ghost" onClick={() => setClosing(false)}>
