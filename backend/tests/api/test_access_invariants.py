@@ -33,6 +33,7 @@ AUTHENTICATED_ONLY = {
     ("GET", "/api/v1/workspaces"),
     ("POST", "/api/v1/workspaces"),
     ("GET", "/api/v1/composer/templates"),  # static EARS catalogue, no tenant data (FR-81)
+    ("GET", "/api/v1/lint/catalogue"),  # the static lint catalogue the composer runs (US-51)
     ("POST", "/api/v1/join"),  # a signed-in user entering a code: not yet a member (US-25)
     # The composer's private drafts belong to their author (FR-81); the service requires that
     # they may still view the draft's project.
