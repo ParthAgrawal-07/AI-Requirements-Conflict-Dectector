@@ -215,4 +215,5 @@ another workspace is a **404**.
 | `GET /change-requests/{id}/reviews` · `GET …/agreement` | `view` | |
 | `POST /change-requests/{id}/reviews` | `rcr.review` | no self-approval (403 `self_approval`) |
 | `POST /change-requests/{id}/reviewers` | `rcr.open` | then the proposer, or a member who holds `rcr.merge` |
+| `GET /requirements/{r}/versions` | `view` | every version's text: audited (`viewed_protected`) for a protected requirement |
 | `POST /change-requests/{id}/merge` · `POST …/close` | `rcr.merge` | merge is refused with 409 `merge_blocked` until the agreement guard passes (FR-65) |

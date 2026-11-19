@@ -6,10 +6,12 @@ import type { BadgeTone } from "../../components/Badge";
 import { useParams } from "react-router-dom";
 import { usePermissions } from "../../app/usePermissions";
 import { Button } from "../../components/Button";
+import { Drawer } from "../../components/Drawer";
 import { useMembers } from "../channels/api";
 import { useRequirements, type RequirementFilters } from "./api";
 import { OwnerChip } from "./OwnerChip";
 import { OwnershipRequestDialog } from "./OwnershipRequestDialog";
+import { VersionHistory } from "./VersionHistory";
 
 const PAGE_SIZE = 50;
 
@@ -92,6 +94,9 @@ export function RequirementsTable({
   const { data, isLoading, isError, error } = useRequirements(projectId, filters);
   const total = data?.total ?? 0;
   const [ownership, setOwnership] = useState<RequirementRead | null>(null);
+  const [history, setHistory] = useState<RequirementRead | null>(null);
+  // Only a requirement of the project on screen: going Back to another project closes the drawer.
+  const historyShown = history && history.project_id === projectId ? history : null;
   // The dialog follows the refreshed row (an accepted request changes the owner); the clicked
   // copy only stands in while the row is off the current page.
   const selected = ownership
@@ -195,7 +200,15 @@ export function RequirementsTable({
                     )}
                   </td>
                   <td>
-                    <StateBadge requirement={item} />
+                    <StateBadge requirement={item} />{" "}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      aria-label={`History of ${item.source_req_id ?? "this requirement"}`}
+                      onClick={() => setHistory(item)}
+                    >
+                      v{item.current_version} · History
+                    </Button>
                   </td>
                   <td>
                     <OwnerChip ownerName={item.owner_name} group={null} />{" "}
@@ -238,6 +251,14 @@ export function RequirementsTable({
           </Button>
         </div>
       )}
+
+      <Drawer
+        open={historyShown !== null}
+        onClose={() => setHistory(null)}
+        title={`History of ${historyShown?.source_req_id ?? "requirement"}`}
+      >
+        {historyShown && <VersionHistory requirementId={historyShown.requirement_id} />}
+      </Drawer>
 
       {selected && (
         <OwnershipRequestDialog

@@ -299,6 +299,15 @@ def test_merge_writes_the_new_version_and_its_consequences(
     )
     assert stale is not None and stale.is_stale
 
+    versions = w.client.get(
+        f"/api/v1/requirements/{w.req.id}/versions", headers=headers_for(w.dev)
+    ).json()
+    assert [(v["version_no"], v["change_request"]) for v in versions] == [
+        (2, {"id": cr["id"], "key": "RCR-1"}),
+        (1, None),
+    ]
+    assert versions[0]["body"] == PROPOSED and versions[0]["changed_by"]["id"] == str(w.dev.id)
+
 
 def test_a_competing_request_must_rebase_before_it_can_merge(w: World) -> None:
     first = w.propose()
@@ -407,3 +416,10 @@ def test_another_reviewer_can_be_asked(w: World) -> None:
     )
     assert self_.json()["error"]["code"] == "self_review"
     assert w.db.scalar(select(Review)) is None
+
+
+def test_version_history_is_for_members_only(w: World, make_user: Callable[..., User]) -> None:
+    outsider = make_user(role=None)
+    url = f"/api/v1/requirements/{w.req.id}/versions"
+    assert w.client.get(url, headers=headers_for(w.dev)).status_code == 200
+    assert w.client.get(url, headers=headers_for(outsider)).status_code == 404

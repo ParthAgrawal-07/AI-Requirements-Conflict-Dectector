@@ -174,6 +174,10 @@ from the baseline (`deprecate`). It records `base_version`, the version the prop
 | `POST /change-requests/{id}/merge` | `rcr.merge` | `{accepted_risk_reason?}`; `409 merge_blocked` with the unmet conditions in `details` |
 | `POST /change-requests/{id}/close` | `rcr.merge` | `{reason}`: closed without merging |
 | `POST /change-requests/{id}/withdraw` | proposer only | Withdrawn by its author |
+
+**Version history** *(US-12)*: `GET /requirements/{id}/versions` (`view`) — every version, newest first:
+`version_no`, `body`, `changed_by`, `changed_at` and the change request it was merged from (`{id, key}`, null for the
+first version). Reading a protected requirement's history is audited (`viewed_protected`).
 * Events: `change_request.opened` with ids, number, status and revision only, never the text. Opening a non-draft
   request also adds a sentence to the map (`graph.delta`). Reading a request about a protected requirement writes a
   `viewed_protected` audit row (NFR-13).

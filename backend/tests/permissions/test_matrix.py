@@ -330,6 +330,8 @@ CASES = [
         lambda _: {"reason": "Not needed after all"},
     ),
     Case("POST", "/api/v1/change-requests/{change_request_id}/withdraw", own_change_request=True),
+    # Sprint 4 — version history (Affan, US-12)
+    Case("GET", "/api/v1/requirements/{requirement_id}/versions", ok=200),
 ]
 
 
