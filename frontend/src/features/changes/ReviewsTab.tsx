@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ApiError } from "../../api/client";
 import { Button } from "../../components/Button";
 import { useToast } from "../../components/Toast";
@@ -56,6 +56,9 @@ export function ReviewsTab({ change, reviews, canReview, pending, onPendingChang
   const notify = useToast();
   const [decision, setDecision] = useState<ReviewDecision>("approve");
   const [rationale, setRationale] = useState("");
+  // The latest drafts, read when a send succeeds: only what was sent is cleared.
+  const latest = useRef({ rationale, pending });
+  latest.current = { rationale, pending };
   const timeline = [...(reviews?.reviews ?? [])].sort((a, b) => a.created_at.localeCompare(b.created_at));
 
   return (
@@ -106,6 +109,7 @@ export function ReviewsTab({ change, reviews, canReview, pending, onPendingChang
           aria-label="Your review"
           onSubmit={(event) => {
             event.preventDefault();
+            const sent = { rationale, pending };
             submit.mutate(
               {
                 decision,
@@ -119,8 +123,9 @@ export function ReviewsTab({ change, reviews, canReview, pending, onPendingChang
               },
               {
                 onSuccess: () => {
-                  setRationale("");
-                  onPendingChange([]);
+                  // Edits made while the review was on its way are kept, not cleared with it.
+                  if (latest.current.rationale === sent.rationale) setRationale("");
+                  onPendingChange(latest.current.pending.filter((p) => !sent.pending.includes(p)));
                   notify(`Review sent on revision ${change.proposal_revision}`, "success");
                 },
                 onError: (error) => notify(error instanceof ApiError ? error.message : "Could not send the review", "error"),

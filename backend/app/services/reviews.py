@@ -230,14 +230,16 @@ def review(
     db.flush()
     for item in inline or []:
         start, end = item.get("start_offset"), item.get("end_offset")
-        if isinstance(end, int) and item.get("field") == "statement" and end > len(proposal):
+        # The default field first, so a comment with no field is checked as a statement comment.
+        field = str(item.get("field") or "statement")
+        if isinstance(end, int) and field == "statement" and end > len(proposal):
             raise BadRequestError(
                 "The comment points past the end of the proposal", code="bad_offsets"
             )
         db.add(
             ReviewComment(
                 review_id=record.id,
-                field=str(item.get("field") or "statement"),
+                field=field,
                 start_offset=start if isinstance(start, int) else None,
                 end_offset=end if isinstance(end, int) else None,
                 body=str(item.get("body") or "").strip(),
