@@ -26,12 +26,13 @@ import contextlib
 import json
 import logging
 import uuid
-from collections.abc import AsyncIterator, Callable, Generator
+from collections.abc import AsyncIterator, Callable, Collection, Generator
 from typing import Annotated, Any, Protocol
 
 import redis.asyncio as aioredis
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from redis.exceptions import RedisError
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
@@ -39,7 +40,7 @@ from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.errors import AppError
 from app.core.security import TokenError, decode_access_token
-from app.models import User
+from app.models import Membership, User
 from app.realtime import bus
 from app.realtime.events import CHANNEL_MEMBER_REMOVED, MEMBERSHIP_REVOKED, Event
 from app.services import channels as channel_service
@@ -120,15 +121,21 @@ def make_fanout() -> Fanout:
 class _Session:
     """What one socket is subscribed to."""
 
-    def __init__(self, user: User) -> None:
+    def __init__(self, user: User, member_of: Collection[uuid.UUID] = ()) -> None:
         self.user = user
         self.user_id = str(user.id)  # read without touching the DB from the forwarding task
+        self.member_of = set(member_of)  # where their notifications come from (read at sign-in)
+        self.listening = set(member_of)  # workspaces the fanout receives events of
         self.workspaces: set[uuid.UUID] = set()
         self.projects: set[uuid.UUID] = set()
         self.whole_workspaces: set[uuid.UUID] = set()
         self.channels: set[uuid.UUID] = set()
 
     def wants(self, event: Event) -> bool:
+        recipient = event.data.get("recipient_id")
+        if recipient is not None:  # a notification is for its recipient only (US-38)
+            member = event.workspace_id in self.member_of or event.workspace_id in self.workspaces
+            return recipient == self.user_id and member
         if event.workspace_id not in self.workspaces:
             return False
         if event.channel_id is not None:
@@ -176,13 +183,22 @@ def _released(db: Session) -> Generator[None, None, None]:
             db.rollback()
 
 
-def _load_active_user(db: Session, subject: uuid.UUID) -> User | None:
+def _load_active_user(db: Session, subject: uuid.UUID) -> tuple[User, list[uuid.UUID]] | None:
     with _released(db):
         user = get_user(db, subject)
-        return user if user is not None and user.is_active else None
+        if user is None or not user.is_active:
+            return None
+        workspaces = list(
+            db.scalars(
+                select(Membership.workspace_id).where(
+                    Membership.user_id == user.id, Membership.ended_at.is_(None)
+                )
+            )
+        )
+        return user, workspaces
 
 
-async def _authenticate(websocket: WebSocket, db: Session) -> User | None:
+async def _authenticate(websocket: WebSocket, db: Session) -> tuple[User, list[uuid.UUID]] | None:
     try:
         frame = await asyncio.wait_for(websocket.receive_json(), AUTH_TIMEOUT_SECONDS)
     except (TimeoutError, ValueError, WebSocketDisconnect):
@@ -231,14 +247,18 @@ def _check_subscription(
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, db: Annotated[Session, Depends(get_db)]) -> None:
     await websocket.accept()
-    user = await _authenticate(websocket, db)
-    if user is None:
+    signed_in = await _authenticate(websocket, db)
+    if signed_in is None:
         await websocket.close(code=CLOSE_UNAUTHENTICATED)
         return
+    user, member_of = signed_in
     await websocket.send_json({"type": "ready", "user_id": str(user.id)})
 
-    state = _Session(user)
+    state = _Session(user, member_of)
     fanout = make_fanout()
+    for workspace_id in member_of:
+        with contextlib.suppress(Exception):
+            await fanout.add(workspace_id)
     forward = asyncio.create_task(_forward(websocket, fanout, state))
     try:
         while True:
@@ -273,14 +293,15 @@ async def _subscribe(
     except Exception:  # a malformed id and the like: same answer as "not there"
         await websocket.send_json({"type": "error", "code": "not_found"})
         return
-    if workspace_id not in state.workspaces:
+    if workspace_id not in state.listening:
         try:
             await fanout.add(workspace_id)
         except RedisError:
             logger.warning("Could not subscribe to workspace %s: Redis unavailable", workspace_id)
             await websocket.send_json({"type": "error", "code": "unavailable"})
             return
-        state.workspaces.add(workspace_id)
+        state.listening.add(workspace_id)
+    state.workspaces.add(workspace_id)
     if channel_id is not None:
         state.channels.add(channel_id)  # channel events only, not the whole project
     elif project_id is None:

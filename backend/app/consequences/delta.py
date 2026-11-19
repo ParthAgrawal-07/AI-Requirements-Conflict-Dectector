@@ -41,7 +41,7 @@ def open_findings(
         select(Finding, CandidatePair)
         .outerjoin(CandidatePair, CandidatePair.id == Finding.candidate_pair_id)
         .where(
-            Finding.is_stale.is_(False),
+            ~Finding.is_stale,
             Finding.status.in_(LIVE_STATUSES),
             or_(
                 Finding.requirement_id.in_(requirement_ids),

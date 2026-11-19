@@ -58,6 +58,10 @@ EXPECTED_TABLES = {
     "review_requests",
     "reviews",
     "review_comments",
+    # Sprint 5 (0008_notifications_suggestions)
+    "notifications",
+    "suggestions",
+    "suggestion_feedback",
 }
 
 

@@ -35,6 +35,7 @@ from app.api import (
     requirements,
     requirements_compose,
     roles,
+    suggestions,
     workspaces,
 )
 from app.core.auth import get_current_user
@@ -72,6 +73,7 @@ for _router in (
     change_requests.router,
     concerns.router,
     consequences.router,
+    suggestions.router,
 ):
     api_router.include_router(_router, dependencies=_authenticated, responses=_unauthorized)
 
