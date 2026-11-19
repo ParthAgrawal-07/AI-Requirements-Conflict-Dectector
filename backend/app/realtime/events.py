@@ -25,6 +25,16 @@ ANALYSIS_PROGRESS = "analysis.progress"  # a document moved to a new stage or pe
 ANALYSIS_COMPLETED = "analysis.completed"  # an analysis run finished or is waiting for budget
 MEMBERSHIP_REVOKED = "membership.revoked"  # the gateway closes the member's sockets (US-26, S2)
 GRAPH_DELTA = "graph.delta"  # nodes/edges changed on the live map (US-14, S3)
+# Issues (US-52, S4): opened, edited, closed, reopened, commented.
+ISSUE_OPENED = "issue.opened"
+ISSUE_UPDATED = "issue.updated"
+ISSUE_CLOSED = "issue.closed"
+ISSUE_REOPENED = "issue.reopened"
+ISSUE_COMMENTED = "issue.commented"
+# Change requests (US-33, US-35, S4): opened, then edited, reviewed, merged, closed or withdrawn.
+CHANGE_REQUEST_OPENED = "change_request.opened"
+CHANGE_REQUEST_UPDATED = "change_request.updated"
+CHANGE_REQUEST_CHECKED = "change_request.checked"  # a consequence report is ready (US-34)
 # Channels (US-28, Madhav). ``data.private`` is true for a private channel: the gateway then
 # forwards the event only to sockets subscribed to that channel by id (re-checked membership).
 CHANNEL_CREATED = "channel.created"
@@ -41,6 +51,14 @@ EVENT_TYPES = frozenset(
         ANALYSIS_COMPLETED,
         MEMBERSHIP_REVOKED,
         GRAPH_DELTA,
+        ISSUE_OPENED,
+        ISSUE_UPDATED,
+        ISSUE_CLOSED,
+        ISSUE_REOPENED,
+        ISSUE_COMMENTED,
+        CHANGE_REQUEST_OPENED,
+        CHANGE_REQUEST_UPDATED,
+        CHANGE_REQUEST_CHECKED,
         CHANNEL_CREATED,
         CHANNEL_UPDATED,
         CHANNEL_MEMBER_REMOVED,
@@ -147,6 +165,37 @@ def message_event(
     )
 
 
+def change_request_event(
+    event_type: str,
+    *,
+    workspace_id: uuid.UUID,
+    project_id: uuid.UUID,
+    change_request_id: uuid.UUID,
+    requirement_id: uuid.UUID,
+    number: int,
+    status: str,
+    proposal_revision: int,
+    actor_id: uuid.UUID | None,
+    **data: Any,
+) -> Event:
+    """A change request changed (``change_request.*``). Ids, number, state — never its text."""
+    return Event(
+        type=event_type,
+        workspace_id=workspace_id,
+        project_id=project_id,
+        entity_id=change_request_id,
+        data={
+            "change_request_id": str(change_request_id),
+            "requirement_id": str(requirement_id),
+            "number": number,
+            "status": status,
+            "proposal_revision": proposal_revision,
+            "actor_id": str(actor_id) if actor_id else None,
+            **data,
+        },
+    )
+
+
 def graph_delta(*, workspace_id: uuid.UUID, delta: GraphDelta) -> Event:
     """The live map changed (US-14). ``data`` is the :class:`~app.graph.schemas.GraphDelta`:
     ids, states, labels and sentences naming requirements by ID — never requirement text."""
@@ -155,6 +204,35 @@ def graph_delta(*, workspace_id: uuid.UUID, delta: GraphDelta) -> Event:
         workspace_id=workspace_id,
         project_id=delta.project_id,
         data=delta.model_dump(mode="json"),
+    )
+
+
+def issue_event(
+    event_type: str,
+    *,
+    workspace_id: uuid.UUID,
+    project_id: uuid.UUID,
+    issue_id: uuid.UUID,
+    number: int,
+    status: str,
+    actor_id: uuid.UUID | None,
+    assignee_ids: list[uuid.UUID],
+    **data: Any,
+) -> Event:
+    """An issue changed (``issue.*``). Ids, its number and state — never its title or body."""
+    return Event(
+        type=event_type,
+        workspace_id=workspace_id,
+        project_id=project_id,
+        entity_id=issue_id,
+        data={
+            "issue_id": str(issue_id),
+            "number": number,
+            "status": status,
+            "actor_id": str(actor_id) if actor_id else None,
+            "assignee_ids": [str(a) for a in assignee_ids],
+            **data,
+        },
     )
 
 

@@ -46,7 +46,14 @@ def latest_report(db: Session, change_request_id: uuid.UUID) -> ConsequenceRepor
     return db.scalar(
         select(ConsequenceReport)
         .where(ConsequenceReport.change_request_id == change_request_id)
-        .order_by(ConsequenceReport.created_at.desc(), ConsequenceReport.id.desc())
+        # The report for the newest proposal and baseline wins, whatever order the workers
+        # finished in (``created_at`` is each transaction's start time).
+        .order_by(
+            ConsequenceReport.proposal_revision.desc(),
+            ConsequenceReport.baseline_revision.desc(),
+            ConsequenceReport.created_at.desc(),
+            ConsequenceReport.id.desc(),
+        )
         .limit(1)
     )
 
@@ -121,6 +128,8 @@ def build_report(
     if requirement is None or project is None:  # pragma: no cover
         return None
 
+    # What this run checks; the request may move on (a new revision) while it probes.
+    revision, base_version = change_request.proposal_revision, change_request.base_version
     impact = ImpactAnalyzer(db).analyse(requirement, kind=change_request.kind)
     probe = consequence_checks.probe(db, change_request, requirement, impact, llm, embedder)
     checks = consequence_checks.run_checks(
@@ -130,8 +139,8 @@ def build_report(
     level, reasons = assess(checks, impact, delta)
     report = ConsequenceReport(
         change_request_id=change_request.id,
-        proposal_revision=change_request.proposal_revision,
-        base_version=change_request.base_version,
+        proposal_revision=revision,
+        base_version=base_version,
         baseline_revision=project.baseline_revision,
         status="done",
         risk_level=level,
@@ -142,9 +151,17 @@ def build_report(
         llm_calls=probe.llm_calls,
     )
     db.add(report)
-    change_request.checks_proposal_revision = change_request.proposal_revision
-    change_request.checks_base_version = change_request.base_version
-    change_request.updated_at = datetime.now(UTC)
+    current = db.scalar(
+        select(ChangeRequest)
+        .where(ChangeRequest.id == change_request.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    # A slower worker for an older revision must not move the markers back (FR-98).
+    if current is not None and (current.checks_proposal_revision or 0) <= revision:
+        current.checks_proposal_revision = revision
+        current.checks_base_version = base_version
+        current.updated_at = datetime.now(UTC)
     db.commit()
     if llm is not None:  # Keval (US-34): the AI summary, kept only if it agrees with the checks
         narrative.attach(db, report, change_request, llm)

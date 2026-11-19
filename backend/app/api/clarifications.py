@@ -32,6 +32,7 @@ from app.models import (
 )
 from app.schemas.common import ErrorResponse
 from app.schemas.findings import ClarificationRead
+from app.services import issues
 from app.services.access import AccessContext, Scope, register_scope_resolver
 from app.services.findings import get_finding, involved_requirements
 
@@ -153,6 +154,11 @@ def answer_clarification(
     clarification.resolved_at = datetime.now(UTC)
     _record_in_history(db, ctx, clarification)
     db.commit()
+
+    finding = db.get(Finding, clarification.finding_id)
+    if finding is not None:
+        issues.on_finding_changed(db, finding, actor=ctx.user)
+
     return ClarificationRead.from_model(clarification)
 
 
