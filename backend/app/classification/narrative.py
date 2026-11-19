@@ -30,7 +30,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.classification.budget import BudgetExceededError
-from app.classification.llm_client import LLMClient, LLMError
+from app.classification.llm_client import LLMClient, LLMError, LLMOutputError
 from app.classification.prompting import _as_data, _schema_json, load_prompt
 from app.models import ChangeRequest, ConsequenceReport, Requirement
 
@@ -95,8 +95,11 @@ def facts(report: ConsequenceReport) -> dict[str, Any]:
 
 
 def known_ids(report: ConsequenceReport, *extra: str) -> set[str]:
-    text = json.dumps(facts(report))
-    return {*_ID.findall(text), *extra}
+    data = facts(report)
+    # The labels themselves too: a printed ID such as REQ-SEC-001 does not match ``_ID``.
+    labels = {a["id"] for a in data["affected"] if a.get("id")}
+    labels |= {i for part in data["findings_delta"].values() for e in part for i in e["ids"] if i}
+    return {*_ID.findall(json.dumps(data)), *labels, *extra}
 
 
 def contradictions(
@@ -151,7 +154,14 @@ def write(
     for _ in range(ATTEMPTS):
         before = llm.calls
         try:
-            output = llm.complete_json(system, user, NarrativeOutput, project_id=project_id)
+            # retries=0: a malformed reply uses up one of the ATTEMPTS, like a contradicting one,
+            # so the narrative never costs more than ATTEMPTS calls.
+            output = llm.complete_json(
+                system, user, NarrativeOutput, project_id=project_id, retries=0
+            )
+        except LLMOutputError:
+            calls += llm.calls - before
+            continue
         except (BudgetExceededError, LLMError) as error:
             calls += llm.calls - before
             logger.info("No narrative for report %s: %s", report.id, type(error).__name__)
@@ -164,13 +174,17 @@ def write(
                     "label": "AI",
                     "summary": output.summary,
                     "points": output.points,
-                    "cited_ids": sorted(set(output.cited_ids) | set(_ID.findall(output.summary))),
+                    "cited_ids": sorted(
+                        set(output.cited_ids)
+                        | set(_ID.findall(" ".join([output.summary, *output.points])))
+                    ),
                     "prompt_version": NARRATIVE_VERSION,
                     "model": llm.model,
                 },
                 calls,
             )
-        logger.info("Narrative for report %s rejected: %s", report.id, "; ".join(problems))
+        # The problems quote the model's reply; log only how many (AGENTS.md §6).
+        logger.info("Narrative for report %s rejected (%d problem(s))", report.id, len(problems))
         user += (
             "\n\nYour previous answer was rejected because it "
             + "; it ".join(problems)
