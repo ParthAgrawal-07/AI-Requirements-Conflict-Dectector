@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends
 from app.api import (
     analysis_runs,
     auth,
+    change_requests,
     channels,
     clarifications,
     concerns,
@@ -24,6 +25,7 @@ from app.api import (
     drafts,
     findings,
     intake,
+    issues,
     join_codes,
     me,
     messages,
@@ -63,8 +65,10 @@ for _router in (
     graph_api.router,
     findings.router,
     clarifications.router,
+    issues.router,
     analysis_runs.router,
     search_similar.router,
+    change_requests.router,
     concerns.router,
 ):
     api_router.include_router(_router, dependencies=_authenticated, responses=_unauthorized)

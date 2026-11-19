@@ -7,6 +7,7 @@ relies on that, so a new model file must be imported here.
 from app.models.analysis import AnalysisRun, CandidatePair, Clarification, Finding
 from app.models.audit import AuditLog
 from app.models.base import Base
+from app.models.change_request import ChangeRequest, ChangeRequestIssue, ChangeRequestRevision
 from app.models.channel import Channel, ChannelMember, ChannelRead, Message
 from app.models.context import DocumentSection, ProjectContext
 from app.models.document import Document
@@ -32,6 +33,7 @@ from app.models.enums import (
     Severity,
 )
 from app.models.graph import NodePosition
+from app.models.issue import Comment, Issue, IssueAssignee, IssueRequirement
 from app.models.join_code import JoinCode, JoinRequest
 from app.models.membership import Membership, ProjectMember
 from app.models.ownership import OwnershipRequest
@@ -51,11 +53,15 @@ __all__ = [
     "AuditLog",
     "Base",
     "CandidatePair",
+    "ChangeRequest",
+    "ChangeRequestIssue",
+    "ChangeRequestRevision",
     "ClassificationStatus",
     "Channel",
     "ChannelMember",
     "ChannelRead",
     "Clarification",
+    "Comment",
     "Document",
     "DocumentSection",
     "DocumentFormat",
@@ -66,6 +72,9 @@ __all__ = [
     "FindingCategory",
     "FindingStatus",
     "ImportMode",
+    "Issue",
+    "IssueAssignee",
+    "IssueRequirement",
     "JoinCode",
     "JoinCodeStatus",
     "JoinRequest",
