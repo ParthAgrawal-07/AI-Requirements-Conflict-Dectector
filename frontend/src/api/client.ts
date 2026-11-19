@@ -15,6 +15,7 @@ export class ApiError extends Error {
     readonly code: string,
     message: string,
     readonly fieldErrors: Record<string, string> = {},
+    readonly details: { code?: string; message: string }[] = [],
   ) {
     super(message);
     this.name = "ApiError";
@@ -100,9 +101,9 @@ async function toError(response: Response): Promise<ApiError> {
     const body = (await response.json()) as ApiErrorBody;
     const fields: Record<string, string> = {};
     for (const detail of body.error.details ?? []) {
-      fields[detail.field] = detail.message;
+      if (detail.field) fields[detail.field] = detail.message;
     }
-    return new ApiError(response.status, body.error.code, body.error.message, fields);
+    return new ApiError(response.status, body.error.code, body.error.message, fields, body.error.details ?? []);
   } catch {
     return new ApiError(response.status, "http_error", response.statusText || "Request failed");
   }
@@ -130,7 +131,9 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   if (response.status === 204) {
     return undefined as T;
   }
-  return (await response.json()) as T;
+  // A queued action may answer 202 with no body (POST /change-requests/{id}/checks/rerun).
+  const text = await response.text();
+  return (text ? JSON.parse(text) : undefined) as T;
 }
 
 async function send(

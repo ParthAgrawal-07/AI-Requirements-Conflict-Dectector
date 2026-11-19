@@ -144,6 +144,18 @@ class AuditAction(StrEnum):
     GROUP_CHANGED = "group_changed"
     OWNERSHIP_REQUESTED = "ownership_requested"
     OWNERSHIP_DECIDED = "ownership_decided"
+    # Issues (US-52). Issue, requirement and user ids, labels and close reasons only.
+    ISSUE_OPENED = "issue_opened"
+    ISSUE_UPDATED = "issue_updated"
+    ISSUE_CLOSED = "issue_closed"
+    ISSUE_REOPENED = "issue_reopened"
+    # Change requests (US-33) and raised concerns (US-56). Ids, numbers and versions only.
+    CHANGE_REQUEST_OPENED = "change_request_opened"
+    CHANGE_REQUEST_UPDATED = "change_request_updated"  # proposal edited (revision +1)
+    CHANGE_REQUEST_REVIEWED = "change_request_reviewed"
+    CHANGE_REQUEST_MERGED = "change_request_merged"
+    CHANGE_REQUEST_CLOSED = "change_request_closed"  # closed without merge, or withdrawn
+    CONCERN_RAISED = "concern_raised"
     # Channels (US-28). Channel and user ids only — never names, topics or messages (CR-04).
     CHANNEL_CREATED = "channel_created"
     CHANNEL_UPDATED = "channel_updated"

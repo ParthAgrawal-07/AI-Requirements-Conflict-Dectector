@@ -5,10 +5,16 @@
 // after every (re)connect the cache is invalidated so the screen re-reads over REST, because
 // events missed while offline are never replayed.
 
-import { createContext, createElement, useContext, useEffect, useRef } from "react";
+import { createContext, createElement, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { API_BASE_URL, apiFetch } from "../api/client";
+import {
+  API_BASE_URL,
+  apiFetch,
+  getAccessToken,
+  refreshAccessToken,
+  triggerUnauthorized,
+} from "../api/client";
 import type { RealtimeEvent } from "../api/types";
 import { upsertMessage, type Message } from "../features/channels/api";
 
@@ -24,8 +30,14 @@ export type SocketFactory = (url: string) => SocketLike;
 
 const PING_MS = 25_000;
 const MAX_BACKOFF_MS = 30_000;
+const MAX_ATTEMPTS = 5;
 const CLOSE_UNAUTHENTICATED = 4401;
 const CLOSE_REVOKED = 4403;
+
+const REALTIME_ENABLED =
+  typeof import.meta !== "undefined" && import.meta.env
+    ? import.meta.env.VITE_REALTIME_ENABLED !== "false"
+    : true;
 
 export function realtimeUrl(base: string = API_BASE_URL): string {
   const url = new URL("/ws", base);
@@ -37,12 +49,14 @@ export class RealtimeConnection {
   private socket: SocketLike | null = null;
   private token: string | null = null;
   private attempts = 0;
+  private refreshedSinceReady = false;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private readonly projects = new Map<string, number>(); // project id -> subscriber count
   private readonly channels = new Map<string, number>(); // channel id -> subscriber count
   private readonly handlers = new Set<EventHandler>();
   private readonly resyncHandlers = new Set<() => void>();
+  private readonly revokedHandlers = new Set<() => void>();
 
   constructor(
     private readonly url: string = realtimeUrl(),
@@ -65,11 +79,15 @@ export class RealtimeConnection {
   /** Watch a project's events; returns the function that stops watching. */
   watchProject(projectId: string): () => void {
     this.projects.set(projectId, (this.projects.get(projectId) ?? 0) + 1);
-    this.sendSubscribe(projectId);
+    this.sendSubscribe(projectId, "project_id");
     return () => {
       const count = (this.projects.get(projectId) ?? 1) - 1;
-      if (count <= 0) this.projects.delete(projectId);
-      else this.projects.set(projectId, count);
+      if (count <= 0) {
+        this.projects.delete(projectId);
+        this.sendUnsubscribe(projectId, "project_id");
+      } else {
+        this.projects.set(projectId, count);
+      }
     };
   }
 
@@ -79,8 +97,12 @@ export class RealtimeConnection {
     this.sendSubscribe(channelId, "channel_id");
     return () => {
       const count = (this.channels.get(channelId) ?? 1) - 1;
-      if (count <= 0) this.channels.delete(channelId);
-      else this.channels.set(channelId, count);
+      if (count <= 0) {
+        this.channels.delete(channelId);
+        this.sendUnsubscribe(channelId, "channel_id");
+      } else {
+        this.channels.set(channelId, count);
+      }
     };
   }
 
@@ -95,12 +117,19 @@ export class RealtimeConnection {
     return () => this.resyncHandlers.delete(handler);
   }
 
+  onRevoked(handler: () => void): () => void {
+    this.revokedHandlers.add(handler);
+    return () => this.revokedHandlers.delete(handler);
+  }
+
   private open(): void {
-    if (!this.token) return;
+    if (!REALTIME_ENABLED || !this.token) return;
     this.socket?.close();
     const socket = this.factory(this.url);
     this.socket = socket;
-    socket.onopen = () => socket.send(JSON.stringify({ type: "auth", token: this.token }));
+    // The client's token is the freshest one: apiFetch may have refreshed it since connect().
+    const token = getAccessToken() ?? this.token;
+    socket.onopen = () => socket.send(JSON.stringify({ type: "auth", token }));
     socket.onmessage = (message) => this.receive(String(message.data));
     socket.onclose = (event) => this.closed(socket, event.code);
   }
@@ -114,7 +143,8 @@ export class RealtimeConnection {
     }
     if (frame.type === "ready") {
       this.attempts = 0;
-      for (const projectId of this.projects.keys()) this.sendSubscribe(projectId);
+      this.refreshedSinceReady = false;
+      for (const projectId of this.projects.keys()) this.sendSubscribe(projectId, "project_id");
       for (const channelId of this.channels.keys()) this.sendSubscribe(channelId, "channel_id");
       this.startPing();
       this.resyncHandlers.forEach((handler) => handler());
@@ -128,15 +158,41 @@ export class RealtimeConnection {
     if (socket !== this.socket) return; // an old socket we replaced
     this.clearTimers();
     this.socket = null;
-    if (!this.token || code === CLOSE_UNAUTHENTICATED || code === CLOSE_REVOKED) return;
+    if (code === CLOSE_UNAUTHENTICATED) {
+      void this.reauthenticate();
+      return;
+    }
+    if (code === CLOSE_REVOKED) {
+      this.revokedHandlers.forEach((handler) => handler());
+      return;
+    }
+    if (!this.token || this.attempts >= MAX_ATTEMPTS) return;
     const delay = Math.min(MAX_BACKOFF_MS, 1000 * 2 ** this.attempts);
     this.attempts += 1;
     this.retryTimer = setTimeout(() => this.open(), delay);
   }
 
+  /** The token expired: refresh once and reconnect, or end the session if that fails too. */
+  private async reauthenticate(): Promise<void> {
+    const token = this.refreshedSinceReady ? null : await refreshAccessToken();
+    if (!token || !this.token) {
+      if (this.token) triggerUnauthorized(); // still signed in here, but the session is gone
+      return;
+    }
+    this.refreshedSinceReady = true;
+    this.token = token;
+    this.open();
+  }
+
   private sendSubscribe(id: string, field: "project_id" | "channel_id" = "project_id"): void {
     if (this.socket && this.socket.readyState === 1) {
       this.socket.send(JSON.stringify({ type: "subscribe", [field]: id }));
+    }
+  }
+
+  private sendUnsubscribe(id: string, field: "project_id" | "channel_id" = "project_id"): void {
+    if (this.socket && this.socket.readyState === 1) {
+      this.socket.send(JSON.stringify({ type: "unsubscribe", [field]: id }));
     }
   }
 
@@ -204,17 +260,21 @@ export function RealtimeProvider({
   connection?: RealtimeConnection;
 }) {
   const queryClient = useQueryClient();
-  const ref = useRef<RealtimeConnection>(connection ?? new RealtimeConnection());
-  const realtime = ref.current;
+  const [realtime] = useState(() => connection ?? new RealtimeConnection());
 
   useEffect(() => {
     if (!token) return;
     realtime.connect(token);
     const stopEvents = realtime.onEvent((event) => applyEvent(queryClient, event));
     const stopResync = realtime.onResync(() => void queryClient.invalidateQueries());
+    const stopRevoked = realtime.onRevoked(() => {
+      void queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+      void queryClient.invalidateQueries({ queryKey: ["permissions"] });
+    });
     return () => {
       stopEvents();
       stopResync();
+      stopRevoked();
       realtime.disconnect();
     };
   }, [token, realtime, queryClient]);

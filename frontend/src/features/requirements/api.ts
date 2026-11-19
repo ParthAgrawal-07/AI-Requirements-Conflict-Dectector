@@ -74,3 +74,21 @@ export function useDecideOwnership(requirementId: string, projectId: string) {
     },
   });
 }
+
+// ── Version history (US-12, Parth's API: GET /requirements/{id}/versions) ────────────────────
+export interface RequirementVersion {
+  version_no: number;
+  body: string;
+  changed_by: { id: string; full_name: string } | null; // null for the extracted first version
+  changed_at: string;
+  change_request: { id: string; key: string } | null; // the RCR it was merged from
+}
+
+/** Newest first. Key ["versions", id]: a merge (change_request.merged) refreshes it. */
+export function useVersions(requirementId: string | null) {
+  return useQuery({
+    queryKey: ["versions", requirementId],
+    enabled: Boolean(requirementId),
+    queryFn: () => apiFetch<RequirementVersion[]>(`/requirements/${requirementId}/versions`),
+  });
+}

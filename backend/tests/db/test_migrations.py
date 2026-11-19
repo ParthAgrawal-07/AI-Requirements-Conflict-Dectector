@@ -43,6 +43,21 @@ EXPECTED_TABLES = {
     "channel_members",
     "channel_reads",
     "messages",
+    # Sprint 4 (0007_issues)
+    "issues",
+    "issue_requirements",
+    "issue_assignees",
+    "comments",
+    # Sprint 4 (0007a_change_requests)
+    "change_requests",
+    "change_request_revisions",
+    "change_request_issues",
+    # Sprint 4 (0007b_consequence_reports)
+    "consequence_reports",
+    # Sprint 4 (0007c_reviews)
+    "review_requests",
+    "reviews",
+    "review_comments",
 }
 
 
