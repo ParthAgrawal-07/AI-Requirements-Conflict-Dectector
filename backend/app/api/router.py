@@ -22,6 +22,7 @@ from app.api import (
     concerns,
     consequences,
     context,
+    decision_rules,
     documents,
     drafts,
     findings,
@@ -72,6 +73,7 @@ for _router in (
     change_requests.router,
     concerns.router,
     consequences.router,
+    decision_rules.router,
 ):
     api_router.include_router(_router, dependencies=_authenticated, responses=_unauthorized)
 

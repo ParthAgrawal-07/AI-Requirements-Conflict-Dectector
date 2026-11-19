@@ -171,6 +171,9 @@ class Finding(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     raised_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     external_ref: Mapped[str | None] = mapped_column(String(200))
     ai_miss: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
+    # Who decides, as resolved by the project's decision rules (US-57, migration 0010c);
+    # refreshed at the item's next update, never retroactively.
+    decision: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
     candidate_pair: Mapped[CandidatePair | None] = relationship()
     requirement: Mapped[Requirement | None] = relationship()

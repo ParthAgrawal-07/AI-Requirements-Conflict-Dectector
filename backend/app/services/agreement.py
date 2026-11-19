@@ -20,11 +20,16 @@ disabled Merge button, so the two can never disagree.
 ``changes_requested``      no reviewer's latest review of this revision asks for changes
 ``high_finding_open``      no High-severity finding is open on the requirement, unless the
                            merger records an accepted risk with a reason
+``decision_missing``       the decision owner a rule names (a role or a person) approved it,
+                           or proposed it (US-57, DR-23); the default rule's owner is the
+                           owner review above
+``rule_reviewer_missing``  every reviewer the decision rule requires approved it
 =========================  =================================================================
 
 Reviews of an earlier proposal revision count for nothing here: they were dismissed by the edit.
 """
 
+import uuid
 from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
@@ -33,7 +38,7 @@ from app.consequences import tasks as consequence_tasks
 from app.models import ChangeRequest, Project, Requirement
 from app.models.change_request import APPROVED, OPEN
 from app.models.change_review import APPROVE, REQUEST_CHANGES
-from app.services import lifecycle, reviews
+from app.services import decision_rules, lifecycle, reviews
 
 
 @dataclass(frozen=True)
@@ -55,7 +60,14 @@ class AgreementGuard:
             u.code
             for u in self.unmet(change_request)
             if u.code
-            in ("approvals_missing", "reviewer_missing", "compliance_missing", "changes_requested")
+            in (
+                "approvals_missing",
+                "reviewer_missing",
+                "compliance_missing",
+                "changes_requested",
+                "decision_missing",
+                "rule_reviewer_missing",
+            )
         }
 
     def unmet(self, change_request: ChangeRequest, *, accepted_risk: bool = False) -> list[Unmet]:
@@ -131,6 +143,7 @@ class AgreementGuard:
                         f"{label} is protected: a compliance reviewer must approve",
                     )
                 )
+        unmet.extend(self._decision(change_request, project, approvers))
         if any(r.decision == REQUEST_CHANGES for r in decisions.values()):
             unmet.append(
                 Unmet("changes_requested", "A reviewer asked for changes to this revision")
@@ -146,3 +159,31 @@ class AgreementGuard:
                     )
                 )
         return unmet
+
+    def _decision(
+        self, change_request: ChangeRequest, project: Project, approvers: set[uuid.UUID]
+    ) -> list[Unmet]:
+        """US-57: approval counts never satisfy a rule — the decision owner must agree."""
+        db = self.db
+        decision, facts = decision_rules.decision_for(db, change_request, store=False)
+        engine = decision_rules.DecisionRuleEngine(db)
+        owners = {u.id for u in engine.owners(project, decision, facts)}
+        found: list[Unmet] = []
+        # The requirement owner deciding is the US-35 owner review (``reviewer_missing``).
+        by_rule = decision.owner_kind != "requirement_owner"
+        if by_rule and change_request.proposer_id not in owners and not owners & approvers:
+            found.append(
+                Unmet(
+                    "decision_missing",
+                    f"{engine.sentence(project, decision, facts)}: their approval is needed",
+                )
+            )
+        for spec in decision.required_reviewers:
+            named = {u.id for u in engine.spec_users(project, spec)} - {change_request.proposer_id}
+            if not named & approvers:
+                found.append(
+                    Unmet("rule_reviewer_missing",
+                          f"A reviewer the rule {decision.rule_name} requires has not approved")
+                )  # fmt: skip
+                break
+        return found

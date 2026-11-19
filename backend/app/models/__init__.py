@@ -12,6 +12,7 @@ from app.models.change_review import Review, ReviewComment, ReviewRequest
 from app.models.channel import Channel, ChannelMember, ChannelRead, Message
 from app.models.consequence import ConsequenceReport
 from app.models.context import DocumentSection, ProjectContext
+from app.models.decision_rule import DecisionRule
 from app.models.document import Document
 from app.models.draft import RequirementDraft
 from app.models.embedding import EMBEDDING_DIM, Embedding
@@ -65,6 +66,7 @@ __all__ = [
     "Clarification",
     "Comment",
     "ConsequenceReport",
+    "DecisionRule",
     "Document",
     "DocumentSection",
     "DocumentFormat",

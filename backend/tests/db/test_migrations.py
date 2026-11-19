@@ -58,6 +58,10 @@ EXPECTED_TABLES = {
     "review_requests",
     "reviews",
     "review_comments",
+    # Sprint 5 (0010c_decision_rules_baselines)
+    "decision_rules",
+    "baselines",
+    "baseline_items",
 }
 
 
