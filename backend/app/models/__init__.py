@@ -9,6 +9,7 @@ from app.models.audit import AuditLog
 from app.models.base import Base
 from app.models.change_request import ChangeRequest, ChangeRequestIssue, ChangeRequestRevision
 from app.models.channel import Channel, ChannelMember, ChannelRead, Message
+from app.models.consequence import ConsequenceReport
 from app.models.context import DocumentSection, ProjectContext
 from app.models.document import Document
 from app.models.draft import RequirementDraft
@@ -62,6 +63,7 @@ __all__ = [
     "ChannelRead",
     "Clarification",
     "Comment",
+    "ConsequenceReport",
     "Document",
     "DocumentSection",
     "DocumentFormat",

@@ -20,6 +20,7 @@ from app.api import (
     channels,
     clarifications,
     concerns,
+    consequences,
     context,
     documents,
     drafts,
@@ -70,6 +71,7 @@ for _router in (
     search_similar.router,
     change_requests.router,
     concerns.router,
+    consequences.router,
 ):
     api_router.include_router(_router, dependencies=_authenticated, responses=_unauthorized)
 

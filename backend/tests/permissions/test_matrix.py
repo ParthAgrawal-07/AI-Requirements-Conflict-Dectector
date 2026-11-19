@@ -296,6 +296,10 @@ CASES = [
             "explanation": "Nobody can test what fast means here.",
         },
     ),
+    # Sprint 4 — impact and consequence checks (Madhav, US-11, US-34)
+    Case("GET", "/api/v1/requirements/{requirement_id}/impact"),
+    Case("GET", "/api/v1/change-requests/{change_request_id}/checks"),
+    Case("POST", "/api/v1/change-requests/{change_request_id}/checks/rerun"),
 ]
 
 

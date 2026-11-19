@@ -34,6 +34,7 @@ ISSUE_COMMENTED = "issue.commented"
 # Change requests (US-33, US-35, S4): opened, then edited, reviewed, merged, closed or withdrawn.
 CHANGE_REQUEST_OPENED = "change_request.opened"
 CHANGE_REQUEST_UPDATED = "change_request.updated"
+CHANGE_REQUEST_CHECKED = "change_request.checked"  # a consequence report is ready (US-34)
 # Channels (US-28, Madhav). ``data.private`` is true for a private channel: the gateway then
 # forwards the event only to sockets subscribed to that channel by id (re-checked membership).
 CHANNEL_CREATED = "channel.created"
@@ -57,6 +58,7 @@ EVENT_TYPES = frozenset(
         ISSUE_COMMENTED,
         CHANGE_REQUEST_OPENED,
         CHANGE_REQUEST_UPDATED,
+        CHANGE_REQUEST_CHECKED,
         CHANNEL_CREATED,
         CHANNEL_UPDATED,
         CHANNEL_MEMBER_REMOVED,
