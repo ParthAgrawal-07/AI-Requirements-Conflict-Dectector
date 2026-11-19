@@ -20,19 +20,19 @@
 | US-03 | Track Long-Running Analysis Progress | Must | 3 | S1 | EP-02 | Dhavni didi (Celery), Pranshu (UI) | Operational (supports FR-03–FR-17), FR-52 | 🟡 Document status and progress endpoint ✅; stage progress and UI ⬜ |
 | US-04 | View Extracted Requirements List | Must | 3 | S1 | EP-02 | Parth (API), Pranshu (UI) | FR-03, FR-05, FR-60 | 🟡 Backend ✅ (paginated, filterable list per project); UI ⬜ |
 | US-05 | Detect Requirement Issues (5-Category Classification) | Must | 13 | S2 | EP-03 | Keval (classification), Heet (embeddings, candidates), Abhyudit (accuracy) | FR-07–FR-12, FR-15, DR-07, DR-09, DR-10 | ⬜ |
-| US-06 | Tune Detection Thresholds per Project | Should | 5 | S5 | EP-03 | Keval, Heet, Abhijeet (settings UI) | FR-10, FR-16, FR-17, NFR-18 | ⬜ |
+| US-06 | Tune Detection Thresholds per Project | Should | 5 | S5 | EP-03 | Heet (threshold preview, re-analysis), Keval, Affan (settings page) | FR-10, FR-16, FR-17, NFR-18 | ⬜ |
 | US-07 | Explain Findings with Confidence Score & Context | Must | 5 | S2 | EP-03 | Keval, Abhijeet (findings UI) | FR-13, FR-14, NFR-17 | ⬜ |
-| US-08 | Assign Severity to Flagged Issues | Should | 3 | S6 | EP-04 | Keval, Abhijeet | FR-42 | ⬜ |
+| US-08 | Assign Severity to Flagged Issues | Should | 3 | S6 | EP-04 | Abhyudit (backend and UI) | FR-42 | ⬜ |
 | US-09 | Generate Clarification Questions | Must | 5 | S3 | EP-04 | Madhav | FR-22, FR-23 | ⬜ |
-| US-10 | Suggest Resolutions & Human Review of Findings | Must | 5 | S3 | EP-04 | Parth (review-state API, guard), Abhijeet (review UI) | FR-18–FR-21 | ⬜ |
-| US-11 | Change-Impact Analysis Engine | Must | 8 | S4 | EP-05 | Madhav (impact), Heet (relationship queries) | FR-24, FR-25 | ⬜ |
-| US-12 | Maintain Requirement Version History | Must | 3 | S4 | EP-05 | Parth (backend), Pranshu (history UI) | FR-26, DR-08 | ⬜ |
-| US-13 | View Requirements Quality Dashboard | Must | 5 | S5 | EP-06 | Pranshu (UI), Parth (aggregation) | FR-27, FR-28, FR-42 | ⬜ |
-| US-14 | Live Requirements Map | Must | 8 | S3 | EP-15 | Dhavni didi (graph API, deltas), Abhijeet (map UI) | FR-29, FR-84, NFR-32, NFR-33 | ⬜ |
-| US-15 | Dismiss / Resolve a Flag (Feedback Loop) | Should | 3 | S6 | EP-04 | Keval (tuning signal), Abhijeet (UI) | FR-18, NFR-22 | ⬜ |
+| US-10 | Suggest Resolutions & Human Review of Findings | Must | 5 | S3 | EP-04 | Affan (review state, protected guard, review UI), Parth (review and lifecycle tables) | FR-18–FR-21 | ⬜ |
+| US-11 | Change-Impact Analysis Engine | Must | 8 | S4 | EP-05 | Heet (impact analysis, relationship queries) | FR-24, FR-25 | ⬜ |
+| US-12 | Maintain Requirement Version History | Must | 3 | S4 | EP-05 | Affan (backend and UI) | FR-26, DR-08 | ⬜ |
+| US-13 | View Requirements Quality Dashboard | Must | 5 | S5 | EP-06 | Abhyudit (aggregation and dashboard) | FR-27, FR-28, FR-42 | ⬜ |
+| US-14 | Live Requirements Map | Must | 8 | S3 | EP-15 | Dhavni didi (graph revisions, deltas, narrator, positions), Abhijeet (map UI, changes feed, applying live deltas on the map) | FR-29, FR-84, NFR-32, NFR-33 | ⬜ |
+| US-15 | Dismiss / Resolve a Flag (Feedback Loop) | Should | 3 | S6 | EP-04 | Keval (feedback loop and view), Pranshu (AI feedback API) | FR-18, NFR-22 | ⬜ |
 | US-16 | Export Issue, Impact and Consequence Reports | Should | 5 | — | EP-06 | — | FR-30 | ⏸ Deferred |
 | US-17 | Receive Executive / ROI Summary Report | Could | 5 | — | EP-09 | — | — | ⏸ Deferred |
-| US-18 | Protect Compliance-Critical Requirements | Should — conditional | 5 | S6 | EP-07 | Parth (backend), Abhijeet (UI) | FR-21, FR-36, NFR-13, DR-05, DR-12 | ⬜ |
+| US-18 | Protect Compliance-Critical Requirements | Should — conditional | 5 | S6 | EP-07 | Abhijeet (backend), Dhavni didi (compliance UI) | FR-21, FR-36, NFR-13, DR-05, DR-12 | ⬜ |
 | US-19 | Authenticate via JWT (Sign-Up Only with a Code, SSO Later) | Must | 5 | S1 | EP-01 | Parth (backend), Pranshu (login UI) | FR-37, FR-38, NFR-11, NFR-12 | 🟡 Backend ✅ (login, sign-up with a code, `/auth/me`); login UI ⬜ |
 | US-20 | Documented REST API for Third-Party Integration | Could | 8 | — | EP-09 | — | — | ⏸ Deferred |
 | US-21 | Integrate with Jira / Confluence / GitHub | Could | 8 | — | EP-09 | — | — | ⏸ Deferred |
@@ -44,38 +44,38 @@
 | US-27 | Enforce Roles and Permissions | Must | 5 | S1 | EP-10 | Parth (backend), Affan (permission tests) | FR-38, FR-48, NFR-11, NFR-27 | 🟡 Backend ✅ (permission catalogue, 9 default roles, `require_permission`); UI ⬜ |
 | US-28 | Create and Manage Channels | Must | 3 | S2 | EP-10 | Madhav (backend), Pranshu (UI) | FR-50 | ⬜ |
 | US-29 | Real-Time Messaging with Threads and Mentions | Must | 8 | S2 | EP-10 | Dhavni didi (WebSocket, event bus), Pranshu (chat UI) | FR-51, FR-52, NFR-24 | ⬜ |
-| US-30 | Requirement Composer with EARS Templates | Must | 5 | S3 | EP-11 | Bansil (backend), Pranshu (composer UI) | FR-55, FR-60, FR-81, DR-15, DR-18 | ⬜ |
-| US-31 | Live Analysis of a Posted Requirement | Must | 8 | S3 | EP-11 | Heet (incremental retrieval), Keval (classification, budget), Dhavni didi (queue, events) | FR-56, FR-57, NFR-25, NFR-28 | ⬜ |
+| US-30 | Requirement Composer with EARS Templates | Must | 5 | S3 | EP-11 | Pranshu (backend and composer UI) | FR-55, FR-60, FR-81, DR-15, DR-18 | ⬜ |
+| US-31 | Live Analysis of a Posted Requirement | Must | 8 | S3 | EP-11 | Heet (incremental retrieval, similar hints), Keval (classification, budget, result card), Abhyudit (requirement runs) | FR-56, FR-57, NFR-25, NFR-28 | ⬜ |
 | US-32 | Suggest Requirements Detected in Chat (Opt-In) | Should | 5 | — | EP-11 | — | FR-58, NFR-30, DR-15 | ⏸ Deferred |
-| US-33 | Open a Change Request (Change Editor) | Must | 5 | S4 | EP-12 | Bansil (backend), Abhijeet (UI) | FR-62, FR-89, DR-14 | ⬜ |
-| US-34 | Consequence Checks for a Change Request | Must | 8 | S4 | EP-12 | Madhav (checks, risk), Keval (narrative), Abhijeet (Checks and Map-preview tabs) | FR-24, FR-25, FR-63, FR-64, FR-88, NFR-26, DR-16 | ⬜ |
-| US-35 | Review and Merge | Must | 5 | S4 | EP-12 | Parth (policy, merge), Abhijeet (UI) | FR-21, FR-65, FR-66, FR-88, DR-04 | ⬜ |
-| US-36 | Owners, Stakeholder Groups and Ownership Requests | Should | 3 | S3 | EP-11 | Bansil (backend), Pranshu (UI) | FR-59, DR-11 | ⬜ |
+| US-33 | Open a Change Request (Change Editor) | Must | 5 | S4 | EP-12 | Bansil (intake, change editor, diff view), Heet (change-request API client), Pranshu (change-request list and page) | FR-62, FR-89, DR-14 | ⬜ |
+| US-34 | Consequence Checks for a Change Request | Must | 8 | S4 | EP-12 | Madhav (checks, findings delta, risk, Checks tab), Keval (narrative) | FR-24, FR-25, FR-63, FR-64, FR-88, NFR-26, DR-16 | ⬜ |
+| US-35 | Review and Merge | Must | 5 | S4 | EP-12 | Heet (reviews, review requests, Reviews tab), Parth (merge, needs-update, agreement guard), Affan (merge box) | FR-21, FR-65, FR-66, FR-88, DR-04 | ⬜ |
+| US-36 | Owners, Stakeholder Groups and Ownership Requests | Should | 3 | S3 | EP-11 | Bansil (backend and UI) | FR-59, DR-11 | ⬜ |
 | US-37 | Requirement Lifecycle States | Must | 3 | S3 | EP-11 | Parth | FR-61, DR-13 | ⬜ |
-| US-38 | Inbox and Notifications | Must | 5 | S5 | EP-13 | Madhav (notification service), Abhijeet (inbox UI) | FR-69, FR-70 | ⬜ |
+| US-38 | Inbox and Notifications | Must | 5 | S5 | EP-13 | Abhijeet (notifications backend), Dhavni didi (bell and inbox UI) | FR-69, FR-70 | ⬜ |
 | US-39 | Notification Preferences and Email Digest | Could | 3 | — | EP-13 | — | FR-71 | ⏸ Deferred |
-| US-40 | Baseline Snapshots and Comparison | Should | 5 | S5 | EP-14 | Parth (backend), Pranshu (UI) | FR-73, DR-08 | ⬜ |
-| US-41 | Export the Updated SRS (DOCX, PDF, Markdown) | Should | 5 | S6 | EP-14 | Bansil | FR-74, FR-107, DR-02, DR-03 | ⬜ |
-| US-42 | Requirement Activity Timeline | Should | 3 | S6 | EP-13 | Dhavni didi (backend), Pranshu (UI) | FR-72, DR-06, DR-08 | ⬜ |
+| US-40 | Baseline Snapshots and Comparison | Should | 5 | S5 | EP-14 | Pranshu (backend and UI) | FR-73, DR-08 | ⬜ |
+| US-41 | Export the Updated SRS (DOCX, PDF, Markdown) | Should | 5 | S6 | EP-14 | Bansil (DOCX, PDF, Markdown exporters), Pranshu (export API) | FR-74, FR-107, DR-02, DR-03 | ⬜ |
+| US-42 | Requirement Activity Timeline | Should | 3 | S6 | EP-13 | Abhyudit (backend and UI) | FR-72, DR-06, DR-08 | ⬜ |
 | US-43 | Ask the Baseline (Q&A with Citations) | Could | 5 | — | EP-14 | — | FR-75, NFR-17 | ⏸ Deferred |
 | US-44 | Requirements Health Analytics | Should | 5 | — | EP-06 | — | FR-76 | ⏸ Deferred |
-| US-45 | AI Resolution Suggestions with Human Feedback | Must | 5 | S5 | EP-12 | Madhav (suggestion engine), Keval (prompts, feedback examples), Abhijeet (suggestion panel UI) | FR-68, FR-94, NFR-36, DR-04, DR-20 | ⬜ |
+| US-45 | AI Resolution Suggestions with Human Feedback | Must | 5 | S5 | EP-12 | Madhav (suggestion service and feedback), Keval (prompts), Abhyudit (suggestion panel), Bansil (change request from a suggestion) | FR-68, FR-94, NFR-36, DR-04, DR-20 | ⬜ |
 | US-46 | Search Across the Workspace | Should | 3 | — | EP-10 | — | FR-53 | ⏸ Deferred |
 | US-47 | Import Meeting Notes as Candidate Requirements | Could | 5 | — | EP-11 | — | — | ⏸ Deferred |
 | US-48 | Link Requirements to Work Items | Should | 3 | — | EP-12 | — | FR-67 | ⏸ Deferred |
 | US-49 | Custom Roles and Permission Sets | Should | 3 | S2 | EP-10 | Parth (backend), Abhijeet (UI) | FR-78, FR-79 | ⬜ |
-| US-50 | Map Preview Layer and Time Slider | Should | 5 | S6 | EP-15 | Dhavni didi (snapshots of graph state), Pranshu (UI) | FR-85 | ⬜ |
-| US-51 | Live Lint, Similar Hints, Pre-Flight Check and AI Wording | Should | 5 | S5 | EP-11 | Keval (lint catalogue, dry run, AI wording), Bansil (composer wiring) | FR-82, FR-83, FR-93, NFR-34, DR-07, DR-18 | ⬜ |
-| US-52 | Requirement Issues and Auto Conflict Issues | Must | 5 | S4 | EP-12 | Dhavni didi (backend, auto-open rules), Pranshu (UI) | FR-86, FR-87, SX-18 | ⬜ |
-| US-53 | Discussion, Votes, Watch and Links | Should | 3 | S6 | EP-11 | Madhav | FR-80, FR-90, FR-91, DR-17, DR-19 | ⬜ |
+| US-50 | Map Preview Layer and Time Slider | Should | 5 | S6 | EP-15 | Dhavni didi (preview layer, revisions, history), Heet (time slider) | FR-85 | ⬜ |
+| US-51 | Live Lint, Similar Hints, Pre-Flight Check and AI Wording | Should | 5 | S5 | EP-11 | Keval (lint engine, pre-flight, AI wording), Pranshu (authoring-aids API, lint tests), Bansil (authoring panel, composer wiring) | FR-82, FR-83, FR-93, NFR-34, DR-07, DR-18 | ⬜ |
+| US-52 | Requirement Issues and Auto Conflict Issues | Must | 5 | S4 | EP-12 | Dhavni didi (auto conflict issues, issues client), Abhijeet (issue API, list, page, comments) | FR-86, FR-87, SX-18 | ⬜ |
+| US-53 | Discussion, Votes, Watch and Links | Should | 3 | S6 | EP-11 | Affan (backend and UI) | FR-80, FR-90, FR-91, DR-17, DR-19 | ⬜ |
 | US-54 | Structural Change Requests and Counter-Proposals | Could | 5 | — | EP-12 | — | FR-92 | ⏸ Deferred |
-| US-55 | Written Change Log and Summaries for the Map | Should | 3 | S6 | EP-15 | Dhavni didi (change sentences, summaries), Keval (AI narrative), Pranshu (Changes panel UI) | FR-95, FR-96 | ⬜ |
-| US-56 | Raise a Concern (Human-Raised Findings) | Must | 3 | S4 | EP-04 | Bansil (backend), Pranshu (UI) | FR-97, DR-21 | ⬜ |
-| US-57 | Decision Rules and Decision Owners per Project | Must | 3 | S5 | EP-12 | Parth (rules engine), Pranshu (settings UI) | FR-65, FR-100, DR-23 | ⬜ |
-| US-58 | Rule-Based Cross-Checks for Conflicts the Similarity Filter Misses | Must | 5 | S5 | EP-03 | Heet (attribute index), Keval (attribute extraction), Abhyudit (recall measurement) | FR-101, NFR-37, DR-21 | ⬜ |
-| US-59 | Open-Items Report Beside the Approved Baseline | Should | 2 | S6 | EP-14 | Bansil | FR-74, FR-102, DR-22 | ⬜ |
+| US-55 | Written Change Log and Summaries for the Map | Should | 3 | S6 | EP-15 | Heet (change-log backend, Changes panel), Abhijeet (changes API, change-summary route, change kinds), Keval (summary paragraph) | FR-95, FR-96 | ⬜ |
+| US-56 | Raise a Concern (Human-Raised Findings) | Must | 3 | S4 | EP-04 | Abhyudit (backend and UI) | FR-97, DR-21 | ⬜ |
+| US-57 | Decision Rules and Decision Owners per Project | Must | 3 | S5 | EP-12 | Parth (rules engine), Affan (decision owners, rules tab, project settings) | FR-65, FR-100, DR-23 | ⬜ |
+| US-58 | Rule-Based Cross-Checks for Conflicts the Similarity Filter Misses | Must | 5 | S5 | EP-03 | Heet (attribute index, rule checks), Keval (attribute extraction), Abhyudit (recall measurement) | FR-101, NFR-37, DR-21 | ⬜ |
+| US-59 | Open-Items Report Beside the Approved Baseline | Should | 2 | S6 | EP-14 | Abhyudit | FR-74, FR-102, DR-22 | ⬜ |
 | US-60 | Project Context Required Before Analysis | Must | 3 | S1 | EP-10 | Bansil (context service, SRS draft of the brief), Abhijeet (setup wizard UI), Keval (context pack in prompts) | FR-47, FR-103, FR-104, FR-105, NFR-39, DR-24 | 🟡 Backend ✅ (versioned context, AI-drafted brief, activation gate); setup wizard UI and context pack in prompts ⬜ |
-| US-61 | Generate the Updated SRS with the LLM and Review It | Must | 5 | S6 | EP-14 | Bansil (generator, fidelity check), Keval (section prompts), Pranshu (review UI) | FR-106, FR-107, NFR-38, DR-25 | ⬜ |
+| US-61 | Generate the Updated SRS with the LLM and Review It | Must | 5 | S6 | EP-14 | Bansil (generator, readiness, fidelity check, publishing), Pranshu (SRS API), Keval (section prompts, section review, SRS screen) | FR-106, FR-107, NFR-38, DR-25 | ⬜ |
 
 ## 2. MVP Scope Note
 
