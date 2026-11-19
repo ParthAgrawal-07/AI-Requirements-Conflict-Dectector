@@ -43,6 +43,8 @@ class GraphEdge(BaseModel):
     status: EdgeStatus = "flagged"  # the human review state (US-10)
     severity: Literal["low", "medium", "high"] | None = None
     confidence: float | None = Field(default=None, ge=0, le=1)
+    # Who found it (ADR-25): the map's AI / Rule / Person badge (US-56).
+    found_by: Literal["ai", "rule", "person"] = "ai"
 
 
 class GraphSnapshot(BaseModel):

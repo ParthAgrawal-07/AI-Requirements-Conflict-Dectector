@@ -4,6 +4,7 @@ import type { RouteObject } from "react-router-dom";
 import { Button } from "../components/Button";
 import { LoginPage } from "../features/auth/LoginPage";
 import { SignupWithCodePage } from "../features/auth/SignupWithCodePage";
+import { ChangeEditor } from "../features/changes/ChangeEditor";
 import { ChannelView } from "../features/channels/ChannelView";
 import { ComposerPage } from "../features/composer/ComposerPage";
 import { FindingsPage } from "../features/findings/FindingsPage";
@@ -124,6 +125,7 @@ export const routes: RouteObject[] = [
               { path: "channels/:channelId", element: <ChannelView /> },
               { path: "findings", element: <FindingsPage /> },
               { path: "map", element: <MapPage /> },
+              { path: "changes/new", element: <ChangeEditor /> },
               ...LATER.map((item) => ({
                 path: item.path,
                 element: <ComingSoon title={item.title} sprint={item.sprint} />,

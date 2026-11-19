@@ -358,11 +358,17 @@ def after_run(db: Session, run_id: uuid.UUID, transition: str = CLOSED) -> None:
     job only rewrites it with the same results."""
     from app.classification.result_card import publish_card
     from app.graph import deltas
+    from app.services import issues
 
     run = db.get(AnalysisRun, run_id)
     if run is None:
         return
     if transition == CLOSED and run.status is AnalysisRunStatus.DONE:
+        try:
+            issues.ConflictIssueOpener(db).on_run(run)
+        except Exception:
+            db.rollback()
+            logger.exception("Auto conflict issues for run %s failed", run_id)
         try:
             deltas.run_finished(db, run)
         except Exception:
