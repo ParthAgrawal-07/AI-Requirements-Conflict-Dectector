@@ -8,11 +8,13 @@ requirements of ``change_requests.json``. No embeddings: the relations are the l
 
 import csv
 import json
+import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import pytest
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -28,13 +30,35 @@ from app.models import (
     User,
 )
 
-BENCHMARK = Path(__file__).resolve().parents[3] / "eval" / "benchmark_v2"
+
+def _find_benchmark() -> Path:
+    """eval/benchmark_v2 from the repo, or wherever EVAL_DIR or /eval mounts it (as
+    test_upload_extract looks for it). The backend container mounts only backend/."""
+    repo_eval = Path(__file__).resolve().parents[3] / "eval"
+    for base in (os.environ.get("EVAL_DIR"), "/eval", str(repo_eval)):
+        if base and (Path(base) / "benchmark_v2" / "change_requests.json").is_file():
+            return Path(base) / "benchmark_v2"
+    return repo_eval / "benchmark_v2"
+
+
+BENCHMARK = _find_benchmark()
+
+
+def _benchmark() -> Path:
+    if not (BENCHMARK / "change_requests.json").is_file():
+        # Skip (here, at collection too) rather than error where eval/ is not mounted.
+        pytest.skip(
+            "eval/benchmark_v2 is not reachable from this environment", allow_module_level=True
+        )
+    return BENCHMARK
+
+
 _LINE = re.compile(r"^(?:\| )?(REQ-\d{3})(?::| \|) (.+?)(?: \|)?$")
 
 
 def statements() -> dict[str, str]:
     found: dict[str, str] = {}
-    for line in (BENCHMARK / "srs_planted.md").read_text(encoding="utf-8").splitlines():
+    for line in (_benchmark() / "srs_planted.md").read_text(encoding="utf-8").splitlines():
         match = _LINE.match(line.strip())
         if match:
             found[match.group(1)] = match.group(2).strip()
@@ -42,13 +66,13 @@ def statements() -> dict[str, str]:
 
 
 def labels() -> list[dict[str, str]]:
-    with (BENCHMARK / "labels.csv").open(encoding="utf-8", newline="") as handle:
+    with (_benchmark() / "labels.csv").open(encoding="utf-8", newline="") as handle:
         return [row for row in csv.DictReader(handle) if row["category"] != "None"]
 
 
 def scripted() -> dict[str, Any]:
     data: dict[str, Any] = json.loads(
-        (BENCHMARK / "change_requests.json").read_text(encoding="utf-8")
+        (_benchmark() / "change_requests.json").read_text(encoding="utf-8")
     )
     return data
 
