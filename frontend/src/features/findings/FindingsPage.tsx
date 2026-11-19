@@ -1,8 +1,14 @@
 import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { useProjectRealtime } from "../../app/socket";
 import { Button } from "../../components/Button";
-import { STATUS_LABEL, useFindings, type FindingCategory, type FindingStatus } from "./api";
+import {
+  STATUS_LABEL,
+  useFindings,
+  type FindingCategory,
+  type FindingFilters,
+  type FindingStatus,
+} from "./api";
 import { FindingCard } from "./FindingCard";
 import { FindingDrawer } from "./FindingDrawer";
 
@@ -15,15 +21,25 @@ const PAGE = 20;
 export function FindingsPage() {
   const { projectId = "" } = useParams();
   useProjectRealtime(projectId);
-  const [category, setCategory] = useState<FindingCategory | undefined>();
-  const [status, setStatus] = useState<FindingStatus | undefined>();
+  // A dashboard tile or a notification opens this page already filtered (FR-28, US-38).
+  const [params] = useSearchParams();
+  const [category, setCategory] = useState<FindingCategory | undefined>(
+    (params.get("category") as FindingCategory | null) ?? undefined,
+  );
+  const [status, setStatus] = useState<FindingStatus | undefined>(
+    (params.get("status") as FindingStatus | null) ?? undefined,
+  );
+  const severity = (params.get("severity") as FindingFilters["severity"] | null) ?? undefined;
+  const source = params.get("source") ?? undefined;
   const [lowOnly, setLowOnly] = useState(false);
   const [offset, setOffset] = useState(0);
-  const [open, setOpen] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(params.get("finding"));
   const findings = useFindings(projectId, {
     category,
     status,
     low_confidence: lowOnly ? true : undefined,
+    severity,
+    source,
     limit: PAGE,
     offset,
   });
