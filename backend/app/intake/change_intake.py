@@ -18,6 +18,7 @@ proposer opens it. The consequence checks start when it is opened (Madhav, US-34
 audited (ids only) and announced as ``change_request.opened``.
 """
 
+import contextlib
 import logging
 import re
 import uuid
@@ -256,6 +257,7 @@ def open_change_request(
         )
         or 0
     ) + 1
+    requirement_id = requirement.id  # read now: after a failed flush the instance may not reload
     try:
         change_request = _store(
             db,
@@ -271,10 +273,12 @@ def open_change_request(
             draft=draft,
         )
     except SQLAlchemyError:
-        db.rollback()
-        # ``from None``: the driver error carries the bound proposal text and reason, which must
-        # not reach the error log (AGENTS.md §6). The code and the request id are enough.
-        logger.error("Storing a change request for %s failed", requirement.id)
+        # The driver error carries the bound proposal text and reason, which must not reach the
+        # error log (AGENTS.md §6): a failing rollback is swallowed rather than chained onto it,
+        # and ``from None`` drops it from the AppError. The requirement id is enough to trace it.
+        with contextlib.suppress(Exception):
+            db.rollback()
+        logger.error("Storing a change request for %s failed", requirement_id)
         raise AppError("The change request could not be saved; try again") from None
     try:
         announce_opened(db, change_request, project, requirement, ctx.user)

@@ -87,8 +87,15 @@ function NewChangeForm({
   const [resolves, setResolves] = useState<number[]>(preselected);
   const issues = useIssues(projectId, { status: "open", requirement: requirement.requirement_id, limit: 50, offset: 0 });
   const listed = new Set((issues.data?.items ?? []).map((issue) => issue.number));
-  // Selected but not on the list (e.g. ?resolves= named another issue): shown so it can be removed.
-  const unlisted = issues.isSuccess ? resolves.filter((n) => !listed.has(n)) : [];
+  // Selected but not on the list (e.g. ?resolves= named another issue, or the list is still
+  // loading or failed): every number that will be sent stays visible and can be unchecked.
+  const unlisted = resolves.filter((n) => !listed.has(n));
+  const unlistedNote = issues.isSuccess
+    ? "not one of this requirement's open issues; uncheck to leave it out"
+    : issues.isError
+      ? "the issue list could not be loaded, so it is not checked yet; uncheck to leave it out"
+      : "checking…";
+  const saving = open.isPending;
   const label = requirement.source_req_id ?? "the requirement";
   const blank = kind === "modify" && !text.trim();
   const unchanged = kind === "modify" && text.trim() === base.body.trim();
@@ -131,25 +138,41 @@ function NewChangeForm({
         <span className="muted small">(base v{base.version})</span>
       </h1>
       {moved && (
-        <p className="banner" role="status">
-          {label} is at v{requirement.current_version} now. Read the current text, then take it as your base; your
-          proposal is kept.{" "}
-          <Button size="sm" variant="ghost" onClick={() => setBase({ version: requirement.current_version, body: requirement.body })}>
+        <div className="banner" role="status">
+          <p>
+            {label} is at v{requirement.current_version} now. Read what changed since v{base.version}, then take it as
+            your base; your proposal is kept.
+          </p>
+          <WordDiff before={base.body} after={requirement.body} label={`Changes from v${base.version} to v${requirement.current_version}`} />
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={saving}
+            onClick={() => setBase({ version: requirement.current_version, body: requirement.body })}
+          >
             Use v{requirement.current_version} as the base
           </Button>
-        </p>
+        </div>
       )}
       <fieldset className="decision">
         <legend>Kind</legend>
         <label className="checkbox">
-          <input type="radio" name="kind" checked={kind === "modify"} onChange={() => setKind("modify")} /> Modify
+          <input type="radio" name="kind" checked={kind === "modify"} disabled={saving} onChange={() => setKind("modify")} />{" "}
+          Modify
         </label>
         <label className="checkbox">
-          <input type="radio" name="kind" checked={kind === "deprecate"} onChange={() => setKind("deprecate")} /> Deprecate
+          <input
+            type="radio"
+            name="kind"
+            checked={kind === "deprecate"}
+            disabled={saving}
+            onChange={() => setKind("deprecate")}
+          />{" "}
+          Deprecate
         </label>
       </fieldset>
       {kind === "modify" ? (
-        <ProposalText current={base.body} text={text} onChange={setText} />
+        <ProposalText current={base.body} text={text} onChange={setText} readOnly={saving} />
       ) : (
         <p className="muted">
           {label} leaves the baseline when this merges; its text stays in the version history.
@@ -157,7 +180,15 @@ function NewChangeForm({
       )}
       <label>
         Reason (required)
-        <textarea rows={2} required minLength={3} maxLength={4000} value={reason} onChange={(e) => setReason(e.target.value)} />
+        <textarea
+          rows={2}
+          required
+          minLength={3}
+          maxLength={4000}
+          value={reason}
+          readOnly={saving} // a later edit would not be in the request already sent
+          onChange={(e) => setReason(e.target.value)}
+        />
       </label>
       {(issues.data?.items ?? []).length > 0 && (
         <fieldset>
@@ -167,6 +198,7 @@ function NewChangeForm({
               <input
                 type="checkbox"
                 checked={resolves.includes(issue.number)}
+                disabled={saving}
                 onChange={(e) =>
                   setResolves(e.target.checked ? [...resolves, issue.number] : resolves.filter((n) => n !== issue.number))
                 }
@@ -181,9 +213,13 @@ function NewChangeForm({
           <legend>Also resolves</legend>
           {unlisted.map((number) => (
             <label key={number} className="checkbox">
-              <input type="checkbox" checked onChange={() => setResolves(resolves.filter((n) => n !== number))} />{" "}
-              <span className="mono">ISS-{number}</span>{" "}
-              <span className="muted small">(not one of this requirement&apos;s open issues; uncheck to leave it out)</span>
+              <input
+                type="checkbox"
+                checked
+                disabled={saving}
+                onChange={() => setResolves(resolves.filter((n) => n !== number))}
+              />{" "}
+              <span className="mono">ISS-{number}</span> <span className="muted small">({unlistedNote})</span>
             </label>
           ))}
         </fieldset>
@@ -207,12 +243,22 @@ function NewChangeForm({
   );
 }
 
-function ProposalText({ current, text, onChange }: { current: string; text: string; onChange: (text: string) => void }) {
+function ProposalText({
+  current,
+  text,
+  onChange,
+  readOnly = false,
+}: {
+  current: string;
+  text: string;
+  onChange: (text: string) => void;
+  readOnly?: boolean;
+}) {
   return (
     <>
       <label>
         Proposed text
-        <textarea rows={4} required maxLength={4000} value={text} onChange={(e) => onChange(e.target.value)} />
+        <textarea rows={4} required maxLength={4000} value={text} readOnly={readOnly} onChange={(e) => onChange(e.target.value)} />
       </label>
       <div>
         <span className="eyebrow">Diff</span>
@@ -237,6 +283,10 @@ function Preflight({ requirement, kind, resolving }: { requirement: RequirementD
       <h2 className="eyebrow">Before you open it</h2>
       {impact.isLoading ? (
         <p className="muted small">Working out what this touches…</p>
+      ) : impact.isError && !impact.data ? (
+        <p className="muted small" role="alert">
+          What this touches could not be worked out right now. The full checks still run once it is open.
+        </p>
       ) : (
         <ul className="readiness">
           {resolving > 0 && (
@@ -308,10 +358,20 @@ export function EditProposal({ change, onDone }: EditProposalProps) {
           This saves it against v{change.requirement.current_version}, the current text.
         </p>
       )}
-      {change.kind === "modify" && <ProposalText current={change.current_body} text={text} onChange={setText} />}
+      {change.kind === "modify" && (
+        <ProposalText current={change.current_body} text={text} onChange={setText} readOnly={update.isPending} />
+      )}
       <label>
         Reason
-        <textarea rows={2} required minLength={3} maxLength={4000} value={reason} onChange={(e) => setReason(e.target.value)} />
+        <textarea
+          rows={2}
+          required
+          minLength={3}
+          maxLength={4000}
+          value={reason}
+          readOnly={update.isPending}
+          onChange={(e) => setReason(e.target.value)}
+        />
       </label>
       <div className="row-actions">
         <Button variant="ghost" onClick={onDone}>

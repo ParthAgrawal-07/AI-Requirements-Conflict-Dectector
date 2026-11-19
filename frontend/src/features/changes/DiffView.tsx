@@ -29,8 +29,9 @@ function selectedRange(container: HTMLElement): Quote | null {
   return text.trim() ? { start_offset: start, end_offset: start + text.length, text } : null;
 }
 
-/** Select words with the mouse and press the button; or, from the keyboard (no selection), press it
- *  and type the words to quote — their first occurrence in the proposal is quoted. */
+/** Select words with the mouse and press the button. From the keyboard (no selection), the button
+ *  opens the proposal in a read-only text box: select any words there — a later repeat of the
+ *  same words included — with Shift and the arrow keys, then quote the selection. */
 function QuotePicker({
   proposed,
   container,
@@ -40,42 +41,46 @@ function QuotePicker({
   container: RefObject<HTMLParagraphElement | null>;
   onQuote: (quote: Quote) => void;
 }) {
-  const [typing, setTyping] = useState(false);
-  const [words, setWords] = useState("");
-  const [missing, setMissing] = useState(false);
+  const [keyboard, setKeyboard] = useState(false);
+  const [empty, setEmpty] = useState(false);
+  const box = useRef<HTMLTextAreaElement>(null);
 
-  if (typing) {
+  if (keyboard) {
     return (
-      <form
-        className="row-actions"
-        aria-label="Quote words"
-        onSubmit={(event) => {
-          event.preventDefault();
-          const text = words.trim();
-          const start = text ? proposed.indexOf(text) : -1;
-          if (start < 0) {
-            setMissing(true);
-            return;
-          }
-          onQuote({ start_offset: start, end_offset: start + text.length, text });
-          setTyping(false);
-          setWords("");
-          setMissing(false);
-        }}
-      >
+      <div className="form-stack">
         <label>
-          Words to quote
-          <input className="input" autoFocus value={words} onChange={(e) => setWords(e.target.value)} />
+          Select the words to quote
+          <textarea ref={box} readOnly rows={3} value={proposed} autoFocus />
         </label>
-        <button type="submit" className="link-button small">
-          Quote
-        </button>
-        {missing && (
-          <span className="field-error small" role="alert">
-            Those words are not in the proposed text.
-          </span>
+        <div className="row-actions">
+          <button
+            type="button"
+            className="link-button small"
+            onClick={() => {
+              const start = box.current?.selectionStart ?? 0;
+              const end = box.current?.selectionEnd ?? 0;
+              const text = proposed.slice(start, end);
+              if (!text.trim()) {
+                setEmpty(true);
+                return;
+              }
+              onQuote({ start_offset: start, end_offset: end, text });
+              setKeyboard(false);
+              setEmpty(false);
+            }}
+          >
+            Quote the selection
+          </button>
+          <button type="button" className="link-button small" onClick={() => setKeyboard(false)}>
+            Cancel
+          </button>
+        </div>
+        {empty && (
+          <p className="field-error small" role="alert">
+            Select some words first.
+          </p>
         )}
-      </form>
+      </div>
     );
   }
   return (
@@ -86,11 +91,26 @@ function QuotePicker({
       onClick={() => {
         const quote = container.current && selectedRange(container.current);
         if (quote) onQuote(quote);
-        else setTyping(true); // keyboard users have no selection to give
+        else setKeyboard(true); // keyboard users have no selection to give
       }}
     >
       Comment on the selected words
     </button>
+  );
+}
+
+/** What merged underneath a request written against an older version (needs update). */
+function MovedBlock({ change }: { change: DiffViewProps["change"] }) {
+  return (
+    <div className="diff-block">
+      <h3 className="eyebrow">
+        Changed underneath: v{change.base_version} → v{change.requirement.current_version}
+      </h3>
+      <WordDiff before={change.base_body} after={change.current_body} label="Merged since this request was written" />
+      {change.base_body === change.current_body && (
+        <p className="muted small">The statement reads the same; the version still moved.</p>
+      )}
+    </div>
   );
 }
 
@@ -119,6 +139,7 @@ export function DiffView({ change, reviews = [], onQuote }: DiffViewProps) {
   if (change.kind === "deprecate" || change.proposed_body === null) {
     return (
       <section className="diff-view" aria-label="Files changed">
+        {moved && <MovedBlock change={change} />}
         <p>
           <strong>Deprecate {label}</strong> — it leaves the baseline. Its text stays in the version history.
         </p>
@@ -130,17 +151,7 @@ export function DiffView({ change, reviews = [], onQuote }: DiffViewProps) {
   const proposed = change.proposed_body;
   return (
     <section className="diff-view" aria-label="Files changed">
-      {moved && (
-        <div className="diff-block">
-          <h3 className="eyebrow">
-            Changed underneath: v{change.base_version} → v{change.requirement.current_version}
-          </h3>
-          <WordDiff before={change.base_body} after={change.current_body} label="Merged since this request was written" />
-          {change.base_body === change.current_body && (
-            <p className="muted small">The statement reads the same; the version still moved.</p>
-          )}
-        </div>
-      )}
+      {moved && <MovedBlock change={change} />}
       <div className="diff-block">
         <h3 className="eyebrow">
           {moved ? `Current v${change.requirement.current_version} → proposed` : `v${change.base_version} → proposed`}

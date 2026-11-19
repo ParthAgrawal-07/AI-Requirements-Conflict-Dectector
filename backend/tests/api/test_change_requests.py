@@ -6,10 +6,12 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.permissions import DefaultRole
 from app.graph import deltas
+from app.intake import change_intake
 from app.models import (
     AuditLog,
     ChangeRequest,
@@ -305,3 +307,35 @@ def test_non_members_get_404_on_every_route(
     ]
 
     assert [r.status_code for r in responses] == [404, 404, 404]
+
+
+def test_a_storage_error_never_logs_the_proposal(
+    client: TestClient,
+    approved: Requirement,
+    developer: User,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    reason = "Confidential reason from the bank"
+
+    def failing_store(*_: object, **__: object) -> None:
+        # What the driver raises: the statement with its bound parameters, text included.
+        raise IntegrityError("INSERT INTO change_requests ...", {"p": PROPOSED, "r": reason}, None)
+
+    rollback = Session.rollback
+    calls: list[int] = []
+
+    def failing_rollback(self: Session) -> None:
+        calls.append(1)
+        if len(calls) == 1:  # the rollback after the failed insert fails too
+            raise IntegrityError("ROLLBACK", {"p": PROPOSED}, None)
+        rollback(self)
+
+    monkeypatch.setattr(change_intake, "_store", failing_store)
+    monkeypatch.setattr(Session, "rollback", failing_rollback)
+
+    response = propose(client, approved, developer, reason=reason)
+
+    assert response.status_code == 500
+    assert PROPOSED not in response.text and reason not in response.text
+    assert PROPOSED not in caplog.text and reason not in caplog.text
