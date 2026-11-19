@@ -66,7 +66,11 @@ def _subject(requirement: Requirement) -> Subject:
 
 def _live_pair_finding(db: Session, pair_id: uuid.UUID) -> Finding | None:
     return db.scalar(
-        select(Finding).where(Finding.candidate_pair_id == pair_id, Finding.is_stale.is_(False))
+        select(Finding).where(
+            Finding.candidate_pair_id == pair_id,
+            Finding.is_stale.is_(False),
+            Finding.source != "person",  # a raised concern never stands in for the analysis
+        )
     )
 
 

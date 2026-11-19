@@ -286,6 +286,16 @@ CASES = [
     ),
     Case("GET", "/api/v1/projects/{project_id}/change-requests", ok=200),
     Case("GET", "/api/v1/change-requests/{change_request_id}", ok=200),
+    # Sprint 4 — raise a concern (Abhyudit, US-56)
+    Case(
+        "POST",
+        "/api/v1/projects/{project_id}/concerns",
+        lambda w: {
+            "category": "Ambiguous",
+            "requirement_ids": [str(w.finding.requirement_id)],
+            "explanation": "Nobody can test what fast means here.",
+        },
+    ),
 ]
 
 
