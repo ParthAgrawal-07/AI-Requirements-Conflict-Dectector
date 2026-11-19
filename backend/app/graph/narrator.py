@@ -180,3 +180,8 @@ def change_requested(actor: str | None, number: int, label: str, kind: str) -> s
 def concern_raised(actor: str | None, kind: EdgeKind, labels: Sequence[str]) -> str:
     """A person raised a concern (US-56): the map shows it with a Person badge."""
     return f"{_who(actor)} raised a concern: {_KIND_NOUN.get(kind, kind)} on {_join(list(labels))}."
+
+
+def merged(actor: str | None, number: int, label: str, version: int) -> str:
+    """RCR-n merged (US-35): the requirement has a new version."""
+    return f"{_who(actor)} merged RCR-{number}: {label} is now v{version}."

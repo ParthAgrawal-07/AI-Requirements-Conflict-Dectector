@@ -5,6 +5,15 @@
 * ``GET /change-requests/{id}`` (``view``) — the proposal, the text it was written against
   (``base_body``) and the current text, so the page can show both diffs.
 
+* ``PATCH /change-requests/{id}`` (``rcr.open``, proposer) — edit: a new proposal revision.
+* ``GET /change-requests/{id}/reviews`` (``view``), ``POST …/reviews`` (``rcr.review``),
+  ``POST …/reviewers`` (``rcr.open``: the proposer, or a member who may merge).
+* ``GET /change-requests/{id}/agreement`` (``view``) — mergeable now, and every unmet
+  condition (the merge box).
+* ``POST …/merge`` (``rcr.merge``) — **409** ``merge_blocked`` with the unmet conditions in
+  ``details``; ``POST …/close`` (``rcr.merge``, with a reason); ``POST …/withdraw``
+  (the proposer).
+
 Another workspace's change request is a 404 (NFR-27). Reading a request about a protected
 requirement is audited (``viewed_protected``, NFR-13), as reading the requirement itself is.
 """
@@ -29,9 +38,12 @@ from app.models import (
     Project,
     Requirement,
     RequirementState,
+    User,
 )
 from app.schemas.common import ErrorResponse, Page
+from app.services import change_requests, reviews
 from app.services.access import AccessContext, Scope, register_scope_resolver
+from app.services.agreement import AgreementGuard
 
 router = APIRouter(tags=["change requests"])
 
@@ -274,3 +286,297 @@ def _change_request_scope(db: Session, change_request_id: uuid.UUID) -> Scope | 
 
 
 register_scope_resolver("change_request_id", _change_request_scope)
+
+
+# ── review and merge (Parth — US-35, FR-65, FR-98) ──────────────────────────────────────────
+ReviewDecision = Literal["approve", "request_changes", "comment"]
+
+
+class ChangeRequestUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    proposed_body: str | None = Field(default=None, max_length=4000)
+    reason: str | None = Field(default=None, min_length=3, max_length=4000)
+    rebase: bool = Field(default=False, description="Write it against the current version")
+    open: bool = Field(default=False, description="Open a draft for review")
+
+
+class InlineComment(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    field: str = Field(default="statement", max_length=32)
+    start_offset: int | None = Field(default=None, ge=0)
+    end_offset: int | None = Field(default=None, ge=0)
+    body: str = Field(min_length=1, max_length=2000)
+
+
+class ReviewCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    decision: ReviewDecision
+    rationale: str | None = Field(default=None, max_length=4000)
+    comments: list[InlineComment] = Field(default_factory=list, max_length=20)
+
+
+class ReviewCommentRead(BaseModel):
+    field: str
+    start_offset: int | None
+    end_offset: int | None
+    body: str
+
+
+class ReviewRead(BaseModel):
+    id: uuid.UUID
+    reviewer: UserRef | None
+    decision: ReviewDecision
+    rationale: str | None
+    proposal_revision: int
+    reviewed_base_version: int
+    dismissed: bool  # given on an earlier revision or base version (FR-98)
+    comments: list[ReviewCommentRead]
+    created_at: datetime
+
+
+class ReviewRequestRead(BaseModel):
+    reviewer: UserRef | None
+    required: bool
+    reason: str
+    approved: bool  # approved the current revision
+
+
+class ReviewsRead(BaseModel):
+    requests: list[ReviewRequestRead]
+    reviews: list[ReviewRead]
+
+
+class ReviewerAdd(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reviewer_id: uuid.UUID
+
+
+class UnmetRead(BaseModel):
+    code: str
+    message: str
+
+
+class AgreementRead(BaseModel):
+    mergeable: bool
+    unmet: list[UnmetRead]
+
+
+class MergeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    accepted_risk_reason: str | None = Field(default=None, max_length=2000)
+
+
+class CloseRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(min_length=3, max_length=2000)
+
+
+def _read(db: Session, change_request: ChangeRequest) -> ChangeRequestRead:
+    return ChangeRequestRead.from_view(change_intake.view(db, change_request))
+
+
+def _ref(user: User | None) -> UserRef | None:
+    return UserRef(id=user.id, full_name=user.full_name) if user else None
+
+
+@router.patch(
+    "/change-requests/{change_request_id}",
+    response_model=ChangeRequestRead,
+    summary="Edit the proposal (proposer): a new revision, earlier reviews dismissed",
+    responses=ERRORS,
+)
+def update_change_request(
+    change_request_id: uuid.UUID,
+    body: ChangeRequestUpdate,
+    ctx: Annotated[AccessContext, requires("rcr.open")],
+    db: DbSession,
+) -> ChangeRequestRead:
+    change_request = change_requests.update_proposal(
+        db,
+        ctx,
+        change_request_or_404(db, change_request_id),
+        proposed_body=body.proposed_body,
+        reason=body.reason,
+        rebase=body.rebase,
+        open_draft=body.open,
+    )
+    return _read(db, change_request)
+
+
+@router.get(
+    "/change-requests/{change_request_id}/reviews",
+    response_model=ReviewsRead,
+    summary="Who was asked to review, and every review (dismissed ones marked)",
+    responses=ERRORS,
+)
+def list_reviews(
+    change_request_id: uuid.UUID,
+    ctx: Annotated[AccessContext, requires("view")],
+    db: DbSession,
+) -> ReviewsRead:
+    change_request = change_request_or_404(db, change_request_id)
+    rows = reviews.reviews_of(db, change_request.id)
+    requested = reviews.requests_of(db, change_request.id)
+    wanted = {r.reviewer_id for r in rows} | {r.reviewer_id for r in requested}
+    people = {u.id: u for u in db.scalars(select(User).where(User.id.in_(wanted)))}
+    comments = reviews.comments_of(db, [r.id for r in rows])
+    decisions = reviews.current_decisions(db, change_request)
+    current = (change_request.proposal_revision, change_request.base_version)
+    return ReviewsRead(
+        requests=[
+            ReviewRequestRead(
+                reviewer=_ref(people.get(r.reviewer_id)),
+                required=r.required,
+                reason=r.reason,
+                approved=r.reviewer_id in decisions
+                and decisions[r.reviewer_id].decision == "approve",
+            )
+            for r in requested
+        ],
+        reviews=[
+            ReviewRead(
+                id=r.id,
+                reviewer=_ref(people.get(r.reviewer_id)),
+                decision=cast(ReviewDecision, r.decision),
+                rationale=r.rationale,
+                proposal_revision=r.proposal_revision,
+                reviewed_base_version=r.reviewed_base_version,
+                dismissed=(r.proposal_revision, r.reviewed_base_version) != current,
+                comments=[
+                    ReviewCommentRead(
+                        field=c.field,
+                        start_offset=c.start_offset,
+                        end_offset=c.end_offset,
+                        body=c.body,
+                    )
+                    for c in comments.get(r.id, [])
+                ],
+                created_at=r.created_at,
+            )
+            for r in rows
+        ],
+    )
+
+
+@router.post(
+    "/change-requests/{change_request_id}/reviews",
+    response_model=ChangeRequestRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Approve, request changes or comment (with inline comments)",
+    responses=ERRORS,
+)
+def create_review(
+    change_request_id: uuid.UUID,
+    body: ReviewCreate,
+    ctx: Annotated[AccessContext, requires("rcr.review")],
+    db: DbSession,
+) -> ChangeRequestRead:
+    change_request = change_request_or_404(db, change_request_id)
+    reviews.review(
+        db,
+        ctx,
+        change_request,
+        decision=body.decision,
+        rationale=body.rationale,
+        inline=[c.model_dump() for c in body.comments],
+    )
+    change_requests.after_review(db, change_request, ctx.user, body.decision)
+    return _read(db, change_request)
+
+
+@router.post(
+    "/change-requests/{change_request_id}/reviewers",
+    response_model=ReviewRequestRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Ask one more person to review (the proposer, or a member who may merge)",
+    responses=ERRORS,
+)
+def add_reviewer(
+    change_request_id: uuid.UUID,
+    body: ReviewerAdd,
+    ctx: Annotated[AccessContext, requires("rcr.open")],
+    db: DbSession,
+) -> ReviewRequestRead:
+    change_request = change_request_or_404(db, change_request_id)
+    row = reviews.add_reviewer(db, ctx, change_request, body.reviewer_id)
+    return ReviewRequestRead(
+        reviewer=_ref(db.get(User, row.reviewer_id)),
+        required=row.required,
+        reason=row.reason,
+        approved=False,
+    )
+
+
+@router.get(
+    "/change-requests/{change_request_id}/agreement",
+    response_model=AgreementRead,
+    summary="Whether it can be merged now, and every unmet condition (FR-98)",
+    responses=ERRORS,
+)
+def get_agreement(
+    change_request_id: uuid.UUID,
+    ctx: Annotated[AccessContext, requires("view")],
+    db: DbSession,
+) -> AgreementRead:
+    unmet = AgreementGuard(db).unmet(change_request_or_404(db, change_request_id))
+    return AgreementRead(
+        mergeable=not unmet, unmet=[UnmetRead(code=u.code, message=u.message) for u in unmet]
+    )
+
+
+@router.post(
+    "/change-requests/{change_request_id}/merge",
+    response_model=ChangeRequestRead,
+    summary="Merge: version n+1 in one transaction, or 409 with the unmet conditions",
+    responses=ERRORS,
+)
+def merge_change_request(
+    change_request_id: uuid.UUID,
+    body: MergeRequest,
+    ctx: Annotated[AccessContext, requires("rcr.merge")],
+    db: DbSession,
+) -> ChangeRequestRead:
+    merged = change_requests.merge(
+        db,
+        ctx,
+        change_request_or_404(db, change_request_id),
+        accepted_risk_reason=body.accepted_risk_reason,
+    )
+    return _read(db, merged.change_request)
+
+
+@router.post(
+    "/change-requests/{change_request_id}/close",
+    response_model=ChangeRequestRead,
+    summary="Close without merging (rejected), with a reason",
+    responses=ERRORS,
+)
+def close_change_request(
+    change_request_id: uuid.UUID,
+    body: CloseRequest,
+    ctx: Annotated[AccessContext, requires("rcr.merge")],
+    db: DbSession,
+) -> ChangeRequestRead:
+    change_request = change_request_or_404(db, change_request_id)
+    return _read(db, change_requests.close(db, ctx, change_request, body.reason))
+
+
+@router.post(
+    "/change-requests/{change_request_id}/withdraw",
+    response_model=ChangeRequestRead,
+    summary="Withdraw your own change request",
+    responses=ERRORS,
+)
+def withdraw_change_request(
+    change_request_id: uuid.UUID,
+    ctx: Annotated[AccessContext, requires("rcr.open")],
+    db: DbSession,
+) -> ChangeRequestRead:
+    change_request = change_request_or_404(db, change_request_id)
+    return _read(db, change_requests.withdraw(db, ctx, change_request))

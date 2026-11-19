@@ -44,6 +44,10 @@ CHANNEL_MEMBER_REMOVED = "channel.member_removed"  # the gateway drops that user
 MESSAGE_CREATED = "message.created"
 MESSAGE_UPDATED = "message.updated"
 MESSAGE_DELETED = "message.deleted"
+# Change requests: review and merge (US-35, Parth). Ids only.
+CHANGE_REQUEST_REVIEWED = "change_request.reviewed"
+CHANGE_REQUEST_MERGED = "change_request.merged"
+CHANGE_REQUEST_CLOSED = "change_request.closed"  # closed without merge, or withdrawn
 
 EVENT_TYPES = frozenset(
     {
@@ -65,6 +69,9 @@ EVENT_TYPES = frozenset(
         MESSAGE_CREATED,
         MESSAGE_UPDATED,
         MESSAGE_DELETED,
+        CHANGE_REQUEST_REVIEWED,
+        CHANGE_REQUEST_MERGED,
+        CHANGE_REQUEST_CLOSED,
     }
 )
 
