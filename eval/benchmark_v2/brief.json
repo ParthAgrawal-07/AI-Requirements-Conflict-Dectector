@@ -1,0 +1,18 @@
+{
+  "description": "The confirmed project context of the SecureDocs benchmark project (US-60). Used by eval/run_benchmark.py --context-pack on to render the same <project_context> block ContextPackBuilder sends with every prompt (summary, actors, glossary terms found in the text). Taken from sections 1-2 of srs_planted.md.",
+  "version": 1,
+  "summary": "SecureDocs is a web portal where employees of a company store, share and review confidential documents. It covers user accounts, sign-in, document storage, retention and notifications. Payroll, billing and the mobile apps are out of scope. It runs in a private cloud, is used through current desktop browsers, and all traffic uses TLS. The compliance office reviews audit logs.",
+  "actors": [
+    "Employees, who upload and read documents every day",
+    "Workspace administrators, who manage the users and settings of one workspace",
+    "Guests, external partners who receive shared documents",
+    "The compliance office, which reviews audit logs"
+  ],
+  "glossary": [
+    {"term": "Session", "meaning": "The time between a successful sign-in and sign-out or expiry."},
+    {"term": "Workspace administrator", "meaning": "An employee who manages the users of one workspace."},
+    {"term": "Recycle bin", "meaning": "The place where deleted documents wait before permanent removal."},
+    {"term": "Guest", "meaning": "An external partner who receives shared documents."},
+    {"term": "Audit log", "meaning": "The record of security-relevant events that the compliance office reviews."}
+  ]
+}
