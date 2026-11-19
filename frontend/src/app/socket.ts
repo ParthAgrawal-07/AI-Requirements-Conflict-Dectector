@@ -234,6 +234,15 @@ export function applyEvent(queryClient: QueryClient, event: RealtimeEvent): void
   } else if (event.type.startsWith("channel.") && event.project_id) {
     void queryClient.invalidateQueries({ queryKey: ["channels", event.project_id] });
     if (event.channel_id) void queryClient.invalidateQueries({ queryKey: ["channel", event.channel_id] });
+  } else if (event.type.startsWith("issue.") && event.project_id) {
+    // US-52: the lists, the issue and — for a new comment — its discussion.
+    void queryClient.invalidateQueries({ queryKey: ["issues", event.project_id] });
+    if (event.entity_id) {
+      void queryClient.invalidateQueries({ queryKey: ["issue", event.entity_id] });
+      if (event.type === "issue.commented") {
+        void queryClient.invalidateQueries({ queryKey: ["issue-comments", event.entity_id] });
+      }
+    }
   } else if (event.type === "membership.revoked") {
     void queryClient.invalidateQueries({ queryKey: ["members", event.workspace_id] });
   }

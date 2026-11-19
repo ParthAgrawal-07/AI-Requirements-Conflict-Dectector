@@ -443,3 +443,20 @@
 .requirement-quote { margin: var(--space-3) 0; padding: var(--space-3); border-left: 3px solid var(--line-strong); background: var(--paper-sunken); }
 .readiness { list-style: none; padding: 0; margin: 0 0 var(--space-2); display: grid; gap: var(--space-1); font-size: 13px; }
 .review-actions { margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px dashed var(--line); }
+
+/* ── Issues (US-52, US-56) and version history (US-12) ──────────────────────────────────── */
+.issue-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.issue-row { padding: var(--space-3) var(--space-4); }
+.issue-title { margin: 0 0 var(--space-1); display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.issue-labels { display: flex; flex-wrap: wrap; gap: var(--space-1); margin: var(--space-1) 0 0; }
+.label-chip { font-size: 12px; padding: 1px 8px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--paper-sunken); }
+.issue-body { white-space: pre-wrap; }
+.inline-list { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.comment-list { list-style: none; padding: 0; margin: 0 0 var(--space-3); display: grid; gap: var(--space-3); }
+.comment { border-left: 3px solid var(--line); padding-left: var(--space-3); }
+.comment p { margin: 0; }
+.version-list { list-style: none; padding: 0; margin: 0; display: grid; gap: var(--space-4); }
+.version-meta { margin: 0 0 var(--space-1); }
+.word-diff { margin: 0; line-height: 1.6; }
+.word-diff del { background: var(--conflict-soft); color: inherit; text-decoration: line-through; }
+.word-diff ins { background: var(--approved-soft); color: inherit; text-decoration: underline; }

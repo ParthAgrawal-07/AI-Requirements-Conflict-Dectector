@@ -8,6 +8,8 @@ import { ChangeEditor } from "../features/changes/ChangeEditor";
 import { ChannelView } from "../features/channels/ChannelView";
 import { ComposerPage } from "../features/composer/ComposerPage";
 import { FindingsPage } from "../features/findings/FindingsPage";
+import { IssueList } from "../features/issues/IssueList";
+import { IssuePage } from "../features/issues/IssuePage";
 import { KitPage } from "../features/kit/KitPage";
 import { JoinPage } from "../features/members/JoinPage";
 import { MembersPage } from "../features/members/MembersPage";
@@ -90,7 +92,6 @@ export function NoWorkspace() {
 }
 
 const LATER: { path: string; title: string; sprint: string }[] = [
-  { path: "issues", title: "Issues", sprint: "Sprint 4 (US-52)" },
   { path: "changes", title: "Change requests", sprint: "Sprint 4 (US-33)" },
   { path: "baselines", title: "Baselines", sprint: "Sprint 5 (US-40)" },
   { path: "insights", title: "Insights", sprint: "Sprint 5 (US-13)" },
@@ -125,6 +126,8 @@ export const routes: RouteObject[] = [
               { path: "channels/:channelId", element: <ChannelView /> },
               { path: "findings", element: <FindingsPage /> },
               { path: "map", element: <MapPage /> },
+              { path: "issues", element: <IssueList /> },
+              { path: "issues/:issueId", element: <IssuePage /> },
               { path: "changes/new", element: <ChangeEditor /> },
               ...LATER.map((item) => ({
                 path: item.path,
