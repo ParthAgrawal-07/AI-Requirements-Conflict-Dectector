@@ -150,5 +150,10 @@ class RequirementVersion(UUIDPrimaryKeyMixin, Base):
         ForeignKey("users.id", ondelete="SET NULL")
     )
     changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # The change request this version was merged from (US-12, migration 0007c); NULL for the
+    # extracted or posted first version.
+    change_request_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("change_requests.id", ondelete="SET NULL")
+    )
 
     requirement: Mapped[Requirement] = relationship(back_populates="versions")

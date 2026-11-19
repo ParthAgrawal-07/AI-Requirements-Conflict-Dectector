@@ -54,6 +54,10 @@ EXPECTED_TABLES = {
     "change_request_issues",
     # Sprint 4 (0007b_consequence_reports)
     "consequence_reports",
+    # Sprint 4 (0007c_reviews)
+    "review_requests",
+    "reviews",
+    "review_comments",
 }
 
 
