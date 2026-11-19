@@ -5,7 +5,7 @@
 // after every (re)connect the cache is invalidated so the screen re-reads over REST, because
 // events missed while offline are never replayed.
 
-import { createContext, createElement, useContext, useEffect, useState } from "react";
+import { createContext, createElement, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import {
@@ -289,4 +289,19 @@ export function useChannelRealtime(channelId: string | undefined): void {
     if (!realtime || !channelId) return;
     return realtime.watchChannel(channelId);
   }, [realtime, channelId]);
+}
+
+/** Hear every event of the watched projects while mounted (the live map's deltas, US-14). The
+ *  handler may change between renders without re-subscribing. */
+export function useRealtimeEvents(handler: EventHandler): void {
+  const realtime = useContext(RealtimeContext);
+  const latest = useRef(handler);
+  latest.current = handler;
+  useEffect(() => {
+    if (!realtime) return;
+    const stop = realtime.onEvent((event) => latest.current(event));
+    return () => {
+      stop();
+    };
+  }, [realtime]);
 }
