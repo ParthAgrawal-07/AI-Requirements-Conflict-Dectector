@@ -261,6 +261,7 @@ export interface ChangeRequestInput {
   base_version: number;
   resolves: number[]; // ISS numbers
   draft: boolean;
+  source_suggestion_id?: string; // US-45: the accepted AI suggestion it came from
 }
 
 export function useOpenChangeRequest(requirementId: string) {
