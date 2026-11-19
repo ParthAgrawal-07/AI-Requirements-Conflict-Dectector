@@ -148,6 +148,28 @@ describe("ResultCard", () => {
     expect(container.textContent?.toLowerCase()).not.toMatch(/verified|conflict-free/);
   });
 
+  it("lets a member raise a concern the analysis missed (US-56)", async () => {
+    mockApi({
+      "GET /api/v1/analysis-runs/run-1": run(),
+      "GET /api/v1/me/permissions?project=p1": {
+        workspace_id: "w1",
+        project_id: "p1",
+        role: { id: "r", name: "Developer", is_default: true },
+        permissions: ["view", "issue.open"],
+        protected_only: [],
+      },
+      "GET /api/v1/projects/p1/requirements": { items: [], total: 0, limit: 200, offset: 0 },
+    });
+    const { user } = renderWithProviders(<ResultCard message={card()} />, {
+      route: ROUTE,
+      path: PATH,
+    });
+
+    await user.click(await screen.findByRole("button", { name: "Raise a concern" }));
+
+    expect(screen.getByRole("dialog", { name: "Raise a concern" })).toBeInTheDocument();
+  });
+
   it("says it is waiting for budget", async () => {
     mockApi({
       "GET /api/v1/analysis-runs/run-1": run({

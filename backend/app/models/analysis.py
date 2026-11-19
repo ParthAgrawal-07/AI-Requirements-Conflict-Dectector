@@ -97,17 +97,20 @@ class Finding(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         CheckConstraint(
             "merged_into_id IS NULL OR merged_into_id <> id", name="not_merged_into_itself"
         ),
+        CheckConstraint("source IN ('ai', 'rule', 'person')", name="source_values"),
         Index("ix_findings_document_id_status", "document_id", "status"),
         Index("ix_findings_document_id_category", "document_id", "category"),
         Index("ix_findings_project_id_status", "project_id", "status"),
         # Idempotent classification (migration 0006c): one live finding per pair. A finding made
-        # stale by an edit (S4) no longer counts. Single-requirement checks are kept idempotent
-        # by ``requirements.single_checked_version``.
+        # stale by an edit (S4) no longer counts, nor does a person's concern (0010a).
+        # Single-requirement checks are kept idempotent by ``requirements.single_checked_version``.
         Index(
             "uq_findings_live_pair",
             "candidate_pair_id",
             unique=True,
-            postgresql_where=text("candidate_pair_id IS NOT NULL AND NOT is_stale"),
+            postgresql_where=text(
+                "candidate_pair_id IS NOT NULL AND NOT is_stale AND source <> 'person'"
+            ),
         ),
     )
 
@@ -162,6 +165,12 @@ class Finding(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     # The project context version the classifier was given (FR-105, migration 0011).
     context_version: Mapped[int | None]
+    # Who found it (ADR-25, migration 0010a): the AI, a rule check (S5) or a person's concern
+    # (US-56) — then who raised it, what they cite, and whether the AI and rules had missed it.
+    source: Mapped[str] = mapped_column(String(16), default="ai", server_default="ai")
+    raised_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    external_ref: Mapped[str | None] = mapped_column(String(200))
+    ai_miss: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
 
     candidate_pair: Mapped[CandidatePair | None] = relationship()
     requirement: Mapped[Requirement | None] = relationship()
