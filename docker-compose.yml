@@ -48,6 +48,8 @@ services:
       db:
         condition: service_healthy
     restart: "no"
+    volumes:
+      - ./backend:/app
 
   backend:
     build: ./backend
@@ -85,6 +87,8 @@ services:
     volumes:
       - ./backend:/app
       - uploads:/data/uploads   # same volume as `backend`: the worker reads what the API saved
+    healthcheck:
+      disable: true
 
   # Periodic jobs (join-code expiry; later the LLM budget reset). Exactly one beat may run.
   beat:
@@ -98,6 +102,10 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+    volumes:
+      - ./backend:/app
+    healthcheck:
+      disable: true
 
   frontend:
     build: ./frontend
