@@ -33,7 +33,12 @@ from sqlalchemy.orm import Session
 from app.classification.budget import BudgetExceededError
 from app.classification.classifier import Classifier
 from app.classification.context_pack import ContextPackBuilder
-from app.classification.llm_client import LLMClient, LLMOutputError, LLMRefusedError
+from app.classification.llm_client import (
+    LLMClient,
+    LLMOutputError,
+    LLMRefusedError,
+    LLMUnavailableError,
+)
 from app.classification.schemas import RequirementInput
 from app.consequences.impact import Impact, label
 from app.embeddings.incremental import similar_to_text
@@ -96,15 +101,19 @@ class Check:
 def _targets(
     db: Session, requirement: Requirement, text: str, impact: Impact, embedder: Embedder | None
 ) -> list[Requirement]:
-    ids = [a.requirement_id for a in impact.direct]
+    # Every directly affected requirement is probed (FR-99): the cap only limits how many
+    # similarity hints are added on top, so a ninth direct target is never silently skipped.
+    direct = [a.requirement_id for a in impact.direct]
+    hints: list[uuid.UUID] = []
     if embedder is not None:
         for hint in similar_to_text(
             db, requirement.project_id, text, embedder, k=SIMILAR_PROBES, exclude={requirement.id}
         ):
-            if hint.requirement_id not in ids:
-                ids.append(hint.requirement_id)
-    rows = {r.id: r for r in (db.get(Requirement, i) for i in ids[:MAX_PROBES]) if r is not None}
-    return [rows[i] for i in ids[:MAX_PROBES] if i in rows and i != requirement.id]
+            if hint.requirement_id not in direct and hint.requirement_id not in hints:
+                hints.append(hint.requirement_id)
+    ids = direct + hints[: max(0, MAX_PROBES - len(direct))]
+    rows = {r.id: r for r in (db.get(Requirement, i) for i in ids) if r is not None}
+    return [rows[i] for i in ids if i in rows and i != requirement.id]
 
 
 def probe(
@@ -147,7 +156,9 @@ def probe(
             out_of_budget = True
             result.pairs.append(Outcome(target.id, label(target), "budget"))
             continue
-        except (LLMOutputError, LLMRefusedError) as error:
+        except (LLMOutputError, LLMRefusedError, LLMUnavailableError) as error:
+            # Unavailable too: the report is still saved, saying to re-run, instead of the task
+            # dying with no report and the Checks tab waiting forever.
             logger.warning(
                 "Probe of %s against %s failed: %s",
                 change_request.id,
@@ -171,7 +182,7 @@ def probe(
         )
     except BudgetExceededError:
         result.single = Outcome(None, None, "budget")
-    except (LLMOutputError, LLMRefusedError):
+    except (LLMOutputError, LLMRefusedError, LLMUnavailableError):
         result.llm_calls += 1
         result.single = Outcome(None, None, "failed")
     return result
@@ -179,7 +190,7 @@ def probe(
 
 def _not_run(outcomes: list[Outcome]) -> tuple[CheckStatus, str]:
     if any(o.state == "budget" for o in outcomes):
-        return "pending", "Waiting for analysis budget; the check runs again when it is back"
+        return "pending", "Waiting for analysis budget; re-run the checks once it is back"
     if any(o.state == "unavailable" for o in outcomes):
         return "info", "No analysis model is configured, so this was not checked"
     return "info", "The analysis could not answer for some requirements; re-run the checks"
