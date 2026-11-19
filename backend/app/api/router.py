@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends
 from app.api import (
     analysis_runs,
     auth,
+    baselines,
     change_requests,
     channels,
     clarifications,
@@ -39,6 +40,7 @@ from app.api import (
 )
 from app.core.auth import get_current_user
 from app.graph import api as graph_api
+from app.lint import api as lint_api
 from app.schemas.common import ErrorResponse
 from app.search import similar as search_similar
 
@@ -72,6 +74,8 @@ for _router in (
     change_requests.router,
     concerns.router,
     consequences.router,
+    lint_api.router,
+    baselines.router,
 ):
     api_router.include_router(_router, dependencies=_authenticated, responses=_unauthorized)
 
