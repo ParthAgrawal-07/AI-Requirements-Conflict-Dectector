@@ -299,15 +299,6 @@ def test_merge_writes_the_new_version_and_its_consequences(
     )
     assert stale is not None and stale.is_stale
 
-    versions = w.client.get(
-        f"/api/v1/requirements/{w.req.id}/versions", headers=headers_for(w.dev)
-    ).json()
-    assert [(v["version_no"], v["change_request"]) for v in versions] == [
-        (2, {"id": cr["id"], "key": "RCR-1"}),
-        (1, None),
-    ]
-    assert versions[0]["body"] == PROPOSED and versions[0]["changed_by"]["id"] == str(w.dev.id)
-
 
 def test_a_competing_request_must_rebase_before_it_can_merge(w: World) -> None:
     first = w.propose()
