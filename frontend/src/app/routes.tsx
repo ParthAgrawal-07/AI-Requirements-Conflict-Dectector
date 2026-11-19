@@ -13,6 +13,7 @@ import { JoinPage } from "../features/members/JoinPage";
 import { MembersPage } from "../features/members/MembersPage";
 import { WorkspaceCreate } from "../features/members/WorkspaceCreate";
 import { MapPage } from "../features/map/MapPage";
+import { Inbox } from "../features/notifications/Inbox";
 import { lastProject, useProjects, useWorkspaces } from "../features/projects/api";
 import { ProjectHomePage } from "../features/projects/ProjectHomePage";
 import { WorkspaceHomePage } from "../features/projects/WorkspaceHomePage";
@@ -111,6 +112,7 @@ export const routes: RouteObject[] = [
         children: [
           { path: "/", element: <RootRedirect /> },
           { path: "/workspaces/new", element: <WorkspaceCreate /> },
+          { path: "/inbox", element: <Inbox /> },
           { path: "/w/:workspaceId", element: <WorkspaceHomePage actions={<WorkspaceActions />} /> },
           { path: "/w/:workspaceId/members", element: <MembersPage /> },
           { path: "/w/:workspaceId/projects/new", element: <ProjectCreatePage /> },

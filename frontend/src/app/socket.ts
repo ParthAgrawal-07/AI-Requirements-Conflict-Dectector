@@ -237,6 +237,14 @@ export function applyEvent(queryClient: QueryClient, event: RealtimeEvent): void
   } else if (event.type === "membership.revoked") {
     void queryClient.invalidateQueries({ queryKey: ["members", event.workspace_id] });
   }
+  if (event.type === "notification.created") {
+    void queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    void queryClient.invalidateQueries({ queryKey: ["notification-counts"] });
+  }
+
+  if (event.type === "suggestion.ready" && typeof event.data.finding_id === "string") {
+    void queryClient.invalidateQueries({ queryKey: ["suggestion", event.data.finding_id] });
+  }
 }
 
 const RealtimeContext = createContext<RealtimeConnection | null>(null);
