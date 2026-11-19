@@ -161,6 +161,19 @@ from the baseline (`deprecate`). It records `base_version`, the version the prop
   `409 not_in_baseline` when deprecating a requirement that is not Approved or Implemented, `409 project_in_setup`
   while the project is in Setup, `400 proposed_body_required`, `400 no_change`, `400 unexpected_body`.
 * `draft: true` keeps the request out of review and off the map until its proposer opens it.
+
+**Review and merge** *(US-35, FR-65, FR-98)*:
+
+| Method & path | Permission | Purpose |
+|---|---|---|
+| `PATCH /change-requests/{id}` | `rcr.open`, proposer only | `{proposed_body?, reason?, rebase?, open?}`: a new proposal revision (earlier approvals are dismissed), write it against the current version, or open a draft |
+| `GET /change-requests/{id}/reviews` | `view` | `{requests, reviews}`: who was asked and why, every review with its inline comments, `dismissed` when given on an earlier revision or base |
+| `POST /change-requests/{id}/reviews` | `rcr.review` | `{decision: approve\|request_changes\|comment, rationale?, comments?}`; `request_changes` needs a rationale, and a proposer cannot approve their own request (403) |
+| `POST /change-requests/{id}/reviewers` | `rcr.open`; the proposer, or a holder of `rcr.merge` | `{reviewer_id}`: ask another member |
+| `GET /change-requests/{id}/agreement` | `view` | `{mergeable, unmet: [{code, message}]}`: the merge box |
+| `POST /change-requests/{id}/merge` | `rcr.merge` | `{accepted_risk_reason?}`; `409 merge_blocked` with the unmet conditions in `details` |
+| `POST /change-requests/{id}/close` | `rcr.merge` | `{reason}`: closed without merging |
+| `POST /change-requests/{id}/withdraw` | proposer only | Withdrawn by its author |
 * Events: `change_request.opened` with ids, number, status and revision only, never the text. Opening a non-draft
   request also adds a sentence to the map (`graph.delta`). Reading a request about a protected requirement writes a
   `viewed_protected` audit row (NFR-13).
