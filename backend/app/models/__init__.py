@@ -7,6 +7,7 @@ relies on that, so a new model file must be imported here.
 from app.models.analysis import AnalysisRun, CandidatePair, Clarification, Finding
 from app.models.audit import AuditLog
 from app.models.base import Base
+from app.models.baseline import Baseline, BaselineItem
 from app.models.change_request import ChangeRequest, ChangeRequestIssue, ChangeRequestRevision
 from app.models.change_review import Review, ReviewComment, ReviewRequest
 from app.models.channel import Channel, ChannelMember, ChannelRead, Message
@@ -54,6 +55,8 @@ __all__ = [
     "AuditAction",
     "AuditLog",
     "Base",
+    "Baseline",
+    "BaselineItem",
     "CandidatePair",
     "ChangeRequest",
     "ChangeRequestIssue",

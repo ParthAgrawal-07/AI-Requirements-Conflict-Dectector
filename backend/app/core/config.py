@@ -109,7 +109,11 @@ class Settings(BaseSettings):
     # threshold on purpose — a hint is cheap to ignore, a missed duplicate is not.
     similar_hint_min_similarity: float = Field(default=0.5, ge=0, le=1)
     similar_requests_per_minute: int = Field(default=60, ge=1, le=1000)
-    llm_provider: Literal["gemini", "groq"] = "gemini"
+    # Keval (US-51): pre-flight checks and AI wording cost LLM calls, so they are limited per
+    # member on top of the project's monthly budget (each pre-flight is at most 4 calls).
+    preflight_requests_per_minute: int = Field(default=6, ge=1, le=1000)
+    wording_requests_per_minute: int = Field(default=6, ge=1, le=1000)
+    llm_provider: Literal["gemini", "groq", "anthropic", "openai"] = "gemini"
     llm_fallback_provider: Literal["groq", "none"] | None = "groq"
     gemini_api_key: SecretStr | None = None
     gemini_model: str = "gemini-2.5-flash"
