@@ -200,3 +200,14 @@ active join code, pending request) cannot be deleted (409 `role_in_use`); otherw
 keeps pointing at it, it disappears from lists, can never be assigned again, and its name becomes free.
 
 The workspace always keeps one Owner: demoting, removing or leaving as the last one is 409 `last_owner`.
+
+## Sprint 4 — change requests (US-33)
+
+`change_request_id` resolves to its project's workspace and project (`app.api.change_requests`), so a request of
+another workspace is a **404**.
+
+| Method and path | Permission | Notes |
+|---|---|---|
+| `POST /requirements/{r}/change-requests` | `rcr.open` | opens or drafts RCR-n; behind the ContextGate (`409 project_in_setup`) |
+| `GET /projects/{p}/change-requests` | `view` | protected requirements in the page are audited (`viewed_protected`) |
+| `GET /change-requests/{id}` | `view` | audited as above when the requirement is protected |

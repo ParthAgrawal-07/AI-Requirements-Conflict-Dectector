@@ -48,6 +48,10 @@ EXPECTED_TABLES = {
     "issue_requirements",
     "issue_assignees",
     "comments",
+    # Sprint 4 (0007a_change_requests)
+    "change_requests",
+    "change_request_revisions",
+    "change_request_issues",
 }
 
 

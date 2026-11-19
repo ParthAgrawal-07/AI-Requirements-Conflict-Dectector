@@ -34,6 +34,7 @@ from app.models import (
     AnalysisRun,
     AnalysisRunStatus,
     AnalysisScope,
+    ChangeRequest,
     Channel,
     Clarification,
     Document,
@@ -97,6 +98,7 @@ class World:
     clarification: Clarification  # the question about `finding`
     ownership_request: OwnershipRequest  # `target` asks to own that requirement
     issue: Issue
+    change_request: ChangeRequest  # RCR-1 by the Owner on the finding's requirement
     db: Session
 
 
@@ -110,6 +112,9 @@ class Case:
     needs: str | None = None
     # Author-only routes: {message_id} is a message the calling member posted just before.
     own_message: bool = False
+    # The status a holder of the permission must get, when the request is meant to succeed; so a
+    # 500 inside the route cannot pass as "allowed".
+    ok: int | None = None
 
 
 CASES = [
@@ -272,6 +277,15 @@ CASES = [
             }
         },
     ),
+    # Sprint 4 — change requests (Bansil, US-33)
+    Case(
+        "POST",
+        "/api/v1/requirements/{requirement_id}/change-requests",
+        lambda _: {"proposed_body": "It shall answer within 2 s.", "reason": "Make it measurable"},
+        ok=201,
+    ),
+    Case("GET", "/api/v1/projects/{project_id}/change-requests", ok=200),
+    Case("GET", "/api/v1/change-requests/{change_request_id}", ok=200),
 ]
 
 
@@ -377,6 +391,17 @@ def world(
     db_session.add(IssueRequirement(issue_id=issue.id, requirement_id=vague.id))
     db_session.add_all([run, clarification])
     db_session.commit()
+    change_request = ChangeRequest(
+        project_id=project.id,
+        requirement_id=vague.id,
+        number=1,
+        proposer_id=owner.id,
+        base_version=1,
+        proposed_body="It shall answer within 2 s.",
+        reason="Measurable",
+    )
+    db_session.add(change_request)
+    db_session.commit()
     return World(
         workspace=workspace,
         project=project,
@@ -393,6 +418,7 @@ def world(
         clarification=clarification,
         ownership_request=ownership_request,
         issue=issue,
+        change_request=change_request,
         db=db_session,
     )
 
@@ -434,6 +460,7 @@ def _call(api: TestClient, case: Case, world: World, user: User) -> int:
         clarification_id=world.clarification.id,
         ownership_request_id=world.ownership_request.id,
         issue_id=world.issue.id,
+        change_request_id=world.change_request.id,
     )
     headers = {"Authorization": f"Bearer {security.create_access_token(user.id)[0]}"}
     body = case.body(world)
@@ -464,6 +491,8 @@ def test_route_is_allowed_exactly_for_holders_of_its_permission(
     held = {p for p in DEFAULT_ROLE_PERMISSIONS[role] if (role, p) not in PROTECTED_ONLY_GRANTS}
     if needed in held:
         assert status not in (401, 403, 404), f"{role.value} should pass, got {status}"
+        if case.ok is not None:
+            assert status == case.ok, f"{role.value} should get {case.ok}, got {status}"
     else:
         assert status == 403, f"{role.value} should be refused, got {status}"
 
@@ -514,6 +543,8 @@ def test_a_custom_role_gets_exactly_its_permissions(
 
     if needed in held:
         assert status not in (401, 403, 404), f"{name} should pass, got {status}"
+        if case.ok is not None:
+            assert status == case.ok, f"{name} should get {case.ok}, got {status}"
     else:
         assert status == 403, f"{name} should be refused, got {status}"
 

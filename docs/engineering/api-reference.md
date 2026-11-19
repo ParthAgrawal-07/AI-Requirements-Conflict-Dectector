@@ -140,6 +140,31 @@ Contract: [`docs/contracts/composer-and-context.md`](../contracts/composer-and-c
 | `DELETE /me/drafts/{id}` | signed in, author only | `204` |
 | `POST /channels/{c}/requirement-posts` | `req.propose` | `{fields, draft_id?}` → `201 {message, requirement}`: a card plus a Proposed requirement; `409` if the channel is archived, `409 project_in_setup` while the project is in setup; rate-limited like messages |
 
+### Change requests  *(US-33, FR-62, FR-89, FR-98 — Sprint 4)*
+
+A change request (`RCR-n`, numbered per project) proposes new text for one requirement (`modify`) or its removal
+from the baseline (`deprecate`). It records `base_version`, the version the proposer read, and starts at
+`proposal_revision` 1. Review and merge (US-35) build on these routes.
+
+| Method & path | Permission | Purpose |
+|---|---|---|
+| `POST /requirements/{id}/change-requests` | `rcr.open` | `{kind?, proposed_body?, reason, base_version?, resolves?, draft?}` → `201` change request |
+| `GET /projects/{p}/change-requests?status=&requirement=&limit=&offset=` | `view` | Newest first, paged (`limit` 1–200) |
+| `GET /change-requests/{id}` | `view` | One request with `base_body` (text at `base_version`) and `current_body` (text now) |
+
+* `proposed_body` is required for `modify`, must differ from the current text, and must be absent for `deprecate`.
+  `reason` is required (3–4,000 characters after trimming). Text with NUL characters is a `422`.
+* "Resolves ISS-n" links: the `resolves` numbers plus every `Resolves|Fixes|Closes ISS-n` in the reason. Each must be
+  an open issue of the same project (`400 unknown_issue`, `400 issue_not_open`).
+* Errors: `409 base_version_moved` when `base_version` is no longer current (re-read the requirement and write the
+  proposal against the new text), `409 requirement_closed` for a rejected or deprecated requirement,
+  `409 not_in_baseline` when deprecating a requirement that is not Approved or Implemented, `409 project_in_setup`
+  while the project is in Setup, `400 proposed_body_required`, `400 no_change`, `400 unexpected_body`.
+* `draft: true` keeps the request out of review and off the map until its proposer opens it.
+* Events: `change_request.opened` with ids, number, status and revision only, never the text. Opening a non-draft
+  request also adds a sentence to the map (`graph.delta`). Reading a request about a protected requirement writes a
+  `viewed_protected` audit row (NFR-13).
+
 ## 1. Endpoint Summary (10 planned)
 
 <!-- coderabbit-ai-generated:v1 -->

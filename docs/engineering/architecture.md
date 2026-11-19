@@ -60,7 +60,7 @@ See `diagrams.md` for the activity diagram and state machines.
 | Auth, membership, permissions and roles | `app/core/auth.py`, `app/core/permissions.py`, `app/services/{access,membership,roles}.py` | Parth |
 | Join codes and join requests | `app/services/join_codes.py` | Madhav |
 | Channels, messages | `app/services/channels.py`, `app/api/channels.py` | Madhav |
-| Requirement posts, drafts, ownership, votes, watches, links | `app/intake/` | Bansil |
+| Requirement posts, drafts, ownership, change-request intake, votes, watches, links | `app/intake/` | Bansil |
 | Ingestion (extraction, segmentation) | `app/ingestion/` | Bansil |
 | Project context, brief drafting, context gate | `app/context/` | Bansil |
 | Updated SRS: readiness, generator, fidelity, exporter | `app/export/srs/` | Bansil (Keval: prompts) |

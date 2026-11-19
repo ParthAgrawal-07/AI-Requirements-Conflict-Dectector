@@ -169,3 +169,14 @@ def issue_reopened(actor: str | None, number: int, *, reflagged: bool = False) -
     if reflagged:
         return f"ISS-{number} reopened: its conflict was found again."
     return f"{_who(actor)} reopened ISS-{number}."
+
+
+def change_requested(actor: str | None, number: int, label: str, kind: str) -> str:
+    """RCR-n opened (US-33). Never the proposed text."""
+    what = "deprecating" if kind == "deprecate" else "a change to"
+    return f"{_who(actor)} proposed {what} {label} (RCR-{number})."
+
+
+def concern_raised(actor: str | None, kind: EdgeKind, labels: Sequence[str]) -> str:
+    """A person raised a concern (US-56): the map shows it with a Person badge."""
+    return f"{_who(actor)} raised a concern: {_KIND_NOUN.get(kind, kind)} on {_join(list(labels))}."
