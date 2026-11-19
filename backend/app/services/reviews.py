@@ -24,7 +24,7 @@ recomputed by :func:`app.services.change_requests.refresh_status`.
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.consequences.impact import ImpactAnalyzer
@@ -225,6 +225,8 @@ def review(
         rationale=(rationale or "").strip() or None,
         proposal_revision=change_request.proposal_revision,
         reviewed_base_version=change_request.base_version,
+        # The statement's own time, not the transaction's: reviews are listed in this order.
+        created_at=func.clock_timestamp(),
     )
     db.add(record)
     db.flush()

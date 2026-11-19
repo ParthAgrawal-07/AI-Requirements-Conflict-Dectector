@@ -112,6 +112,8 @@ class Case:
     needs: str | None = None
     # Author-only routes: {message_id} is a message the calling member posted just before.
     own_message: bool = False
+    # Proposer-only routes: {change_request_id} is a change request the calling member opened.
+    own_change_request: bool = False
     # The status a holder of the permission must get, when the request is meant to succeed; so a
     # 500 inside the route cannot pass as "allowed".
     ok: int | None = None
@@ -300,6 +302,34 @@ CASES = [
     Case("GET", "/api/v1/requirements/{requirement_id}/impact"),
     Case("GET", "/api/v1/change-requests/{change_request_id}/checks"),
     Case("POST", "/api/v1/change-requests/{change_request_id}/checks/rerun"),
+    # Sprint 4 — review and merge (Parth, US-35). The world's request is not
+    # approved, so a merger gets 409 (unmet conditions) — through the permission, refused later.
+    Case(
+        "PATCH",
+        "/api/v1/change-requests/{change_request_id}",
+        lambda _: {"reason": "A clearer reason"},
+        own_change_request=True,
+    ),
+    Case("GET", "/api/v1/change-requests/{change_request_id}/reviews"),
+    Case(
+        "POST",
+        "/api/v1/change-requests/{change_request_id}/reviews",
+        lambda _: {"decision": "comment", "rationale": "Reads well."},
+    ),
+    Case(
+        "POST",
+        "/api/v1/change-requests/{change_request_id}/reviewers",
+        lambda w: {"reviewer_id": str(w.target.id)},
+        needs="rcr.merge",
+    ),
+    Case("GET", "/api/v1/change-requests/{change_request_id}/agreement"),
+    Case("POST", "/api/v1/change-requests/{change_request_id}/merge", lambda _: {}),
+    Case(
+        "POST",
+        "/api/v1/change-requests/{change_request_id}/close",
+        lambda _: {"reason": "Not needed after all"},
+    ),
+    Case("POST", "/api/v1/change-requests/{change_request_id}/withdraw", own_change_request=True),
 ]
 
 
@@ -458,6 +488,20 @@ def _call(api: TestClient, case: Case, world: World, user: User) -> int:
         world.db.add(own)
         world.db.commit()
         message_id = own.id
+    change_request_id = world.change_request.id
+    if case.own_change_request:
+        mine = ChangeRequest(
+            project_id=world.project.id,
+            requirement_id=world.change_request.requirement_id,
+            number=world.change_request.number + 1 + world.db.query(ChangeRequest).count(),
+            proposer_id=user.id,
+            base_version=1,
+            proposed_body="It shall answer within 3 s.",
+            reason="Mine",
+        )
+        world.db.add(mine)
+        world.db.commit()
+        change_request_id = mine.id
     path = case.path.format(
         message_id=message_id,
         finding_id=world.finding.id,
@@ -474,7 +518,7 @@ def _call(api: TestClient, case: Case, world: World, user: User) -> int:
         clarification_id=world.clarification.id,
         ownership_request_id=world.ownership_request.id,
         issue_id=world.issue.id,
-        change_request_id=world.change_request.id,
+        change_request_id=change_request_id,
     )
     headers = {"Authorization": f"Bearer {security.create_access_token(user.id)[0]}"}
     body = case.body(world)
