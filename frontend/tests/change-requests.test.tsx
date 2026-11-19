@@ -246,14 +246,18 @@ describe("ChangeRequestPage", () => {
       requirement: { ...change().requirement, current_version: 3 },
       current_body: "When the user is inactive for 15 minutes, the system shall end the session.",
     });
-    const { calls } = pageApi(["view", "rcr.open"], {
+    const { calls } = pageApi(["view", "rcr.open", "rcr.review"], {
       "GET /api/v1/change-requests/cr1": moved,
       "PATCH /api/v1/change-requests/cr1": { ...moved, base_version: 3, proposal_revision: 2, status: "open" },
     });
     const { user } = renderWithProviders(<ChangeRequestPage />, { route: PAGE, path: PAGE_PATH });
 
     expect(await screen.findByText(/REQ-014 changed to v3 after this request was written against v2/)).toBeInTheDocument();
-    expect(screen.queryByRole("form", { name: "Your review" })).not.toBeInTheDocument(); // never your own
+    // Permissions are loaded once Re-run (needs rcr.review) shows; even then, never your own review.
+    await user.click(screen.getByRole("tab", { name: /^Checks/ }));
+    expect(await screen.findByRole("button", { name: "Re-run checks" })).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: /^Conversation/ }));
+    expect(screen.queryByRole("form", { name: "Your review" })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "Files changed" }));
     expect(screen.getByText("Changed underneath: v2 → v3")).toBeInTheDocument();

@@ -29,9 +29,21 @@ export function ChangeRequestPage() {
   const { workspaceId = "", projectId = "", changeRequestId } = useParams();
   useProjectRealtime(projectId);
   const change = useChangeRequest(changeRequestId);
-  if (change.isLoading) return <p className="page muted">Loading the change request…</p>;
-  if (change.isError || !change.data) return <p className="page" role="alert">This change request could not be loaded.</p>;
-  return <Detail change={change.data} workspaceId={workspaceId} projectId={projectId} />;
+  // A failed background refresh keeps the last data on screen, so unsent comments survive it.
+  if (!change.data) {
+    if (change.isLoading) return <p className="page muted">Loading the change request…</p>;
+    return <p className="page" role="alert">This change request could not be loaded.</p>;
+  }
+  return (
+    <>
+      {change.isError && (
+        <p className="banner" role="alert">
+          This change request could not be refreshed; what you see may be out of date.
+        </p>
+      )}
+      <Detail change={change.data} workspaceId={workspaceId} projectId={projectId} />
+    </>
+  );
 }
 
 function Detail({ change, workspaceId, projectId }: { change: ChangeRequest; workspaceId: string; projectId: string }) {
@@ -51,6 +63,8 @@ function Detail({ change, workspaceId, projectId }: { change: ChangeRequest; wor
   const label = change.requirement.label ?? "The requirement";
   const risk = checks.data?.report?.risk_level;
   const failing = checks.data?.report?.checks.filter((c) => c.status === "fail" || c.status === "warning").length ?? 0;
+  // A stale report is kept for reference; its risk and counts are not the current ones (US-34).
+  const stale = checks.data?.state === "stale";
 
   return (
     <div className="page change-request-page">
@@ -66,7 +80,10 @@ function Detail({ change, workspaceId, projectId }: { change: ChangeRequest; wor
       <p>
         <Badge tone={STATUS_TONE[change.status]}>{STATUS_TEXT[change.status]}</Badge>{" "}
         {risk && (
-          <Badge tone={risk === "high" ? "conflict" : "neutral"}>Risk {risk[0].toUpperCase() + risk.slice(1)}</Badge>
+          <Badge tone={risk === "high" ? "conflict" : "neutral"}>
+            Risk {risk[0].toUpperCase() + risk.slice(1)}
+            {stale && " (out of date)"}
+          </Badge>
         )}{" "}
         {change.requirement.is_protected && (
           <Badge tone="neutral" icon="⚑">
@@ -145,7 +162,10 @@ function Detail({ change, workspaceId, projectId }: { change: ChangeRequest; wor
             tabs={[
               { id: "conversation", label: pending.length ? `Conversation (${pending.length} pending)` : "Conversation" },
               { id: "diff", label: "Files changed" },
-              { id: "checks", label: failing ? `Checks (${failing} to look at)` : "Checks" },
+              {
+                id: "checks",
+                label: stale ? "Checks (out of date)" : failing ? `Checks (${failing} to look at)` : "Checks",
+              },
             ]}
           >
             {tab === "conversation" && (

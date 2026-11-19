@@ -74,7 +74,8 @@ export function ChangeRequestList() {
           </li>
         ))}
       </ul>
-      {total > PAGE && (
+      {/* Also past the last page (an item closed under it): Previous must stay reachable. */}
+      {(total > PAGE || offset > 0) && (
         <div className="row-actions">
           <Button size="sm" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))}>
             Previous
