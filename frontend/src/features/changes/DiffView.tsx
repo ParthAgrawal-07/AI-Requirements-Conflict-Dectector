@@ -29,6 +29,18 @@ function selectedRange(container: HTMLElement): Quote | null {
   return text.trim() ? { start_offset: start, end_offset: start + text.length, text } : null;
 }
 
+/** A textarea shows CRLF (and a lone CR) as one LF, so its selection offsets count that way;
+ *  this maps such an offset back to the original text, whose offsets the review stores. */
+export function originalOffset(original: string, shown: number): number {
+  let count = 0;
+  for (let i = 0; i < original.length; i++) {
+    if (count === shown) return i;
+    if (original[i] === "\r" && original[i + 1] === "\n") continue; // the pair is one character there
+    count++;
+  }
+  return original.length;
+}
+
 /** Select words with the mouse and press the button. From the keyboard (no selection), the button
  *  opens the proposal in a read-only text box: select any words there — a later repeat of the
  *  same words included — with Shift and the arrow keys, then quote the selection. */
@@ -57,8 +69,8 @@ function QuotePicker({
             type="button"
             className="link-button small"
             onClick={() => {
-              const start = box.current?.selectionStart ?? 0;
-              const end = box.current?.selectionEnd ?? 0;
+              const start = originalOffset(proposed, box.current?.selectionStart ?? 0);
+              const end = originalOffset(proposed, box.current?.selectionEnd ?? 0);
               const text = proposed.slice(start, end);
               if (!text.trim()) {
                 setEmpty(true);
