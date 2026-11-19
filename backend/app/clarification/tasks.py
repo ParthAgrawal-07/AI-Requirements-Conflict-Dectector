@@ -46,6 +46,7 @@ from app.models import (
     MessageKind,
     Project,
 )
+from app.services import issues
 from app.services import messages as message_service
 from app.services.findings import involved_requirements
 
@@ -162,6 +163,7 @@ def _claimed_question(db: Session, llm: LLMClient | None, finding: Finding) -> C
         clarification = db.scalar(
             select(Clarification).where(Clarification.finding_id == finding.id)
         )
+        newly_created = clarification is None
         if clarification is None:
             client = llm or get_llm_client()
             if client is None:
@@ -176,6 +178,8 @@ def _claimed_question(db: Session, llm: LLMClient | None, finding: Finding) -> C
         return None
     if clarification is not None and clarification.message_id is None:
         post_in_thread(db, clarification, finding)
+    if newly_created:
+        issues.add_question(db, finding)
     return clarification
 
 

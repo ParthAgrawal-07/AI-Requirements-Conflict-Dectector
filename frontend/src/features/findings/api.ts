@@ -33,7 +33,11 @@ export interface EvidenceSpan {
 export interface Finding {
   id: UUID;
   project_id: UUID;
-  source: "AI";
+  /** Who found it (US-56): the analysis, a rule check (Sprint 5) or a person's concern. */
+  source: "AI" | "Rule" | "Person";
+  raised_by?: UUID | null;
+  external_ref?: string | null;
+  ai_miss?: boolean;
   category: FindingCategory;
   status: FindingStatus;
   severity: "low" | "medium" | "high" | null;
