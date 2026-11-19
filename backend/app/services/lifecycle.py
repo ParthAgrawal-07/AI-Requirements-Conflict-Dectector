@@ -113,12 +113,12 @@ def readiness(db: Session, requirement: Requirement) -> Readiness:
     analysed = requirement.single_checked_version == version and behind is None
     return Readiness(
         analysis_current=analysed,
-        open_high_findings=_open_high_findings(db, requirement),
+        open_high_findings=open_high_findings(db, requirement),
         needs_signoff=requirement.is_protected and requirement.signed_off_version != version,
     )
 
 
-def _open_high_findings(db: Session, requirement: Requirement) -> list[uuid.UUID]:
+def open_high_findings(db: Session, requirement: Requirement) -> list[uuid.UUID]:
     pairs = select(CandidatePair.id).where(
         or_(
             CandidatePair.requirement_a_id == requirement.id,

@@ -15,18 +15,31 @@
   ``POST /ownership-requests/{id}/decision`` — ask to own a requirement; its owner or a member with
   ``baseline.manage`` decides (US-36, Bansil). Deciding admits ``baseline.manage`` or
   ``req.propose`` and ``app.intake.ownership.decide`` checks the caller owns it or may reassign.
+* ``GET /requirements/{id}/versions`` (``view``) - every version, newest first, with who made it
+  and the change request it was merged from (US-12).
 """
 
 import uuid
+from datetime import datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Query
+from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import DbSession, requires, requires_any
 from app.core.errors import BadRequestError, NotFoundError
 from app.intake import ownership
-from app.models import AuditAction, AuditLog, Requirement, RequirementOrigin, RequirementState
+from app.models import (
+    AuditAction,
+    AuditLog,
+    ChangeRequest,
+    Requirement,
+    RequirementOrigin,
+    RequirementState,
+    User,
+)
 from app.schemas.common import ErrorResponse, Page
 from app.schemas.documents import RequirementRead
 from app.schemas.requirements import (
@@ -37,7 +50,7 @@ from app.schemas.requirements import (
     RequirementUpdate,
     SignOffRequest,
 )
-from app.services import lifecycle
+from app.services import change_requests, lifecycle
 from app.services import requirements as requirement_service
 from app.services.access import AccessContext
 
@@ -254,3 +267,79 @@ def decide_ownership(
 ) -> OwnershipRequestRead:
     request = ownership.decide(db, ctx, ownership_request_id, accept=body.accept)
     return OwnershipRequestRead.model_validate(request)
+
+
+class VersionAuthor(BaseModel):
+    id: uuid.UUID
+    full_name: str
+
+
+class VersionChangeRequest(BaseModel):
+    id: uuid.UUID
+    key: str  # "RCR-7"
+
+
+class RequirementVersionRead(BaseModel):
+    version_no: int
+    body: str
+    changed_by: VersionAuthor | None  # None for the extracted first version
+    changed_at: datetime
+    change_request: VersionChangeRequest | None
+
+
+@router.get(
+    "/requirements/{requirement_id}/versions",
+    response_model=list[RequirementVersionRead],
+    summary="Every version of the requirement, newest first (US-12)",
+    responses=_ONE,
+)
+def list_versions(
+    requirement_id: uuid.UUID,
+    ctx: Annotated[AccessContext, requires("view")],
+    db: DbSession,
+) -> list[RequirementVersionRead]:
+    rows = change_requests.versions(db, requirement_id)
+    requirement = db.get(Requirement, requirement_id)
+    if requirement is not None and requirement.is_protected:
+        # Every version's text is returned: audited like reading the requirement (NFR-13).
+        db.add(
+            AuditLog(
+                workspace_id=ctx.workspace_id,
+                actor_id=ctx.user.id,
+                requirement_id=requirement.id,
+                action=AuditAction.VIEWED_PROTECTED,
+            )
+        )
+        db.commit()
+    authors = {
+        u.id: u
+        for u in db.scalars(
+            select(User).where(User.id.in_({r.changed_by for r in rows if r.changed_by}))
+        )
+    }
+    numbers = {
+        c.id: c.number
+        for c in db.scalars(
+            select(ChangeRequest).where(
+                ChangeRequest.id.in_({r.change_request_id for r in rows if r.change_request_id})
+            )
+        )
+    }
+    result = []
+    for row in rows:
+        author = authors.get(row.changed_by) if row.changed_by else None
+        number = numbers.get(row.change_request_id) if row.change_request_id else None
+        result.append(
+            RequirementVersionRead(
+                version_no=row.version_no,
+                body=row.body_snapshot,
+                changed_by=VersionAuthor(id=author.id, full_name=author.full_name)
+                if author
+                else None,
+                changed_at=row.changed_at,
+                change_request=VersionChangeRequest(id=row.change_request_id, key=f"RCR-{number}")
+                if row.change_request_id and number is not None
+                else None,
+            )
+        )
+    return result

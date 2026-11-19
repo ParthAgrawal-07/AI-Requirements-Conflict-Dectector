@@ -72,6 +72,9 @@ def nodes(
     )
     if requirement_ids is not None:
         query = query.where(Requirement.id.in_(list(requirement_ids)))
+    from app.services.issues import open_counts  # issues import the graph for their deltas
+
+    issues = open_counts(db, project_id, requirement_ids)
     return [
         GraphNode(
             id=r.id,
@@ -82,6 +85,7 @@ def nodes(
             req_type=r.req_type,
             origin=r.origin.value,
             is_protected=r.is_protected,
+            open_issues=issues.get(r.id, 0),
             x=position.x if position else None,
             y=position.y if position else None,
         )
@@ -144,4 +148,5 @@ def edge_of(finding: Finding, pair: CandidatePair | None) -> GraphEdge | None:
         status=cast(EdgeStatus, finding.status.value),
         severity=cast(EdgeSeverity, finding.severity.value) if finding.severity else None,
         confidence=finding.confidence,
+        found_by=cast(Literal["ai", "rule", "person"], finding.source),
     )
