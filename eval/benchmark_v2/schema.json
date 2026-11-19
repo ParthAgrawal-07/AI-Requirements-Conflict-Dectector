@@ -100,6 +100,17 @@
           "items": { "$ref": "#/$defs/req_id" },
           "uniqueItems": true
         },
+        "expected_new_duplicates": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/req_id" },
+          "uniqueItems": true
+        },
+        "expected_resolved": {
+          "description": "Partners of the target whose open finding the change resolves (Sprint 4, findings delta).",
+          "type": "array",
+          "items": { "$ref": "#/$defs/req_id" },
+          "uniqueItems": true
+        },
         "split": { "enum": ["dev", "heldout"] },
         "notes": { "type": "string" }
       }
