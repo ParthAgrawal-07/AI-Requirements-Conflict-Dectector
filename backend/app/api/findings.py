@@ -41,6 +41,13 @@ def list_findings(
     status: Annotated[FindingStatus | None, Query()] = None,
     requirement: Annotated[uuid.UUID | None, Query(description="Findings about this one")] = None,
     low_confidence: Annotated[bool | None, Query()] = None,
+    source: Annotated[
+        str | None,
+        Query(
+            pattern=r"^(ai|rule|person)(,(ai|rule|person))*$",
+            description="Who found them, comma-separated: ai, rule, person (US-56)",
+        ),
+    ] = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> Page[FindingRead]:
@@ -54,6 +61,7 @@ def list_findings(
         status=status,
         requirement_id=requirement,
         low_confidence=low_confidence,
+        sources=source.split(",") if source else None,
         limit=limit,
         offset=offset,
     )

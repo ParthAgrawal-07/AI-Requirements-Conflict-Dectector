@@ -93,6 +93,7 @@ def list_findings(
     status: FindingStatus | None = None,
     requirement_id: uuid.UUID | None = None,
     low_confidence: bool | None = None,
+    sources: list[str] | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> tuple[list[FindingView], int]:
@@ -106,6 +107,8 @@ def list_findings(
         conditions.append(Finding.confidence < project.confidence_threshold)
     elif low_confidence is False:
         conditions.append(Finding.confidence >= project.confidence_threshold)
+    if sources:
+        conditions.append(Finding.source.in_(sources))
     if requirement_id is not None:
         pair = aliased(CandidatePair)
         conditions.append(

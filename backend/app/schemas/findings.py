@@ -82,7 +82,11 @@ class EvidenceSpan(BaseModel):
 class FindingRead(BaseModel):
     id: uuid.UUID
     project_id: uuid.UUID
-    source: Literal["AI"] = "AI"  # human-raised concerns arrive with US-56 (Sprint 4)
+    # Who found it (ADR-25): the analysis, a rule check (S5) or a person's concern (US-56).
+    source: Literal["AI", "Rule", "Person"] = "AI"
+    raised_by: uuid.UUID | None = None  # for a concern
+    external_ref: str | None = None  # what the concern cites, e.g. "Contract §7.2"
+    ai_miss: bool = False  # a concern neither the AI nor a rule had found (NFR-37)
     category: FindingCategory
     status: FindingStatus
     severity: Severity | None
@@ -117,6 +121,10 @@ class FindingRead(BaseModel):
         return cls(
             id=finding.id,
             project_id=finding.project_id,
+            source=_SOURCE.get(finding.source, "AI"),
+            raised_by=finding.raised_by,
+            external_ref=finding.external_ref,
+            ai_miss=finding.ai_miss,
             category=finding.category,
             status=finding.status,
             severity=finding.severity,
@@ -161,6 +169,14 @@ class FindingRead(BaseModel):
             and finding.clarification is not None
             and finding.clarification.resolved_at is not None,
         )
+
+
+# The stored source (``ai``, ``rule``, ``person``) as the API spells it (ADR-25).
+_SOURCE: dict[str, Literal["AI", "Rule", "Person"]] = {
+    "ai": "AI",
+    "rule": "Rule",
+    "person": "Person",
+}
 
 
 def _category(value: object) -> FindingCategory | None:
