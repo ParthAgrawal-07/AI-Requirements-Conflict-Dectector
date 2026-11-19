@@ -151,6 +151,9 @@ export function useAddComment(issueId: string) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["issue-comments", issueId] });
       void queryClient.invalidateQueries({ queryKey: ["issue", issueId] });
+      // List rows carry comment_count; the hook knows only the issue, so every cached issue list
+      // (["issues", projectId, …]) is refreshed — without realtime too.
+      void queryClient.invalidateQueries({ queryKey: ["issues"] });
     },
   });
 }
