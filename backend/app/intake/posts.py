@@ -31,9 +31,10 @@ from sqlalchemy import BigInteger, cast, func, select
 from sqlalchemy.orm import Session
 
 from app.context.service import ensure_analysis_allowed
-from app.core.errors import ConflictError, NotFoundError
+from app.core.errors import BadRequestError, ConflictError, NotFoundError
 from app.graph import deltas, narrator
 from app.intake import drafts as draft_service
+from app.intake import from_suggestion
 from app.intake.schemas import ComposerFields
 from app.models import (
     AnalysisRun,
@@ -73,6 +74,8 @@ def post_requirement(
     author: User,
     fields: ComposerFields,
     draft_id: uuid.UUID | None = None,
+    supersedes: uuid.UUID | None = None,
+    source_suggestion_id: uuid.UUID | None = None,
 ) -> PostResult:
     project = db.scalar(select(Project).where(Project.id == channel.project_id).with_for_update())
     if project is None:  # impossible through the FK; defensive
@@ -89,6 +92,17 @@ def post_requirement(
     if draft is not None and draft.project_id != project.id:
         # Never delete a draft of another project as a side effect of this post.
         raise NotFoundError("Draft not found")
+    from_suggestion.refuse_placeholders(fields.statement)
+    old = from_suggestion.check_supersede(db, author, supersedes) if supersedes else None
+    if old is not None and old.project_id != project.id:
+        raise NotFoundError("The requirement to supersede was not found")
+    if source_suggestion_id is not None:
+        if old is None:
+            raise BadRequestError(
+                "A post from a suggestion supersedes your own proposal: name it",
+                code="supersedes_required",
+            )
+        from_suggestion.accepted_suggestion(db, author, old, source_suggestion_id)
 
     label = next_label(db, project.id)
     message = message_service.post_message(
@@ -133,6 +147,8 @@ def post_requirement(
             details={"channel_id": str(channel.id), "message_id": str(message.id)},
         )
     )
+    if old is not None:  # Bansil (US-45): the new post replaces the member's own proposal
+        from_suggestion.supersede(db, old, requirement, author, project.workspace_id)
     run = orchestrator.queue_requirement_run(db, requirement)
     if draft is not None:
         draft_service.delete_draft(db, draft, commit=False)
@@ -161,10 +177,20 @@ def post_to_project(
     author: User,
     fields: ComposerFields,
     draft_id: uuid.UUID | None = None,
+    supersedes: uuid.UUID | None = None,
+    source_suggestion_id: uuid.UUID | None = None,
 ) -> PostResult:
     """The composer's *Propose*: post where the fields say (see the module docstring)."""
     channel = target_channel(db, project, author, fields)
-    return post_requirement(db, channel=channel, author=author, fields=fields, draft_id=draft_id)
+    return post_requirement(
+        db,
+        channel=channel,
+        author=author,
+        fields=fields,
+        draft_id=draft_id,
+        supersedes=supersedes,
+        source_suggestion_id=source_suggestion_id,
+    )
 
 
 def target_channel(db: Session, project: Project, author: User, fields: ComposerFields) -> Channel:

@@ -174,10 +174,25 @@ export function useSimilar(projectId: string, text: string, enabled: boolean) {
 export function usePropose(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ fields, draftId }: { fields: ComposerFields; draftId: UUID | null }) =>
+    mutationFn: ({
+      fields,
+      draftId,
+      supersedes,
+      sourceSuggestionId,
+    }: {
+      fields: ComposerFields;
+      draftId: UUID | null;
+      supersedes?: UUID; // US-45: the member's own proposal this post replaces
+      sourceSuggestionId?: UUID;
+    }) =>
       apiFetch<PostResult>(`/projects/${projectId}/requirements`, {
         method: "POST",
-        json: { fields, draft_id: draftId },
+        json: {
+          fields,
+          draft_id: draftId,
+          supersedes: supersedes ?? null,
+          source_suggestion_id: sourceSuggestionId ?? null,
+        },
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({

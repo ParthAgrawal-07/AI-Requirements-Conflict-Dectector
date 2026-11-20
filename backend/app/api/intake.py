@@ -46,6 +46,9 @@ class RequirementPostCreate(BaseModel):
     fields: ComposerFields
     # The draft this post came from; it is deleted with the post.
     draft_id: uuid.UUID | None = None
+    # US-45: a post written from an accepted suggestion replaces the member's own proposal.
+    supersedes: uuid.UUID | None = None
+    source_suggestion_id: uuid.UUID | None = None
 
 
 class RequirementPostRead(BaseModel):
