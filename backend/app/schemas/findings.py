@@ -87,6 +87,7 @@ class FindingRead(BaseModel):
     raised_by: uuid.UUID | None = None  # for a concern
     external_ref: str | None = None  # what the concern cites, e.g. "Contract §7.2"
     ai_miss: bool = False  # a concern neither the AI nor a rule had found (NFR-37)
+    rule_id: str | None = None  # the rule check that fired, for a Rule finding (US-58)
     category: FindingCategory
     status: FindingStatus
     severity: Severity | None
@@ -121,10 +122,11 @@ class FindingRead(BaseModel):
         return cls(
             id=finding.id,
             project_id=finding.project_id,
-            source=_SOURCE.get(finding.source, "AI"),
+            source=SOURCE_LABELS.get(finding.source, "AI"),
             raised_by=finding.raised_by,
             external_ref=finding.external_ref,
             ai_miss=finding.ai_miss,
+            rule_id=finding.rule_id,
             category=finding.category,
             status=finding.status,
             severity=finding.severity,
@@ -171,8 +173,7 @@ class FindingRead(BaseModel):
         )
 
 
-# The stored source (``ai``, ``rule``, ``person``) as the API spells it (ADR-25).
-_SOURCE: dict[str, Literal["AI", "Rule", "Person"]] = {
+SOURCE_LABELS: dict[str, Literal["AI", "Rule", "Person"]] = {
     "ai": "AI",
     "rule": "Rule",
     "person": "Person",
