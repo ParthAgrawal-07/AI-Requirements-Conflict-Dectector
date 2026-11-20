@@ -15,7 +15,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import DbSession, requires
-from app.models import AnalysisRun, AnalysisRunStatus, AnalysisScope, Project
+from app.core.errors import NotFoundError
+from app.models import AnalysisRun, AnalysisRunStatus, AnalysisScope, Finding, Project
 from app.schemas.common import ErrorResponse
 from app.schemas.findings import FindingRead
 from app.services import findings as finding_service
@@ -54,7 +55,17 @@ def get_run(
     ctx: Annotated[AccessContext, requires("view")],
     db: DbSession,
 ) -> AnalysisRunRead:
-    run, views = finding_service.run_findings(db, ctx, analysis_run_id)
+    run = db.get(AnalysisRun, analysis_run_id)
+    project = db.get(Project, run.project_id) if run is not None else None
+    if run is None or project is None:
+        raise NotFoundError("Analysis run not found")
+    findings = list(
+        db.scalars(
+            select(Finding)
+            .where(Finding.analysis_run_id == run.id, ~Finding.is_stale)
+            .order_by(Finding.confidence.desc(), Finding.created_at, Finding.id)
+        )
+    )
     return AnalysisRunRead(
         id=run.id,
         project_id=run.project_id,
@@ -71,7 +82,9 @@ def get_run(
         created_at=run.created_at,
         started_at=run.started_at,
         finished_at=run.finished_at,
-        findings=[FindingRead.from_view(view) for view in views],
+        findings=[
+            FindingRead.from_view(view) for view in finding_service.views_of(db, project, findings)
+        ],
     )
 
 
