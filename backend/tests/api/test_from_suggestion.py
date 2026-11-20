@@ -190,3 +190,23 @@ def test_only_the_owner_supersedes_a_proposal(
         headers=headers_for(people["arjun"]),
     )
     assert response.status_code == 403
+
+
+def test_a_channel_post_supersedes_too(
+    client: TestClient, db_session: Session, setup: dict[str, Any], people: dict[str, User]
+) -> None:
+    setup["a"].state = RequirementState.PROPOSED
+    db_session.commit()
+    prefill = accept(client, setup["suggestion"], people["riya"])
+    channel = db_session.query(Channel).filter_by(project_id=setup["a"].project_id).one()
+
+    response = client.post(
+        f"/api/v1/channels/{channel.id}/requirement-posts",
+        json={"fields": FIELDS, "supersedes": prefill["requirement_id"],
+              "source_suggestion_id": prefill["source_suggestion_id"]},
+        headers=headers_for(people["riya"]),
+    )  # fmt: skip
+
+    assert response.status_code == 201, response.text
+    db_session.refresh(setup["a"])
+    assert setup["a"].state is RequirementState.REJECTED
