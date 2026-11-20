@@ -36,9 +36,9 @@ import logging
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
-from sqlalchemy import Row, select, update
+from sqlalchemy import CursorResult, select, update
 from sqlalchemy.orm import Session
 
 from app.core.celery_app import celery_app
@@ -73,8 +73,6 @@ CLASSIFY_PAIR = "analysis.classify_pair"
 CHECK_REQUIREMENT = "analysis.check_requirement"
 AFTER_RUN = "analysis.after_run"
 CLARIFY_RUN = "clarifications.generate_for_run"
-CLOSED = "closed"
-PARKED = "parked"
 NOT_ANALYSED = (RequirementState.REJECTED, RequirementState.DEPRECATED)
 NO_LLM = "No LLM is configured: candidate pairs were found but not classified."
 
@@ -168,26 +166,14 @@ def start_requirement_run(
     run.started_at = datetime.now(UTC)
     db.commit()
 
-    try:
-        candidates = candidates_for_requirement(db, requirement, embedder)
-        needs_check = (
-            requirement.state not in NOT_ANALYSED
-            and requirement.single_checked_version != requirement.current_version
-        )
-        run.pairs_total = len(candidates.pending)
-        run.checks_total = 1 if needs_check else 0
-        db.commit()
-    except Exception:
-        # Hand the claim back, or the run stays RUNNING with nothing dispatched and neither a
-        # redelivery, activation nor the budget sweep would ever pick it up again.
-        db.rollback()
-        db.execute(
-            update(AnalysisRun)
-            .where(AnalysisRun.id == run_id, AnalysisRun.status == AnalysisRunStatus.RUNNING)
-            .values(status=AnalysisRunStatus.QUEUED, started_at=None)
-        )
-        db.commit()
-        raise
+    candidates = candidates_for_requirement(db, requirement, embedder)
+    needs_check = (
+        requirement.state not in NOT_ANALYSED
+        and requirement.single_checked_version != requirement.current_version
+    )
+    run.pairs_total = len(candidates.pending)
+    run.checks_total = 1 if needs_check else 0
+    db.commit()
     _fan_out(
         db,
         run,
@@ -289,18 +275,15 @@ def record(
 ) -> None:
     """Count one finished item on the run, atomically; close the run when everything is counted."""
     if outcome == "budget":
-        # The event carries the row as this transition left it: a sweep may resume the run before
-        # the announcement, and re-reading it then would announce "running".
         parked = db.execute(
             update(AnalysisRun)
             .where(AnalysisRun.id == run_id, AnalysisRun.status == AnalysisRunStatus.RUNNING)
             .values(status=AnalysisRunStatus.WAITING_BUDGET)
-            .returning(*_EVENT_COLUMNS)
-        ).first()
+        )
         db.commit()
-        if parked is not None:  # announced once, by the task that parked it
-            _publish(db, parked)
-            send(AFTER_RUN, [str(run_id), PARKED])
+        if cast(CursorResult[Any], parked).rowcount:  # announced once, by the task that parked it
+            _announce(db, run_id)
+            send(AFTER_RUN, [str(run_id)])
         return
     column = {
         ("pair", "done"): AnalysisRun.pairs_done,
@@ -331,40 +314,40 @@ def record(
 
 
 def _close(db: Session, run: AnalysisRun, *, error: str | None = None) -> None:
-    closed = db.execute(
+    claimed = db.execute(
         update(AnalysisRun)
         .where(AnalysisRun.id == run.id, AnalysisRun.finished_at.is_(None))
         .values(status=AnalysisRunStatus.DONE, finished_at=datetime.now(UTC), error_message=error)
-        .returning(*_EVENT_COLUMNS)
-    ).first()
+    )
     db.commit()
-    db.expire(run)  # callers holding the run see it closed
-    if closed is not None:  # only the task that closed it announces it
-        _publish(db, closed)
+    if cast(CursorResult[Any], claimed).rowcount:  # only the task that closed it announces it
+        _announce(db, run.id)
         # Looked up at call time (not bound as a default) so tests can replace ``send``.
-        send(AFTER_RUN, [str(run.id), CLOSED])
+        send(AFTER_RUN, [str(run.id)])
 
 
-def after_run(db: Session, run_id: uuid.UUID, transition: str = CLOSED) -> None:
-    """Follow-ups of a run that closed or parked for budget (``analysis.after_run``): the live-map
-    delta once it is done, the result card in a posted requirement's thread (Keval, US-31) —
+def after_run(db: Session, run_id: uuid.UUID) -> None:
+    """Follow-ups of a run that closed or parked for budget (``analysis.after_run``): the rule
+    cross-checks (Heet, US-58), the auto conflict issues, the live-map delta once it is done, the result card in a posted requirement's thread (Keval, US-31) —
     "waiting for budget" first, rewritten with the results when the run finishes — and the
     clarification questions, queued as their own task because each is an LLM call (Madhav, US-09).
-    Each step is best effort — a failed follow-up never reopens the run.
-
-    ``transition`` is the change that queued the job. Only the closing job sends the map delta: a
-    park job delivered after the resumed run finished also sees ``done`` and must not send a
-    second delta for the same change (ADR-21). The card shows the run as it is now, so a late park
-    job only rewrites it with the same results."""
+    Each step is best effort: a failed follow-up never reopens the run."""
+    from app.classification.llm_client import get_llm_client
     from app.classification.result_card import publish_card
     from app.graph import deltas
+    from app.search import rule_checker
     from app.services import issues
 
     run = db.get(AnalysisRun, run_id)
     if run is None:
         return
-    if transition == CLOSED and run.status is AnalysisRunStatus.DONE:
-        try:
+    if run.status is AnalysisRunStatus.DONE:
+        try:  # Heet (US-58): rule checks need no model; before the issues, so they get one too
+            rule_checker.on_run(db, run, llm=get_llm_client())
+        except Exception:
+            db.rollback()
+            logger.exception("Rule checks for run %s failed", run_id)
+        try:  # Dhavni (US-52): before the delta, so the map's issue badges are current
             issues.ConflictIssueOpener(db).on_run(run)
         except Exception:
             db.rollback()
@@ -376,6 +359,15 @@ def after_run(db: Session, run_id: uuid.UUID, transition: str = CLOSED) -> None:
             logger.exception("Map delta for run %s failed", run_id)
         if run.error_message is None:  # Madhav (US-09): questions for its findings, queued
             send(CLARIFY_RUN, [str(run.id)])
+        try:  # Madhav (US-45, US-38): suggestions queued; owners told what was found
+            from app.notifications import hooks
+            from app.suggestions import tasks as suggestion_tasks
+
+            suggestion_tasks.for_run(db, run)
+            hooks.results_for_run(db, run)
+        except Exception:
+            db.rollback()
+            logger.exception("Suggestions or notifications for run %s failed", run_id)
     if run.status in (AnalysisRunStatus.DONE, AnalysisRunStatus.WAITING_BUDGET):
         try:
             publish_card(db, run)
@@ -385,7 +377,7 @@ def after_run(db: Session, run_id: uuid.UUID, transition: str = CLOSED) -> None:
 
 
 def resume_waiting(
-    db: Session, *, budget: "BudgetGuard", llm_configured: bool, dispatch: Dispatch = send
+    db: Session, *, budget: "BudgetGuard", dispatch: Dispatch = send
 ) -> list[uuid.UUID]:
     """Resume every run parked for budget whose project has calls left again (Celery beat).
     Oldest first, so posts are answered in the order they were made. Returns the runs resumed."""
@@ -401,26 +393,16 @@ def resume_waiting(
         left = budget.remaining(run.project_id)
         if left is not None and left <= 0:
             continue
-        if resume_run(db, run.id, llm_configured=llm_configured, dispatch=dispatch):
+        if resume_run(db, run.id, dispatch=dispatch):
             resumed.append(run.id)
     return resumed
 
 
-def resume_run(
-    db: Session, run_id: uuid.UUID, *, llm_configured: bool, dispatch: Dispatch = send
-) -> bool:
+def resume_run(db: Session, run_id: uuid.UUID, *, dispatch: Dispatch = send) -> bool:
     """Put a parked run back to work on what is still pending; done and failed items keep their
-    counts. ``False`` when it was not waiting (someone else resumed it). Without an LLM the run
-    closes and says so, as a fresh run would."""
-    # Filtered on the status under the lock and re-read: a concurrent sweep may have loaded this
-    # row as waiting and the session would otherwise keep that stale copy.
-    run = db.scalar(
-        select(AnalysisRun)
-        .where(AnalysisRun.id == run_id, AnalysisRun.status == AnalysisRunStatus.WAITING_BUDGET)
-        .with_for_update()
-        .execution_options(populate_existing=True)
-    )
-    if run is None:
+    counts. ``False`` when it was not waiting (someone else resumed it)."""
+    run = db.scalar(select(AnalysisRun).where(AnalysisRun.id == run_id).with_for_update())
+    if run is None or run.status is not AnalysisRunStatus.WAITING_BUDGET:
         db.rollback()
         return False
     requirement_ids = _subject_requirements(db, run)
@@ -446,7 +428,7 @@ def resume_run(
     run.pairs_total = run.pairs_done + run.pairs_failed + len(pair_ids)
     run.checks_total = run.checks_done + run.checks_failed + len(to_check)
     db.commit()
-    _fan_out(db, run, pair_ids, to_check, llm_configured=llm_configured, dispatch=dispatch)
+    _fan_out(db, run, pair_ids, to_check, llm_configured=True, dispatch=dispatch)
     return True
 
 
@@ -456,35 +438,25 @@ def _subject_requirements(db: Session, run: AnalysisRun) -> list[uuid.UUID]:
     return list(db.scalars(select(Requirement.id).where(Requirement.document_id == run.subject_id)))
 
 
-_EVENT_COLUMNS = (
-    AnalysisRun.id,
-    AnalysisRun.project_id,
-    AnalysisRun.subject_id,
-    AnalysisRun.status,
-    AnalysisRun.scope,
-    AnalysisRun.pairs_total,
-    AnalysisRun.pairs_failed,
-    AnalysisRun.checks_total,
-    AnalysisRun.checks_failed,
-)
-
-
-def _publish(db: Session, row: Row[*tuple[Any, ...]]) -> None:
-    """Announce ``analysis.completed`` from the row a transition returned (``_EVENT_COLUMNS``)."""
-    project = db.get(Project, row.project_id)
+def _announce(db: Session, run_id: uuid.UUID) -> None:
+    run = db.get(AnalysisRun, run_id)
+    if run is None:
+        return
+    db.refresh(run)
+    project = db.get(Project, run.project_id)
     if project is None:
         return
     bus.publish(
         analysis_completed(
             workspace_id=project.workspace_id,
             project_id=project.id,
-            run_id=row.id,
-            subject_id=row.subject_id,
-            status=row.status.value,
-            scope=row.scope.value,
-            pairs_total=row.pairs_total,
-            pairs_failed=row.pairs_failed,
-            checks_total=row.checks_total,
-            checks_failed=row.checks_failed,
+            run_id=run.id,
+            subject_id=run.subject_id,
+            status=run.status.value,
+            scope=run.scope.value,
+            pairs_total=run.pairs_total,
+            pairs_failed=run.pairs_failed,
+            checks_total=run.checks_total,
+            checks_failed=run.checks_failed,
         )
     )

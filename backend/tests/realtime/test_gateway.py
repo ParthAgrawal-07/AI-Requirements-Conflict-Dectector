@@ -5,7 +5,6 @@ import uuid
 from collections.abc import Callable
 
 import pytest
-import redis
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 from starlette.websockets import WebSocketDisconnect
@@ -14,7 +13,12 @@ from app.core import security
 from app.core.permissions import DefaultRole
 from app.models import Project, User, Workspace
 from app.realtime import bus, gateway
-from app.realtime.events import MEMBERSHIP_REVOKED, Event, analysis_progress
+from app.realtime.events import (
+    MEMBERSHIP_REVOKED,
+    Event,
+    analysis_progress,
+    notification_created,
+)
 
 
 def _token(user: User) -> str:
@@ -130,65 +134,55 @@ def test_ping_pong(client: TestClient, event_bus: bus.InProcessEventBus, user: U
         assert socket.receive_json() == {"type": "pong"}
 
 
-def test_an_idle_socket_does_not_hold_a_database_transaction(
+def test_an_open_socket_holds_no_database_connection(
     client: TestClient,
     event_bus: bus.InProcessEventBus,
     db_session: Session,
-    user: User,
-    project: Project,
+    make_user: Callable[..., User],
+    workspace: Workspace,
 ) -> None:
+    """Found by the CP2 load test: each open socket kept its session's transaction, and so a pooled
+    connection, until it closed — 50 members exhausted the pool and REST requests failed."""
+    member = make_user(role=DefaultRole.DEVELOPER)
     with client.websocket_connect("/ws") as socket:
-        socket.send_json({"type": "auth", "token": _token(user)})
+        socket.send_json({"type": "auth", "token": _token(member)})
         socket.receive_json()
         assert not db_session.in_transaction()
-
-        socket.send_json({"type": "subscribe", "project_id": str(project.id)})
-        socket.receive_json()
+        socket.send_json({"type": "subscribe", "workspace_id": str(workspace.id)})
+        assert socket.receive_json()["type"] == "subscribed"
         assert not db_session.in_transaction()
 
 
-def test_a_redis_outage_on_subscribe_is_reported_not_fatal(
+def test_a_notification_reaches_its_recipient_whatever_they_watch(
     client: TestClient,
     event_bus: bus.InProcessEventBus,
-    monkeypatch: pytest.MonkeyPatch,
-    user: User,
-    project: Project,
-) -> None:
-    class DownFanout(gateway.MemoryFanout):
-        async def add(self, workspace_id: uuid.UUID) -> None:
-            raise redis.ConnectionError("down")
-
-    monkeypatch.setattr(gateway, "make_fanout", lambda: DownFanout(event_bus))
-    with client.websocket_connect("/ws") as socket:
-        socket.send_json({"type": "auth", "token": _token(user)})
-        socket.receive_json()
-
-        socket.send_json({"type": "subscribe", "project_id": str(project.id)})
-        assert socket.receive_json() == {"type": "error", "code": "unavailable"}
-        socket.send_json({"type": "ping"})
-        assert socket.receive_json() == {"type": "pong"}
-
-
-def test_unsubscribe_stops_forwarding_that_project(
-    client: TestClient,
-    event_bus: bus.InProcessEventBus,
-    user: User,
+    make_user: Callable[..., User],
+    workspace: Workspace,
     make_project: Callable[..., Project],
 ) -> None:
-    dropped, kept = make_project(), make_project()
+    """US-38: the bell is live on the inbox page and while another project is open; a
+    notification still reaches no one else."""
+    member, colleague = make_user(role=DefaultRole.DEVELOPER), make_user(role=DefaultRole.DEVELOPER)
+    watched, elsewhere = make_project(), make_project()
+
+    def note(recipient: User, project: Project | None) -> Event:
+        return notification_created(
+            workspace_id=workspace.id, project_id=project.id if project else None,
+            notification_id=uuid.uuid4(), recipient_id=recipient.id, kind="assigned", group="assigned",
+        )  # fmt: skip
+
     with client.websocket_connect("/ws") as socket:
-        socket.send_json({"type": "auth", "token": _token(user)})
+        socket.send_json({"type": "auth", "token": _token(member)})
         socket.receive_json()
-        for project in (dropped, kept):
-            socket.send_json({"type": "subscribe", "project_id": str(project.id)})
-            socket.receive_json()
+        event_bus.publish(note(colleague, elsewhere))  # not theirs: never sent
+        event_bus.publish(note(member, None))  # nothing subscribed yet: the inbox page
+        assert socket.receive_json()["event"]["data"]["recipient_id"] == str(member.id)
 
-        socket.send_json({"type": "unsubscribe", "project_id": str(dropped.id)})
-        socket.send_json({"type": "unsubscribe", "project_id": "not-a-uuid"})
-        socket.send_json({"type": "ping"})
-        assert socket.receive_json() == {"type": "pong"}  # unsubscribes were handled, no reply
-
-        event_bus.publish(_progress(dropped, 11))
-        event_bus.publish(_progress(kept, 22))
-
-        assert socket.receive_json()["event"]["data"]["progress_percent"] == 22
+        socket.send_json({"type": "subscribe", "project_id": str(watched.id)})
+        assert socket.receive_json()["type"] == "subscribed"
+        event_bus.publish(note(member, elsewhere))
+        received = socket.receive_json()["event"]
+        assert (received["project_id"], received["data"]["recipient_id"]) == (
+            str(elsewhere.id),
+            str(member.id),
+        )

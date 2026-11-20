@@ -28,29 +28,39 @@ The contract with Madhav's module (``docs/contracts/permissions.md``)::
   teams with ``add_project_member(..., via_join_code=True)``: that is what stops a code from ever
   granting Owner, Admin or any role with their permissions;
 * it applies its own per-code rate limit and audit entries.
+
+Until that module exists the stub below accepts one development code (never in production).
 """
 
+import importlib
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.config import Environment, get_settings
 from app.core.errors import (
     AppError,
     BadRequestError,
     ConflictError,
     InvalidJoinCodeError,
+    ServiceUnavailableError,
     SignupRefusedError,
 )
+from app.core.permissions import DefaultRole
 from app.core.security import WeakPasswordError, validate_password_strength
-from app.models import Membership, User
-from app.services import join_codes
+from app.models import Membership, User, Workspace
+from app.services.membership import add_member, get_default_role
 from app.services.users import create_user, get_user_by_email, normalize_email
 
 logger = logging.getLogger(__name__)
+
+DEV_JOIN_CODE = "TEST1234"  # noqa: S105 — development stub only, refused outside dev/test
+DEV_JOIN_WORKSPACE = "Demo Workspace"
 
 JoinCodeRedeemer = Callable[[Session, str, User], Any]
 
@@ -67,9 +77,40 @@ class SignupResult:
     membership: Membership | None
 
 
+def _dev_stub_redeem(db: Session, code: str, user: User) -> Membership:
+    """Stand-in for Madhav's redeem until it merges: ``TEST1234`` joins the demo workspace."""
+    if get_settings().environment not in (Environment.DEVELOPMENT, Environment.TEST):
+        raise ServiceUnavailableError(
+            "Joining with a code is not available yet.", code="join_codes_unavailable"
+        )
+    workspace = db.scalar(
+        select(Workspace).where(Workspace.name == DEV_JOIN_WORKSPACE).order_by(Workspace.created_at)
+    )
+    if code.strip().upper() != DEV_JOIN_CODE or workspace is None:
+        raise InvalidJoinCodeError()
+    return add_member(
+        db,
+        workspace_id=workspace.id,
+        user_id=user.id,
+        role_id=get_default_role(db, DefaultRole.DEVELOPER).id,
+        via_join_code=True,
+        commit=False,
+    )
+
+
 def get_join_code_redeemer() -> JoinCodeRedeemer:
-    """FastAPI dependency: Madhav's ``join_codes.redeem``. Tests override it with a fake."""
-    return join_codes.redeem
+    """FastAPI dependency: Madhav's ``join_codes.redeem`` if it exists, else the dev stub."""
+    try:
+        module = importlib.import_module("app.services.join_codes")
+    except ModuleNotFoundError as exc:
+        if exc.name != "app.services.join_codes":
+            raise  # the module exists but one of *its* imports is broken: do not hide that
+        return _dev_stub_redeem
+    redeem = getattr(module, "redeem", None)
+    if not callable(redeem):
+        logger.error("app.services.join_codes has no redeem(db, code, user); using the dev stub")
+        return _dev_stub_redeem
+    return redeem  # type: ignore[no-any-return]
 
 
 def register_with_code(
@@ -116,5 +157,11 @@ def register_with_code(
         raise
 
     membership = outcome if isinstance(outcome, Membership) else None
+    if membership is None:  # Madhav (US-38): the managers are told someone is waiting
+        from app.models import JoinRequest
+        from app.notifications import hooks
+
+        if isinstance(outcome, JoinRequest):
+            hooks.join_requested(db, outcome)
     status: Literal["joined", "pending_approval"] = "joined" if membership else "pending_approval"
     return SignupResult(user=user, status=status, membership=membership)

@@ -229,7 +229,14 @@ def post_message(
     if commit:
         db.commit()
         announce(MESSAGE_CREATED, project, channel, message)
+        _notify_mentions(db, project, channel, message)
     return message
+
+
+def _notify_mentions(db: Session, project: Project, channel: Channel, message: Message) -> None:
+    from app.notifications import hooks  # Madhav (US-38); late import: hooks reads services
+
+    hooks.mentioned(db, project, channel, message)
 
 
 SYSTEM_KINDS = (MessageKind.ANALYSIS_CARD, MessageKind.SYSTEM)
@@ -243,15 +250,12 @@ def post_system_message(
     kind: MessageKind,
     parent_id: uuid.UUID | None = None,
     payload: dict[str, Any] | None = None,
-    commit: bool = True,
 ) -> Message:
     """Post a message written by the app, not a member — a result card (US-31) or a notice.
 
     Mentions in the body are parsed as for a member's message, so an @mentioned owner is notified.
     Posts even in an archived channel: the card belongs to a requirement posted before archiving.
-    With commit=True, commits and announces ``message.created``. With commit=False,
-    returns a flushed message in the caller's transaction; the caller must commit before
-    announcing ``message.created``.
+    Commits and announces ``message.created``.
     """
     if kind not in SYSTEM_KINDS:
         raise ValueError(f"{kind} is not a system message kind")
@@ -268,11 +272,10 @@ def post_system_message(
         created_at=func.clock_timestamp(),
     )
     db.add(message)
-    db.flush()
+    db.commit()
     db.refresh(message)
-    if commit:
-        db.commit()
-        announce(MESSAGE_CREATED, project, channel, message)
+    announce(MESSAGE_CREATED, project, channel, message)
+    _notify_mentions(db, project, channel, message)
     return message
 
 
