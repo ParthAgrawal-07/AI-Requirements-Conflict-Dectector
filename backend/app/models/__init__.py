@@ -5,6 +5,7 @@ relies on that, so a new model file must be imported here.
 """
 
 from app.models.analysis import AnalysisRun, CandidatePair, Clarification, Finding
+from app.models.attributes import RequirementAttribute
 from app.models.audit import AuditLog
 from app.models.base import Base
 from app.models.change_request import ChangeRequest, ChangeRequestIssue, ChangeRequestRevision
@@ -93,6 +94,7 @@ __all__ = [
     "ProjectMember",
     "ProjectStatus",
     "Requirement",
+    "RequirementAttribute",
     "RequirementDraft",
     "RequirementOrigin",
     "RequirementState",
