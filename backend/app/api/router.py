@@ -41,6 +41,7 @@ from app.core.auth import get_current_user
 from app.graph import api as graph_api
 from app.schemas.common import ErrorResponse
 from app.search import similar as search_similar
+from app.search import thresholds as search_thresholds
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -72,6 +73,7 @@ for _router in (
     change_requests.router,
     concerns.router,
     consequences.router,
+    search_thresholds.router,
 ):
     api_router.include_router(_router, dependencies=_authenticated, responses=_unauthorized)
 
