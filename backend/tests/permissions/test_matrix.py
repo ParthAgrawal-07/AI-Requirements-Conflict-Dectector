@@ -367,6 +367,8 @@ CASES = [
     Case("DELETE", "/api/v1/decision-rules/{decision_rule_id}", ok=204),
     Case("GET", "/api/v1/findings/{finding_id}/decision", ok=200),
     Case("GET", "/api/v1/issues/{issue_id}/decision", ok=200),
+    Case("GET", "/api/v1/projects/{project_id}/analytics", ok=200),
+    Case("GET", "/api/v1/workspaces/{workspace_id}/analytics", ok=200),
     Case("GET", "/api/v1/change-requests/{change_request_id}/decision", ok=200),
     # Sprint 5 — baselines (Parth, US-40)
     Case(

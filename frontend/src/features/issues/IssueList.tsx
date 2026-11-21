@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ApiError } from "../../api/client";
 import { useAuth } from "../../app/auth";
 import { useProjectRealtime } from "../../app/socket";
@@ -29,7 +29,10 @@ export function IssueList() {
   const { user } = useAuth();
   const { can } = usePermissions({ projectId });
   const navigate = useNavigate();
-  const [status, setStatus] = useState<IssueStatus | undefined>("open");
+  const [params] = useSearchParams(); // the dashboard's "closed" tile opens closed issues
+  const [status, setStatus] = useState<IssueStatus | undefined>(
+    params.get("status") === "closed" ? "closed" : "open",
+  );
   const [mine, setMine] = useState(false);
   const [label, setLabel] = useState("");
   const [offset, setOffset] = useState(0);

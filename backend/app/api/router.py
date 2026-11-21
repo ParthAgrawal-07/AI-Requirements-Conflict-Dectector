@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends
 
 from app.api import (
     analysis_runs,
+    analytics,
     auth,
     baselines,
     change_requests,
@@ -84,6 +85,7 @@ for _router in (
     notifications_api.router,
     lint_api.router,
     baselines.router,
+    analytics.router,
 ):
     api_router.include_router(_router, dependencies=_authenticated, responses=_unauthorized)
 
