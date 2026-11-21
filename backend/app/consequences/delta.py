@@ -89,6 +89,8 @@ def _entry(
         "labels": [labels.get(i, "?") for i in ids],
         "source": finding.source if finding else source,
         "reason": reason,
+        # Keval (US-08): the severity in force, which the risk level reads.
+        "severity": finding.severity.value if finding and finding.severity else None,
     }
 
 

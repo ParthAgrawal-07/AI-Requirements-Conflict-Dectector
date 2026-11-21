@@ -3,7 +3,8 @@
 ==========  ===============================================================================
 ``high``    a check failed for a reason in the text (a new conflict, a broken dependency), a
             protected requirement is involved, or more than ``MANY_AFFECTED`` requirements are
-``medium``  any other warning, a new finding in the delta, or ``SOME_AFFECTED`` or more
+``medium``  any other warning, a new finding in the delta, a High-severity finding the change
+            leaves open (US-08), or ``SOME_AFFECTED`` or more
 ``low``     everything else
 ==========  ===============================================================================
 
@@ -39,6 +40,12 @@ def assess(
         high.append(f"{count} requirements are affected")
     elif count >= SOME_AFFECTED:
         medium.append(f"{count} requirements are affected")
+    severe = [e for e in delta.get("still_open", []) if e.get("severity") == "high"]
+    if severe:
+        medium.append(
+            f"{len(severe)} High-severity finding{'s' * (len(severe) != 1)} stay"
+            f"{'s' * (len(severe) == 1)} open"
+        )
     if delta.get("new"):
         medium.append(
             f"{len(delta['new'])} new finding{'s' * (len(delta['new']) != 1)} with the new text"

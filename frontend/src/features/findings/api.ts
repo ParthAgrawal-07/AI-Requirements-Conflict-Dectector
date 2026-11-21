@@ -7,6 +7,8 @@ import { apiFetch } from "../../api/client";
 import type { Page, RequirementOrigin, RequirementState, UUID } from "../../api/types";
 
 export type FindingCategory = "Conflicting" | "Duplicate" | "Ambiguous" | "Incomplete" | "Dependent";
+export type Severity = "low" | "medium" | "high";
+export const SEVERITY_WORD: Record<Severity, string> = { high: "High", medium: "Medium", low: "Low" };
 export type FindingStatus = "flagged" | "confirmed" | "dismissed" | "merged" | "reclassified";
 
 export interface FindingRequirement {
@@ -40,7 +42,13 @@ export interface Finding {
   ai_miss?: boolean;
   category: FindingCategory;
   status: FindingStatus;
-  severity: "low" | "medium" | "high" | null;
+  severity: Severity | null;
+  /** US-08: who set the severity in force, what the system proposed (kept after an override)
+   *  and why. Severity is "how bad"; confidence is "how sure". */
+  severity_source?: "system" | "person" | "reviewer" | null;
+  severity_proposed?: Severity | null;
+  severity_reason?: string | null;
+  severity_set_at?: string | null;
   confidence: number;
   confidence_percent: number;
   low_confidence: boolean;
@@ -130,6 +138,19 @@ export function useReviewFinding(projectId: string) {
   return useMutation({
     mutationFn: ({ findingId, input }: { findingId: UUID; input: ReviewInput }) =>
       apiFetch<Finding>(`/findings/${findingId}/review`, { method: "POST", json: input }),
+    onSuccess: (finding) => {
+      queryClient.setQueryData(["finding", finding.id], finding);
+      void queryClient.invalidateQueries({ queryKey: ["findings", projectId] });
+    },
+  });
+}
+
+/** US-08: a reviewer overrides the severity with a reason; the system's proposal stays. */
+export function useSetSeverity(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ findingId, severity, reason }: { findingId: UUID; severity: Severity; reason: string }) =>
+      apiFetch<Finding>(`/findings/${findingId}/severity`, { method: "PATCH", json: { severity, reason } }),
     onSuccess: (finding) => {
       queryClient.setQueryData(["finding", finding.id], finding);
       void queryClient.invalidateQueries({ queryKey: ["findings", projectId] });

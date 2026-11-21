@@ -20,6 +20,8 @@ from app.models import (
 from app.services.findings import FindingView
 from app.services.review_state import ReviewAction
 
+SeveritySource = Literal["system", "person", "reviewer"]
+
 
 class FindingRequirement(BaseModel):
     """A requirement the finding is about, with where it came from (US-07)."""
@@ -91,6 +93,12 @@ class FindingRead(BaseModel):
     category: FindingCategory
     status: FindingStatus
     severity: Severity | None
+    # US-08: who set the severity in force (system, person, reviewer), what the system proposed
+    # (kept after an override) and why. Severity is "how bad"; confidence is "how sure".
+    severity_source: SeveritySource | None = None
+    severity_proposed: Severity | None = None
+    severity_reason: str | None = None
+    severity_set_at: datetime | None = None
     confidence: float
     confidence_percent: int
     # Below the project's confidence threshold: "low confidence — recommend manual review".
@@ -130,6 +138,12 @@ class FindingRead(BaseModel):
             category=finding.category,
             status=finding.status,
             severity=finding.severity,
+            severity_source=cast(SeveritySource | None, finding.severity_source),
+            severity_proposed=Severity(finding.severity_proposed)
+            if finding.severity_proposed
+            else None,
+            severity_reason=finding.severity_reason,
+            severity_set_at=finding.severity_set_at,
             confidence=finding.confidence,
             confidence_percent=round(finding.confidence * 100),
             low_confidence=view.low_confidence,

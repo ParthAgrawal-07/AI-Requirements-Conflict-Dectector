@@ -7,7 +7,7 @@
 """
 
 import uuid
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Query
 
@@ -49,6 +49,10 @@ def list_findings(
         ),
     ] = None,
     severity: Annotated[Severity | None, Query()] = None,
+    include_dismissed: Annotated[
+        bool, Query(description="Show dismissed findings too (hidden by default, US-15)")
+    ] = False,
+    sort: Annotated[Literal["confidence", "severity"], Query()] = "confidence",
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> Page[FindingRead]:
@@ -64,6 +68,8 @@ def list_findings(
         low_confidence=low_confidence,
         sources=source.split(",") if source else None,
         severity=severity,
+        include_dismissed=include_dismissed,
+        sort=sort,
         limit=limit,
         offset=offset,
     )

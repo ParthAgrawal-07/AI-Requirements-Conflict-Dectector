@@ -100,6 +100,14 @@ class Finding(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ),
         CheckConstraint("source IN ('ai', 'rule', 'person')", name="source_values"),
         CheckConstraint("(source = 'rule') = (rule_id IS NOT NULL)", name="rule_has_rule_id"),
+        CheckConstraint(
+            "severity_source IS NULL OR severity_source IN ('system', 'person', 'reviewer')",
+            name="severity_source_values",
+        ),
+        CheckConstraint(
+            "severity_proposed IS NULL OR severity_proposed IN ('low', 'medium', 'high')",
+            name="severity_proposed_values",
+        ),
         Index("ix_findings_document_id_status", "document_id", "status"),
         Index("ix_findings_document_id_category", "document_id", "category"),
         Index("ix_findings_project_id_status", "project_id", "status"),
@@ -189,6 +197,16 @@ class Finding(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # Who decides, as resolved by the project's decision rules (US-57, migration 0010c);
     # refreshed at the item's next update, never retroactively.
     decision: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    # Severity provenance (US-08, migration 0009a): who set the severity in force ("system",
+    # "person" for a raised concern, "reviewer" for an override), what the system proposed (kept
+    # after an override) and the override's reason, author and time.
+    severity_source: Mapped[str | None] = mapped_column(String(16))
+    severity_proposed: Mapped[str | None] = mapped_column(String(8))
+    severity_reason: Mapped[str | None] = mapped_column(Text)
+    severity_set_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    severity_set_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     candidate_pair: Mapped[CandidatePair | None] = relationship()
     requirement: Mapped[Requirement | None] = relationship()
