@@ -9,6 +9,7 @@ import { ChangeRequestList } from "../features/changes/ChangeRequestList";
 import { ChangeRequestPage } from "../features/changes/ChangeRequestPage";
 import { ChannelView } from "../features/channels/ChannelView";
 import { ComposerPage } from "../features/composer/ComposerPage";
+import { DashboardPage } from "../features/dashboard/DashboardPage";
 import { FindingsPage } from "../features/findings/FindingsPage";
 import { IssueList } from "../features/issues/IssueList";
 import { IssuePage } from "../features/issues/IssuePage";
@@ -17,6 +18,7 @@ import { JoinPage } from "../features/members/JoinPage";
 import { MembersPage } from "../features/members/MembersPage";
 import { WorkspaceCreate } from "../features/members/WorkspaceCreate";
 import { MapPage } from "../features/map/MapPage";
+import { Inbox } from "../features/notifications/Inbox";
 import { lastProject, useProjects, useWorkspaces } from "../features/projects/api";
 import { ProjectHomePage } from "../features/projects/ProjectHomePage";
 import { WorkspaceHomePage } from "../features/projects/WorkspaceHomePage";
@@ -95,7 +97,6 @@ export function NoWorkspace() {
 
 const LATER: { path: string; title: string; sprint: string }[] = [
   { path: "baselines", title: "Baselines", sprint: "Sprint 5 (US-40)" },
-  { path: "insights", title: "Insights", sprint: "Sprint 5 (US-13)" },
 ];
 
 export const routes: RouteObject[] = [
@@ -113,6 +114,7 @@ export const routes: RouteObject[] = [
         children: [
           { path: "/", element: <RootRedirect /> },
           { path: "/workspaces/new", element: <WorkspaceCreate /> },
+          { path: "/inbox", element: <Inbox /> },
           { path: "/w/:workspaceId", element: <WorkspaceHomePage actions={<WorkspaceActions />} /> },
           { path: "/w/:workspaceId/members", element: <MembersPage /> },
           { path: "/w/:workspaceId/projects/new", element: <ProjectCreatePage /> },
@@ -132,6 +134,7 @@ export const routes: RouteObject[] = [
               { path: "changes", element: <ChangeRequestList /> },
               { path: "changes/new", element: <ChangeEditor /> },
               { path: "changes/:changeRequestId", element: <ChangeRequestPage /> },
+              { path: "insights", element: <DashboardPage /> },
               ...LATER.map((item) => ({
                 path: item.path,
                 element: <ComingSoon title={item.title} sprint={item.sprint} />,

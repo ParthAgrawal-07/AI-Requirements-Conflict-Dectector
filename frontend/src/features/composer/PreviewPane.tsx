@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { SimilarRequirement } from "./api";
 
 export interface PreviewPaneProps {
@@ -5,11 +6,19 @@ export interface PreviewPaneProps {
   missing: string[];
   similar: SimilarRequirement[];
   similarLoading: boolean;
+  /** Lint, pre-flight and AI wording (US-51), below the hints. */
+  children?: ReactNode;
 }
 
 /** The live sentence and, beside it, the most similar existing requirements (interface design
  *  §5.1). A hint is a pointer to look at, never a finding: similarity is not a conflict (DR-10). */
-export function PreviewPane({ statement, missing, similar, similarLoading }: PreviewPaneProps) {
+export function PreviewPane({
+  statement,
+  missing,
+  similar,
+  similarLoading,
+  children,
+}: PreviewPaneProps) {
   return (
     <aside className="preview-pane" aria-label="Preview and similar requirements">
       <div className="eyebrow">Preview</div>
@@ -41,6 +50,7 @@ export function PreviewPane({ statement, missing, similar, similarLoading }: Pre
           ))}
         </ul>
       )}
+      {children}
     </aside>
   );
 }

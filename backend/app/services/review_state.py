@@ -34,7 +34,13 @@ from typing import Literal
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
-from app.core.errors import BadRequestError, ConflictError, ForbiddenError, NotFoundError
+from app.core.errors import (
+    AppError,
+    BadRequestError,
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+)
 from app.graph import deltas, narrator
 from app.graph.service import KIND
 from app.models import (
@@ -132,6 +138,8 @@ def review(
             f"'{action}' is not possible on a {finding.status.value} finding",
             code="illegal_review",
         )
+    if action in ("dismiss", "merge"):
+        _check_decision_owner(db, ctx, finding)
     reason = (reason or "").strip() or None
     if action == "dismiss" and (reason is None or len(reason) < MIN_REASON):
         raise BadRequestError("Say why the finding is dismissed", code="reason_required")
@@ -200,6 +208,25 @@ def review(
         actor=ctx.user,
     )
     return record
+
+
+def _check_decision_owner(db: Session, ctx: AccessContext, finding: Finding) -> None:
+    """US-57, DR-23: when a rule other than the default chose who decides, only they may
+    close the finding. The default rule keeps the US-10 guard above."""
+    from app.models import Project
+    from app.services import decision_rules
+
+    decision, facts = decision_rules.decision_for(db, finding, store=False)
+    project = db.get(Project, finding.project_id)
+    if decision.is_default or project is None:
+        return
+    engine = decision_rules.DecisionRuleEngine(db)
+    if ctx.user.id not in {u.id for u in engine.owners(project, decision, facts)}:
+        raise AppError(
+            f"{engine.sentence(project, decision, facts)}: only the decision owner can close it",
+            status_code=403,
+            code="decision_owner_only",
+        )
 
 
 def _scoped(ctx: AccessContext) -> Select[Finding]:

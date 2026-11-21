@@ -8,14 +8,19 @@ dismissed ones back for the "show dismissed" filter.
 
 Everything is read from the database; building the map never starts an analysis (SX-16).
 :func:`nodes` and :func:`edges` load single elements by id for ``app.graph.deltas``.
+
+A 500-requirement map has thousands of edges, so :func:`edges` reads only the columns an edge
+shows — not whole findings with their stored model output — and the API serialises the snapshot
+once (the CP2 load test: ~0.5 s of CPU per snapshot before, which 50 maps opening together turned
+into a 16 s wait).
 """
 
 import uuid
 from collections.abc import Collection
 from typing import Literal, cast
 
-from sqlalchemy import or_, select
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.graph.schemas import EdgeKind, EdgeStatus, GraphEdge, GraphNode, GraphSnapshot, NodeState
 from app.models import (
@@ -27,6 +32,7 @@ from app.models import (
     Project,
     Requirement,
     RequirementState,
+    Severity,
 )
 
 EdgeSeverity = Literal["low", "medium", "high"]
@@ -106,47 +112,79 @@ def edges(
     ``include_hidden`` also returns findings that are off the map (stale, dismissed, merged) —
     the delta builder needs them to know what to remove.
     """
-    a = aliased(Requirement)
-    single = aliased(Requirement)
     query = (
-        select(Finding, CandidatePair)
+        select(
+            Finding.id,
+            Finding.category,
+            Finding.status,
+            Finding.severity,
+            Finding.confidence,
+            Finding.source,
+            Finding.requirement_id,
+            Finding.original_ai_output["dependency_direction"].astext,
+            CandidatePair.requirement_a_id,
+            CandidatePair.requirement_b_id,
+        )
         .outerjoin(CandidatePair, CandidatePair.id == Finding.candidate_pair_id)
-        .outerjoin(a, a.id == CandidatePair.requirement_a_id)
-        .outerjoin(single, single.id == Finding.requirement_id)
-        .where(or_(a.project_id == project_id, single.project_id == project_id))
+        .where(Finding.project_id == project_id)
         .order_by(Finding.created_at, Finding.id)
     )
     if finding_ids is not None:
         query = query.where(Finding.id.in_(list(finding_ids)))
     if not include_hidden:
-        query = query.where(Finding.is_stale.is_(False), Finding.status != FindingStatus.MERGED)
+        query = query.where(~Finding.is_stale, Finding.status != FindingStatus.MERGED)
         if not include_dismissed:
             query = query.where(Finding.status != FindingStatus.DISMISSED)
     result: list[GraphEdge] = []
-    for finding, pair in db.execute(query):
-        edge = edge_of(finding, pair)
+    for row in db.execute(query):
+        edge = _edge(*row)
         if edge is not None:
             result.append(edge)
     return result
 
 
 def edge_of(finding: Finding, pair: CandidatePair | None) -> GraphEdge | None:
-    if pair is not None:
-        source, target = pair.requirement_a_id, pair.requirement_b_id
-        direction = (finding.original_ai_output or {}).get("dependency_direction")
-        if finding.category is FindingCategory.DEPENDENT and direction == "B_depends_on_A":
-            source, target = target, source  # an edge points from dependant to dependency
-    elif finding.requirement_id is not None:
-        source = target = finding.requirement_id
+    return _edge(
+        finding.id,
+        finding.category,
+        finding.status,
+        finding.severity,
+        finding.confidence,
+        finding.source,
+        finding.requirement_id,
+        (finding.original_ai_output or {}).get("dependency_direction"),
+        pair.requirement_a_id if pair else None,
+        pair.requirement_b_id if pair else None,
+    )
+
+
+def _edge(
+    finding_id: uuid.UUID,
+    category: FindingCategory,
+    status: FindingStatus,
+    severity: Severity | None,
+    confidence: float | None,
+    source: str,
+    requirement_id: uuid.UUID | None,
+    direction: str | None,
+    a_id: uuid.UUID | None,
+    b_id: uuid.UUID | None,
+) -> GraphEdge | None:
+    if a_id is not None and b_id is not None:
+        source_id, target_id = a_id, b_id
+        if category is FindingCategory.DEPENDENT and direction == "B_depends_on_A":
+            source_id, target_id = target_id, source_id  # from dependant to dependency
+    elif requirement_id is not None:
+        source_id = target_id = requirement_id
     else:  # pragma: no cover — the subject CHECK makes this impossible
         return None
     return GraphEdge(
-        id=finding.id,
-        source=source,
-        target=target,
-        kind=KIND[finding.category],
-        status=cast(EdgeStatus, finding.status.value),
-        severity=cast(EdgeSeverity, finding.severity.value) if finding.severity else None,
-        confidence=finding.confidence,
-        found_by=cast(Literal["ai", "rule", "person"], finding.source),
+        id=finding_id,
+        source=source_id,
+        target=target_id,
+        kind=KIND[category],
+        status=cast(EdgeStatus, status.value),
+        severity=cast(EdgeSeverity, severity.value) if severity else None,
+        confidence=confidence,
+        found_by=cast(Literal["ai", "rule", "person"], source),
     )

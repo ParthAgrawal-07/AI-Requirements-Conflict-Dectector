@@ -3,7 +3,7 @@ import type { RequirementRead, RequirementState } from "../../api/types";
 import { useAuth } from "../../app/auth";
 import { Badge } from "../../components/Badge";
 import type { BadgeTone } from "../../components/Badge";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { usePermissions } from "../../app/usePermissions";
 import { Button } from "../../components/Button";
 import { Drawer } from "../../components/Drawer";
@@ -59,7 +59,11 @@ export function RequirementsTable({
   extractionFailed?: boolean;
 }) {
   const { user } = useAuth();
-  const [filter, setFilter] = useState<Filter>("all");
+  const [params] = useSearchParams(); // a dashboard tile opens the list filtered (FR-28)
+  const fromUrl = params.get("state");
+  const [filter, setFilter] = useState<Filter>(
+    fromUrl === "Approved" || fromUrl === "Proposed" ? fromUrl : "all",
+  );
   const [origin, setOrigin] = useState<RequirementFilters["origin"]>(undefined);
   const [search, setSearch] = useState("");
   const [q, setQ] = useState("");

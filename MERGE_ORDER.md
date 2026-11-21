@@ -1,6 +1,6 @@
-# Sprint 3 — how to apply these zips
+# Sprint 5 — how to apply these zips
 
-Rebuilt for the **feature-wise ownership** in Sprint Plan §2.1: each zip is one owner's features, backend UI and tests together. The code is the same as before; only who ships which file changed. Built on the Sprint 2 end state (`68984d0`). Every zip holds **complete files at their repo paths** plus a `README_<name>.md`. Nothing has been committed or pushed.
+Rebuilt for the **feature-wise ownership** in Sprint Plan §2.1: each zip is one owner's features, backend UI and tests together. The code is the same as before; only who ships which file changed. Built on the Sprint 4 end state (`d9f1256`). Every zip holds **complete files at their repo paths** plus a `README_<name>.md`. Nothing has been committed or pushed.
 
 Testers have a feature zip (merged mid-sprint) and a `-tests` zip (merged last). A `<Name>-2` zip means one person's work has to be split around someone else's (a migration or import order); its README says why.
 
@@ -10,20 +10,20 @@ Open the PRs **in this order** (each one after the previous merged, or rebased o
 
 | # | Zip | Depends on | Branch | Stories | What | Lines |
 |---|---|---|---|---|---|---|
-| 1 | Heet | Sprint 2 end state | `us-31-retrieval-hints` | US-31 | Incremental retrieval and similar-requirement hints | 617 |
-| 2 | Dhavni | Heet | `us-14-graph-deltas` | US-14 | Graph revisions, deltas, narrator, node positions, analysis cards in the thread | 1,630 |
-| 3 | Abhyudit | Dhavni | `us-31-requirement-runs` | US-31 | Requirement runs: queue a posted requirement through retrieval and classification | 470 |
-| 4 | Parth | Abhyudit | `us-37-lifecycle` | US-37 | Requirement lifecycle states and the review/lifecycle migration | 1,187 |
-| 5 | Bansil | Parth | `us-36-ownership` | US-36 | Owners, stakeholder groups and ownership requests — backend and UI | 871 |
-| 6 | Pranshu | Bansil | `us-30-composer` | US-30 | Requirement composer with EARS templates — backend and UI | 1,694 |
-| 7 | Affan | Pranshu | `us-10-finding-review` | US-10 | Human review of findings with the protected guard — review state, API and UI | 1,231 |
-| 8 | Keval | Affan | `us-31-classify-budget-card` | US-31 | Live classification, Redis budget guard, model provenance, result card — backend and UI | 1,319 |
-| 9 | Madhav | Keval | `us-09-clarifications` | US-09 | Clarification questions, thread posts and answers | 1,157 |
-| 10 | Abhijeet | Madhav | `us-14-map-ui` | US-14 | Live map UI: canvas, node drawer, table view, changes feed, live updates | 1,288 |
-| 11 | Abhyudit-tests | Abhijeet | `e-s3-cp1-accuracy` | CP1 | CP1 accuracy report: post-style benchmark set, runner styles, with/without context pack | 331 |
-| 12 | Affan-tests | Abhyudit-tests | `e-s3-cp1-e2e` | CP1 | CP1 end-to-end flow, map freshness load test, tenant isolation | 477 |
+| 1 | Keval | Sprint 4 end state | `us-51-us-58-authoring-ai` | US-51, US-58, US-45 | Lint engine and catalogue v2, pre-flight and AI wording logic, attribute extraction, suggestion prompts | 1,351 |
+| 2 | Heet | Keval | `us-58-us-06-rule-checks` | US-58, US-06 | Attribute index and rule cross-checks, threshold preview and re-analysis | 1,569 |
+| 3 | Madhav | Heet | `us-45-suggestions` | US-45 | AI suggestion service with append-only structured feedback | 1,885 |
+| 4 | Abhijeet | Madhav | `us-38-notifications-backend` | US-38, US-14 | Notifications backend (service, hooks, subjects, API); graph service fixes and gateway tests | 1,031 |
+| 5 | Parth | Abhijeet | `us-57-decision-rules` | US-57 | Decision rules engine and API | 1,564 |
+| 6 | Affan | Parth | `us-57-decision-owners-ui` | US-57, US-06 | Decision owners, rules tab and the project settings page | 490 |
+| 7 | Dhavni | Affan | `e-s5-load-test-inbox-ui` | CP2, US-38 | CP2 load test: messages, analysis, checks, the 500-node map; notifications bell and inbox UI | 720 |
+| 8 | Pranshu | Dhavni | `us-40-us-51-baselines-authoring-api` | US-40, US-51 | Baseline snapshots and comparison (backend and UI); authoring-aids API: lint, pre-flight and wording routes | 1,460 |
+| 9 | Abhyudit | Pranshu | `us-13-us-45-dashboard-panel` | US-13, US-45 | Quality dashboard (aggregation and UI) and the suggestion panel | 1,490 |
+| 10 | Bansil | Abhyudit | `us-51-us-45-authoring-panel` | US-51, US-45 | Composer authoring panel; change requests and posts from accepted suggestions | 979 |
+| 11 | Abhyudit-tests | Bansil | `e-s5-cp2-recall` | CP2 | Below-threshold set, recall by layer, suggestion rating study, CP2 report | 413 |
+| 12 | Affan-tests | Abhyudit-tests | `e-s5-cp2-e2e` | CP2 | CP2 full-loop E2E from rule conflict to snapshot comparison | 242 |
 
-**Migrations** (Parth reviews): 0006d (Dhavni) → 0006e (Parth) → 0006f (Bansil) → 0006g (Keval) → 0006h (Madhav) — one head at every step.
+**Migrations** (Parth reviews): 0010b (Heet) → 0008 (Madhav) → 0010c (Parth) — one head at every step.
 
 ## Files shipped by more than one zip
 
@@ -31,50 +31,73 @@ Each zip holds the version of the file as it stands after that zip, so the merge
 
 | File | Shipped by (in order) |
 |---|---|
-| `backend/app/api/requirements.py` | Parth → Bansil |
-| `backend/app/api/router.py` | Heet → Bansil → Pranshu → Keval → Madhav |
-| `backend/app/core/config.py` | Heet → Keval |
-| `backend/app/models/__init__.py` | Dhavni → Parth → Bansil → Affan |
-| `backend/app/models/analysis.py` | Parth → Keval → Madhav |
-| `backend/app/models/enums.py` | Parth → Bansil → Madhav |
-| `backend/app/schemas/findings.py` | Affan → Keval → Madhav |
-| `backend/app/schemas/requirements.py` | Parth → Bansil |
-| `backend/app/services/analysis_orchestrator.py` | Abhyudit → Keval → Madhav |
-| `backend/tests/permissions/test_matrix.py` | Heet → Dhavni → Parth → Bansil → Keval → Madhav |
-| `frontend/src/app/routes.tsx` | Pranshu → Abhijeet |
-| `frontend/src/app/socket.ts` | Pranshu → Abhijeet |
-| `frontend/src/features/channels/MessageItem.tsx` | Dhavni → Keval |
-| `frontend/src/styles/components.css` | Pranshu → Abhijeet |
+| `backend/app/api/router.py` | Heet → Madhav → Abhijeet → Parth → Pranshu → Abhyudit |
+| `backend/app/models/__init__.py` | Heet → Madhav → Abhijeet → Parth → Pranshu |
+| `backend/app/models/analysis.py` | Heet → Parth |
+| `backend/app/models/change_request.py` | Madhav → Parth |
+| `backend/app/services/analysis_orchestrator.py` | Heet → Abhijeet |
+| `backend/tests/api/test_access_invariants.py` | Abhijeet → Pranshu |
+| `backend/tests/db/test_migrations.py` | Heet → Madhav → Parth |
+| `backend/tests/permissions/test_matrix.py` | Heet → Madhav → Pranshu |
+| `frontend/src/app/routes.tsx` | Dhavni → Abhyudit |
+| `frontend/src/app/socket.ts` | Dhavni → Pranshu |
+| `frontend/src/styles/components.css` | Dhavni → Pranshu |
 
 ## Files `main` changed after these zips were built
 
 PR #57 (Sprint 2) and later fixes changed these on `main`. The zips hold complete files, so the person opening the PR merges `main`'s changes in by hand instead of overwriting:
 
-- `.env.example` (Keval)
-- `backend/app/classification/budget.py` (Keval)
-- `backend/app/classification/llm_client.py` (Keval)
-- `backend/app/classification/tasks.py` (Keval)
-- `backend/app/core/config.py` (Heet, Keval)
+- `backend/app/api/analysis_runs.py` (Keval)
+- `backend/app/api/findings.py` (Parth)
+- `backend/app/api/intake.py` (Bansil)
+- `backend/app/api/requirements_compose.py` (Bansil)
+- `backend/app/api/router.py` (Heet, Madhav, Abhijeet, Parth, Pranshu, Abhyudit)
+- `backend/app/classification/result_card.py` (Keval)
+- `backend/app/classification/tasks.py` (Heet)
+- `backend/app/core/celery_app.py` (Madhav)
+- `backend/app/core/config.py` (Pranshu)
 - `backend/app/embeddings/candidates.py` (Heet)
-- `backend/app/embeddings/store.py` (Heet)
-- `backend/app/intake/posts.py` (Pranshu)
-- `backend/tests/api/test_access_invariants.py` (Affan)
-- `backend/tests/api/test_drafts.py` (Pranshu)
-- `backend/tests/permissions/test_matrix.py` (Heet, Dhavni, Parth, Bansil, Keval, Madhav)
-- `backend/tests/services/test_processing.py` (Bansil)
-- `docs/contracts/realtime.md` (Dhavni)
-- `eval/reports/s2.md` (Abhyudit-tests)
-- `eval/run_benchmark.py` (Abhyudit-tests)
-- `frontend/src/app/routes.tsx` (Pranshu, Abhijeet)
-- `frontend/src/app/socket.ts` (Pranshu, Abhijeet)
-- `frontend/src/features/findings/FindingCard.tsx` (Affan)
-- `frontend/src/features/findings/FindingDrawer.tsx` (Affan)
-- `frontend/src/features/findings/FindingsPage.tsx` (Affan)
-- `frontend/src/features/findings/api.ts` (Affan)
-- `frontend/src/features/requirements/RequirementsTable.tsx` (Bansil)
-- `frontend/src/styles/components.css` (Pranshu, Abhijeet)
+- `backend/app/graph/api.py` (Abhijeet)
+- `backend/app/graph/deltas.py` (Abhijeet)
+- `backend/app/graph/service.py` (Abhijeet)
+- `backend/app/intake/posts.py` (Bansil)
+- `backend/app/lint/catalogue.json` (Keval)
+- `backend/app/main.py` (Parth)
+- `backend/app/models/__init__.py` (Heet, Madhav, Abhijeet, Parth, Pranshu)
+- `backend/app/models/analysis.py` (Heet, Parth)
+- `backend/app/models/enums.py` (Parth)
+- `backend/app/models/project.py` (Madhav)
+- `backend/app/realtime/events.py` (Madhav)
+- `backend/app/realtime/gateway.py` (Madhav)
+- `backend/app/schemas/findings.py` (Heet)
+- `backend/app/services/analysis_orchestrator.py` (Heet, Abhijeet)
+- `backend/app/services/findings.py` (Parth)
+- `backend/app/services/lifecycle.py` (Parth)
+- `backend/app/services/messages.py` (Abhijeet)
+- `backend/app/services/review_state.py` (Parth)
+- `backend/app/services/signup.py` (Abhijeet)
+- `backend/tests/api/test_access_invariants.py` (Abhijeet, Pranshu)
+- `backend/tests/api/test_auth.py` (Parth)
+- `backend/tests/classification/test_lint_catalogue.py` (Pranshu)
+- `backend/tests/core/test_tasks.py` (Abhyudit)
+- `backend/tests/db/test_migrations.py` (Heet, Madhav, Parth)
+- `backend/tests/embeddings/test_candidates.py` (Heet)
+- `backend/tests/integration/test_upload_extract.py` (Abhyudit)
+- `backend/tests/permissions/test_matrix.py` (Heet, Madhav, Pranshu)
+- `backend/tests/realtime/test_gateway.py` (Abhijeet)
+- `frontend/src/app/AppShell.tsx` (Dhavni)
+- `frontend/src/app/routes.tsx` (Dhavni, Abhyudit)
+- `frontend/src/app/socket.ts` (Dhavni, Pranshu)
+- `frontend/src/features/composer/ComposerPage.tsx` (Bansil)
+- `frontend/src/features/composer/PreviewPane.tsx` (Bansil)
+- `frontend/src/features/composer/api.ts` (Bansil)
+- `frontend/src/features/findings/FindingDrawer.tsx` (Abhyudit)
+- `frontend/src/features/findings/FindingsPage.tsx` (Abhyudit)
+- `frontend/src/features/findings/api.ts` (Abhyudit)
+- `frontend/src/features/requirements/RequirementsTable.tsx` (Pranshu)
+- `frontend/src/styles/components.css` (Dhavni, Pranshu)
 
 ## Verified
 
-- Applying all zips in this order on `68984d0` reproduces the Sprint 3 end state byte for byte.
+- Applying all zips in this order on `d9f1256` reproduces the Sprint 5 end state byte for byte.
 - After **every** step: ruff, ruff format --check, mypy, a single Alembic head, pytest collection and the frontend typecheck pass (rcd-test image, Python 3.11).

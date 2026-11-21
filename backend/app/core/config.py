@@ -109,6 +109,9 @@ class Settings(BaseSettings):
     # threshold on purpose — a hint is cheap to ignore, a missed duplicate is not.
     similar_hint_min_similarity: float = Field(default=0.5, ge=0, le=1)
     similar_requests_per_minute: int = Field(default=60, ge=1, le=1000)
+    # US-51: limit authoring requests per member in addition to the project budget.
+    preflight_requests_per_minute: int = Field(default=6, ge=1, le=1000)
+    wording_requests_per_minute: int = Field(default=6, ge=1, le=1000)
     llm_provider: Literal["gemini", "groq"] = "gemini"
     llm_fallback_provider: Literal["groq", "none"] | None = "groq"
     gemini_api_key: SecretStr | None = None

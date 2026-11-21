@@ -1,0 +1,257 @@
+{
+  "embedder": "all-MiniLM-L6-v2",
+  "similarity_threshold": 0.75,
+  "k": 10,
+  "ai_layer": "not run (no model)",
+  "below_threshold_set": {
+    "pairs": 18,
+    "conflicts": 15,
+    "below_threshold": 9,
+    "by_layer": {
+      "rules": 12,
+      "missed": 3
+    },
+    "rule_subset": 12,
+    "rule_subset_caught": 12,
+    "false_positives": 0,
+    "detail": [
+      {
+        "id": "BT-01",
+        "category": "Conflicting",
+        "expected_rule": "numeric_limit",
+        "similarity": 0.688,
+        "passes_filter": false,
+        "rules_fired": [
+          "numeric_limit"
+        ],
+        "ai": null,
+        "layer": "rules",
+        "rule_as_expected": true
+      },
+      {
+        "id": "BT-02",
+        "category": "Conflicting",
+        "expected_rule": "numeric_limit",
+        "similarity": 0.743,
+        "passes_filter": false,
+        "rules_fired": [
+          "numeric_limit"
+        ],
+        "ai": null,
+        "layer": "rules",
+        "rule_as_expected": true
+      },
+      {
+        "id": "BT-03",
+        "category": "Conflicting",
+        "expected_rule": "numeric_limit",
+        "similarity": 0.89,
+        "passes_filter": true,
+        "rules_fired": [
+          "numeric_limit"
+        ],
+        "ai": null,
+        "layer": "rules",
+        "rule_as_expected": true
+      },
+      {
+        "id": "BT-04",
+        "category": "Conflicting",
+        "expected_rule": "numeric_limit",
+        "similarity": 0.864,
+        "passes_filter": true,
+        "rules_fired": [
+          "numeric_limit"
+        ],
+        "ai": null,
+        "layer": "rules",
+        "rule_as_expected": true
+      },
+      {
+        "id": "BT-05",
+        "category": "Conflicting",
+        "expected_rule": "numeric_limit",
+        "similarity": 0.946,
+        "passes_filter": true,
+        "rules_fired": [
+          "numeric_limit"
+        ],
+        "ai": null,
+        "layer": "rules",
+        "rule_as_expected": true
+      },
+      {
+        "id": "BT-06",
+        "category": "Conflicting",
+        "expected_rule": "negation",
+        "similarity": 0.708,
+        "passes_filter": false,
+        "rules_fired": [
+          "negation"
+        ],
+        "ai": null,
+        "layer": "rules",
+        "rule_as_expected": true
+      },
+      {
+        "id": "BT-07",
+        "category": "Conflicting",
+        "expected_rule": "negation",
+        "similarity": 0.819,
+        "passes_filter": true,
+        "rules_fired": [
+          "negation"
+        ],
+        "ai": null,
+        "layer": "rules",
+        "rule_as_expected": true
+      },
+      {
+        "id": "BT-08",
+        "category": "Conflicting",
+        "expected_rule": "negation",
+        "similarity": 0.728,
+        "passes_filter": false,
+        "rules_fired": [
+          "negation"
+        ],
+        "ai": null,
+        "layer": "rules",
+        "rule_as_expected": true
+      },
+      {
+        "id": "BT-09",
+        "category": "Conflicting",
+        "expected_rule": "actor",
+        "similarity": 0.742,
+        "passes_filter": false,
+        "rules_fired": [
+          "actor"
+        ],
+        "ai": null,
+        "layer": "rules",
+        "rule_as_expected": true
+      },
+      {
+        "id": "BT-10",
+        "category": "Conflicting",
+        "expected_rule": "actor",
+        "similarity": 0.716,
+        "passes_filter": false,
+        "rules_fired": [
+          "actor"
+        ],
+        "ai": null,
+        "layer": "rules",
+        "rule_as_expected": true
+      },
+      {
+        "id": "BT-11",
+        "category": "Conflicting",
+        "expected_rule": "condition_overlap",
+        "similarity": 0.921,
+        "passes_filter": true,
+        "rules_fired": [
+          "condition_overlap"
+        ],
+        "ai": null,
+        "layer": "rules",
+        "rule_as_expected": true
+      },
+      {
+        "id": "BT-12",
+        "category": "Conflicting",
+        "expected_rule": "condition_overlap",
+        "similarity": 0.865,
+        "passes_filter": true,
+        "rules_fired": [
+          "condition_overlap"
+        ],
+        "ai": null,
+        "layer": "rules",
+        "rule_as_expected": true
+      },
+      {
+        "id": "BT-13",
+        "category": "Conflicting",
+        "expected_rule": null,
+        "similarity": 0.473,
+        "passes_filter": false,
+        "rules_fired": [],
+        "ai": null,
+        "layer": "missed",
+        "rule_as_expected": true
+      },
+      {
+        "id": "BT-14",
+        "category": "Conflicting",
+        "expected_rule": null,
+        "similarity": 0.346,
+        "passes_filter": false,
+        "rules_fired": [],
+        "ai": null,
+        "layer": "missed",
+        "rule_as_expected": true
+      },
+      {
+        "id": "BT-15",
+        "category": "Conflicting",
+        "expected_rule": null,
+        "similarity": 0.613,
+        "passes_filter": false,
+        "rules_fired": [],
+        "ai": null,
+        "layer": "missed",
+        "rule_as_expected": true
+      },
+      {
+        "id": "BT-16",
+        "category": "None",
+        "expected_rule": null,
+        "similarity": 0.942,
+        "passes_filter": true,
+        "rules_fired": [],
+        "ai": null,
+        "layer": "correctly_quiet",
+        "rule_as_expected": true
+      },
+      {
+        "id": "BT-17",
+        "category": "None",
+        "expected_rule": null,
+        "similarity": 0.816,
+        "passes_filter": true,
+        "rules_fired": [],
+        "ai": null,
+        "layer": "correctly_quiet",
+        "rule_as_expected": true
+      },
+      {
+        "id": "BT-18",
+        "category": "None",
+        "expected_rule": null,
+        "similarity": 0.53,
+        "passes_filter": false,
+        "rules_fired": [],
+        "ai": null,
+        "layer": "correctly_quiet",
+        "rule_as_expected": true
+      }
+    ]
+  },
+  "planted_srs": {
+    "requirements": 60,
+    "conflicts": 8,
+    "below_threshold": 6,
+    "by_layer": {
+      "rules": 2,
+      "missed": 6
+    },
+    "rules_on_conflicts": [
+      "REQ-021/REQ-023: numeric_limit",
+      "REQ-034/REQ-035: numeric_limit"
+    ],
+    "rules_on_unlabelled_pairs": [],
+    "rules_on_labelled_non_conflicts": []
+  }
+}

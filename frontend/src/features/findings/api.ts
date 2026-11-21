@@ -101,6 +101,8 @@ export interface FindingFilters {
   status?: FindingStatus;
   requirement?: UUID;
   low_confidence?: boolean;
+  severity?: "low" | "medium" | "high"; // US-13 drill-down
+  source?: string; // "ai", "rule", "person" (comma-separated)
   limit: number;
   offset: number;
 }
