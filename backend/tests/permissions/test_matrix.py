@@ -498,7 +498,9 @@ def world(
         ],
     )
     rule = DecisionRule(
-        project_id=project.id, name="Existing rule", owner_kind="requirement_owner"
+        project_id=project.id,
+        name="Existing rule",
+        owner_kind="requirement_owner",
     )
     db_session.add_all((suggestion, rule))
     db_session.commit()
