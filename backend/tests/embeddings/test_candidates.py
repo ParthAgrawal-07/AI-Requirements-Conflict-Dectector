@@ -1,11 +1,13 @@
 """Candidate pairs (Heet — US-05, FR-09, FR-10): top-k neighbours above the threshold, stored once,
 never re-classified for unchanged versions, and never across projects."""
 
+import threading
+import time
 import uuid
 from collections.abc import Callable
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import Engine, select, text
 from sqlalchemy.orm import Session
 
 from app.core.celery_app import celery_app
@@ -22,7 +24,10 @@ from app.models import (
     Requirement,
     RequirementState,
     User,
+    Workspace,
 )
+from app.services.users import create_user
+from tests.conftest import _run_migrations
 
 TIMEOUT_A = "API requests shall time out after 2 seconds."
 TIMEOUT_B = "API requests may take up to 10 seconds before they time out."
@@ -207,3 +212,71 @@ def test_the_task_is_named_and_routed_to_the_analysis_queue() -> None:
     assert generate_candidates_task.name == "embeddings.generate_candidates"
     route = celery_app.amqp.router.route({}, "embeddings.generate_candidates")
     assert route["queue"].name == "analysis"
+
+
+def test_two_runs_at_once_share_one_pair(
+    scratch_engine: Engine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Real concurrency (found by the CP2 load test): the first run has inserted the pair but not
+    committed when the second looks. The second waits, then leaves classification to the first
+    run."""
+    _run_migrations(scratch_engine)
+    with Session(scratch_engine) as setup:
+        workspace = Workspace(name="Race")
+        setup.add(workspace)
+        setup.commit()
+        project = Project(workspace_id=workspace.id, name="Race")
+        setup.add(project)
+        setup.commit()
+        uploader = create_user(
+            setup,
+            email="race@example.com",
+            password="correct-horse-battery-staple",
+            full_name="Race",
+        )
+        document = Document(
+            workspace_id=workspace.id,
+            project_id=project.id,
+            uploaded_by=uploader.id,
+            filename="srs.docx",
+            format=DocumentFormat.DOCX,
+            size_bytes=1,
+            sha256="0" * 64,
+            storage_path="srs.docx",
+        )
+        setup.add(document)
+        setup.commit()
+        setup.add_all(
+            Requirement(document_id=document.id, project_id=project.id, body=body, order_index=i)
+            for i, body in enumerate((TIMEOUT_A, TIMEOUT_B))
+        )
+        setup.commit()
+        embed_document(setup, document.id, HashingEmbedder())
+        project_id = project.id
+
+    with Session(scratch_engine) as first, Session(scratch_engine) as second:
+        monkeypatch.setattr(first, "commit", first.flush)  # the first run is still open
+        earlier = generate_candidates(first, project_id, threshold=0.3)
+
+        def commit_once_the_other_waits() -> None:
+            # The second run is blocked on the first's uncommitted pair: only then commit.
+            with scratch_engine.connect() as probe:
+                for _ in range(200):
+                    waiting = probe.scalar(
+                        text("SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock'")
+                    )
+                    if waiting:
+                        break
+                    time.sleep(0.05)
+            Session.commit(first)
+
+        committer = threading.Thread(target=commit_once_the_other_waits)
+        committer.start()
+        later = generate_candidates(second, project_id, threshold=0.3)
+        committer.join(timeout=30)
+        second.commit()
+        (pair,) = pairs(second)
+
+    assert (earlier.created, later.created) == (1, 0)
+    assert earlier.pending == [pair.id]
+    assert later.pending == []

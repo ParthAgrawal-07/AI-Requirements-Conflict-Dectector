@@ -45,7 +45,10 @@ def get_graph(
         project = db.get(Project, project_id)
         if project is not None and project.graph_revision == revision:
             return Response(status_code=304)
-    return graph_service.snapshot(db, project_id, include_dismissed=include_dismissed)
+    snapshot = graph_service.snapshot(db, project_id, include_dismissed=include_dismissed)
+    # Already a validated GraphSnapshot: serialise it once instead of letting the response model
+    # validate thousands of edges a second time.
+    return Response(content=snapshot.model_dump_json(), media_type="application/json")
 
 
 @router.put(
