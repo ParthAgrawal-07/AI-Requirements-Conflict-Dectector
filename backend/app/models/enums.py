@@ -167,6 +167,11 @@ class AuditAction(StrEnum):
     CHANNEL_ARCHIVED = "channel_archived"
     CHANNEL_MEMBER_ADDED = "channel_member_added"
     CHANNEL_MEMBER_REMOVED = "channel_member_removed"
+    # The updated SRS (US-61). Document ids, section keys, actions and version labels only.
+    SRS_DRAFT_CREATED = "srs_draft_created"
+    SRS_SECTION_REVIEWED = "srs_section_reviewed"
+    SRS_PUBLISHED = "srs_published"
+    SRS_DISCARDED = "srs_discarded"
 
 
 class MessageKind(StrEnum):

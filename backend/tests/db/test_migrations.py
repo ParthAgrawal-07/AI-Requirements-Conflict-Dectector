@@ -68,6 +68,9 @@ EXPECTED_TABLES = {
     "decision_rules",
     "baselines",
     "baseline_items",
+    # Sprint 6 (0012a_srs_documents)
+    "srs_documents",
+    "srs_sections",
 }
 
 
