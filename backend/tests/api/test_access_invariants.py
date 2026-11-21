@@ -28,6 +28,7 @@ PUBLIC = {
 }
 # Any signed-in user, no workspace involved. Keep this list short and think before extending it.
 AUTHENTICATED_ONLY = {
+    ("GET", "/api/v1/lint/catalogue"),  # static catalogue (US-51)
     # One’s own inbox, across workspaces (US-38).
     ("GET", "/api/v1/notifications"),
     ("GET", "/api/v1/notifications/counts"),

@@ -507,3 +507,37 @@
 @media (max-width: 720px) {
   .inbox-layout, .preview-columns { grid-template-columns: 1fr; }
 }
+
+/* ── Sprint 5 (Pranshu): authoring aids, dashboard, baselines, decision rules ────────────── */
+.authoring-panel { display: grid; gap: var(--space-4); margin-top: var(--space-4); }
+.quality-meter { margin: 0 0 var(--space-2); letter-spacing: 0.1em; }
+.lint-text { margin: 0 0 var(--space-2); line-height: 1.7; }
+.lint-text mark { background: none; color: inherit; text-decoration: underline wavy; text-underline-offset: 3px; }
+.lint-text mark.lint-error { text-decoration-color: var(--danger); }
+.lint-text mark.lint-warning { text-decoration-color: var(--proposed); }
+.lint-text mark.lint-info { text-decoration-color: var(--ink-faint); }
+.lint-list, .likely-list, .compare-list { margin: 0; padding-left: var(--space-4); display: grid; gap: var(--space-2); }
+.lint-severity { font-weight: 600; text-transform: capitalize; }
+.ghost-map { display: block; margin-top: var(--space-2); }
+.ghost-node { fill: var(--paper); stroke: var(--accent); stroke-width: 2; stroke-dasharray: 4 3; }
+.ghost-target { fill: var(--paper-raised); stroke: var(--ink-soft); }
+.ghost-edge { stroke: var(--ink-faint); stroke-width: 2; stroke-dasharray: 2 3; }
+.ghost-edge-conflict { stroke: var(--conflict); stroke-width: 2; }
+.ghost-label { font-size: 10px; fill: var(--ink-soft); font-family: var(--font-mono); }
+.wording-suggestion { border: 1px dashed var(--line-strong); border-radius: var(--radius-sm); padding: var(--space-3); margin-top: var(--space-2); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--space-4); }
+.tile { border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper-raised); padding: var(--space-4); }
+.tile-title { font-size: 14px; margin: 0 0 var(--space-3); }
+.tile-counts { margin: 0; display: grid; gap: var(--space-1); }
+.tile-row { display: flex; justify-content: space-between; gap: var(--space-2); }
+.tile-row dd { margin: 0; font-variant-numeric: tabular-nums; font-weight: 600; }
+.decision-owner { margin: 0 0 var(--space-3); color: var(--ink-soft); }
+
+/* ── Sprint 5 (Abhijeet): suggestion panel, inbox and bell, settings ─────────────────────── */
+.suggestion-panel { border: 1px solid var(--line); border-radius: var(--radius); padding: var(--space-4); margin: var(--space-4) 0; background: var(--paper-raised); }
+.suggestion-panel h3 { margin: 0 0 var(--space-3); font-size: 15px; }
+.suggestion-options { border: 0; padding: 0; margin: 0 0 var(--space-3); display: grid; gap: var(--space-3); }
+.suggestion-option { display: block; line-height: 1.5; }
+.suggestion-actions { display: grid; gap: var(--space-2); margin-top: var(--space-3); }
+.preference-marks { color: var(--approved); font-weight: 600; }
+mark.tbd { background: var(--proposed-soft); color: var(--proposed); font-weight: 600; }

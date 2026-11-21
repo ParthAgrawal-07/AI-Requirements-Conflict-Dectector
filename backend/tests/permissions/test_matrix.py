@@ -34,6 +34,7 @@ from app.models import (
     AnalysisRun,
     AnalysisRunStatus,
     AnalysisScope,
+    Baseline,
     ChangeRequest,
     Channel,
     Clarification,
@@ -103,6 +104,7 @@ class World:
     change_request: ChangeRequest  # RCR-1 by the Owner on the finding's requirement
     suggestion: Suggestion  # ready AI options for `finding`
     decision_rule_id: uuid.UUID
+    baselines: tuple[Baseline, Baseline]
     db: Session
 
 
@@ -366,6 +368,37 @@ CASES = [
     Case("GET", "/api/v1/findings/{finding_id}/decision", ok=200),
     Case("GET", "/api/v1/issues/{issue_id}/decision", ok=200),
     Case("GET", "/api/v1/change-requests/{change_request_id}/decision", ok=200),
+    # Sprint 5 — baselines (Parth, US-40)
+    Case(
+        "POST",
+        "/api/v1/projects/{project_id}/baselines",
+        lambda _: {"label": "Snap"},
+        needs="baseline.manage",
+    ),
+    Case("GET", "/api/v1/projects/{project_id}/baselines"),
+    Case("GET", "/api/v1/baselines/{baseline_id}"),
+    Case("GET", "/api/v1/baselines/{baseline_id}/compare/{other_baseline_id}"),
+    # Sprint 5 — authoring aids (Keval, US-51). POST lint needs req.propose; pre-flight and
+    # wording need an active project — the world's project has not confirmed its context yet, so
+    # they are refused with 412 (ContextGate) — past the permission check.
+    Case(
+        "POST",
+        "/api/v1/projects/{project_id}/lint",
+        lambda _: {"text": "A shall B."},
+        needs="req.propose",
+    ),
+    Case(
+        "POST",
+        "/api/v1/projects/{project_id}/preflight",
+        lambda _: {"text": "A shall B."},
+        needs="req.propose",
+    ),
+    Case(
+        "POST",
+        "/api/v1/projects/{project_id}/improve-wording",
+        lambda _: {"text": "A shall B."},
+        needs="req.propose",
+    ),
 ]
 
 
@@ -503,7 +536,11 @@ def world(
         owner_kind="requirement_owner",
         match_label="API",
     )
-    db_session.add_all((suggestion, rule))
+    baselines = tuple(
+        Baseline(project_id=project.id, label=label, baseline_revision=0, requirement_count=0)
+        for label in ("a", "b")
+    )
+    db_session.add_all((suggestion, rule, *baselines))
     db_session.commit()
     return World(
         workspace=workspace,
@@ -524,6 +561,7 @@ def world(
         change_request=change_request,
         suggestion=suggestion,
         decision_rule_id=rule.id,
+        baselines=(baselines[0], baselines[1]),
         db=db_session,
     )
 
@@ -532,14 +570,18 @@ def world(
 def api(
     client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> Iterator[TestClient]:
+    from app.classification.budget import UnlimitedBudget, get_budget_guard
+    from app.classification.llm_client import get_llm_client
     from app.main import app
 
     monkeypatch.setattr(document_service, "dispatch_processing", lambda _id: "task-1")
     app.dependency_overrides[get_storage] = lambda: LocalFileStorage(tmp_path / "uploads")
     app.dependency_overrides[get_embedder] = HashingEmbedder
+    app.dependency_overrides[get_llm_client] = lambda: None
+    app.dependency_overrides[get_budget_guard] = UnlimitedBudget
     yield client
-    app.dependency_overrides.pop(get_storage, None)
-    app.dependency_overrides.pop(get_embedder, None)
+    for dependency in (get_storage, get_embedder, get_llm_client, get_budget_guard):
+        app.dependency_overrides.pop(dependency, None)
 
 
 def _call(api: TestClient, case: Case, world: World, user: User) -> int:
@@ -582,6 +624,8 @@ def _call(api: TestClient, case: Case, world: World, user: User) -> int:
         change_request_id=change_request_id,
         suggestion_id=world.suggestion.id,
         decision_rule_id=world.decision_rule_id,
+        baseline_id=world.baselines[0].id,
+        other_baseline_id=world.baselines[1].id,
     )
     headers = {"Authorization": f"Bearer {security.create_access_token(user.id)[0]}"}
     body = case.body(world)
