@@ -1,0 +1,40 @@
+{
+  "style": "document",
+  "context_pack": false,
+  "prompt_version": "v2",
+  "embedder": "all-MiniLM-L6-v2",
+  "k": 10,
+  "similarity_threshold": 0.75,
+  "split": "all",
+  "requirements_analysed": 60,
+  "requirements_extracted": 60,
+  "labels": 55,
+  "candidate_pairs": 30,
+  "candidate_recall": 0.5,
+  "candidate_recall_by_category": {
+    "Conflicting": {
+      "labelled": 8,
+      "candidates": 2
+    },
+    "Duplicate": {
+      "labelled": 6,
+      "candidates": 6
+    },
+    "Dependent": {
+      "labelled": 6,
+      "candidates": 2
+    }
+  },
+  "missed_by_prefilter": [
+    "REQ-002\u2013REQ-012 (Conflicting)",
+    "REQ-004\u2013REQ-032 (Conflicting)",
+    "REQ-006\u2013REQ-008 (Dependent)",
+    "REQ-008\u2013REQ-027 (Dependent)",
+    "REQ-020\u2013REQ-032 (Conflicting)",
+    "REQ-024\u2013REQ-028 (Conflicting)",
+    "REQ-036\u2013REQ-037 (Conflicting)",
+    "REQ-038\u2013REQ-039 (Conflicting)",
+    "REQ-040\u2013REQ-050 (Dependent)",
+    "REQ-046\u2013REQ-047 (Dependent)"
+  ]
+}
