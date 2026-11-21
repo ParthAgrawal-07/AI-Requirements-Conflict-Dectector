@@ -27,7 +27,9 @@ class Baseline(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     note: Mapped[str | None] = mapped_column(Text)
     baseline_revision: Mapped[int]  # the project's baseline revision when it was frozen
     requirement_count: Mapped[int]
-    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
 
 
 class BaselineItem(Base):
