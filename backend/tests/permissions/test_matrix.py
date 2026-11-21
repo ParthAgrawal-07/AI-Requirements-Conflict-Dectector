@@ -358,7 +358,7 @@ CASES = [
     Case(
         "POST",
         "/api/v1/projects/{project_id}/decision-rules",
-        lambda _: {"name": "New rule", "owner_kind": "requirement_owner"},
+        lambda _: {"name": "New rule", "owner_kind": "requirement_owner", "match_label": "API"},
         ok=201,
     ),
     Case("PATCH", "/api/v1/decision-rules/{decision_rule_id}", lambda _: {"priority": 20}, ok=200),
@@ -501,6 +501,7 @@ def world(
         project_id=project.id,
         name="Existing rule",
         owner_kind="requirement_owner",
+        match_label="API",
     )
     db_session.add_all((suggestion, rule))
     db_session.commit()
