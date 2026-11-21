@@ -34,6 +34,7 @@ from app.consequences import tasks as consequence_tasks
 from app.context.service import ensure_analysis_allowed
 from app.core.errors import AppError, BadRequestError, ConflictError
 from app.graph import deltas, narrator
+from app.intake import from_suggestion
 from app.models import (
     AuditAction,
     AuditLog,
@@ -215,6 +216,7 @@ def open_change_request(
     base_version: int | None = None,
     resolves_numbers: Iterable[int] = (),
     draft: bool = False,
+    source_suggestion_id: uuid.UUID | None = None,
 ) -> ChangeRequest:
     """Open (or draft) RCR-n — committed, then announced."""
     db.refresh(requirement, with_for_update=True)
@@ -235,6 +237,12 @@ def open_change_request(
             code="base_version_moved",
         )
     text = (proposed_body or "").strip()
+    from_suggestion.refuse_placeholders(text)  # Bansil (US-45): no unfilled AI placeholder
+    suggestion = (
+        from_suggestion.accepted_suggestion(db, ctx.user, requirement, source_suggestion_id)
+        if source_suggestion_id is not None
+        else None
+    )
     if kind == MODIFY:
         if not text:
             raise BadRequestError("Write the proposed text", code="proposed_body_required")
@@ -252,6 +260,9 @@ def open_change_request(
         raise BadRequestError("Unknown kind", code="unknown_kind")
 
     linked = _issues(db, project.id, resolved_numbers(reason, resolves_numbers))
+    issue = from_suggestion.issue_of(db, suggestion) if suggestion else None
+    if issue is not None and issue.id not in {i.id for i in linked}:
+        linked.append(issue)  # the merge closes the conflict the suggestion resolves
     db.execute(select(Project.id).where(Project.id == project.id).with_for_update())
     number = (
         db.scalar(
@@ -273,6 +284,7 @@ def open_change_request(
             proposed_fields=proposed_fields,
             linked=linked,
             draft=draft,
+            source_suggestion_id=suggestion.id if suggestion else None,
         )
     except SQLAlchemyError:
         # The driver error carries the bound proposal text and reason, which must not reach the
@@ -308,6 +320,7 @@ def _store(
     proposed_fields: dict[str, Any] | None,
     linked: list[Issue],
     draft: bool,
+    source_suggestion_id: uuid.UUID | None,
 ) -> ChangeRequest:
     change_request = ChangeRequest(
         project_id=project.id,
@@ -321,6 +334,7 @@ def _store(
         proposed_body=text if kind == MODIFY else None,
         proposed_fields=proposed_fields,
         reason=reason.strip(),
+        source_suggestion_id=source_suggestion_id,
     )
     db.add(change_request)
     db.flush()
@@ -349,6 +363,7 @@ def _store(
                 "base_version": change_request.base_version,
                 "resolves": [str(i.id) for i in linked],
                 "draft": draft,
+                "source_suggestion_id": str(source_suggestion_id) if source_suggestion_id else None,
             },
         )
     )

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ApiError } from "../../api/client";
 import { useAuth } from "../../app/auth";
 import { usePermissions } from "../../app/usePermissions";
 import { Button } from "../../components/Button";
 import { useToast } from "../../components/Toast";
 import { useChannels, useMembers } from "../channels/api";
+import type { Prefill } from "../findings/suggestions";
 import {
   cleanFields,
   EMPTY_FIELDS,
@@ -22,6 +23,7 @@ import {
 } from "./api";
 import { missingSlots, renderStatement } from "./ears";
 import { EarsTemplatePicker } from "./EarsTemplatePicker";
+import { AuthoringPanel } from "./AuthoringPanel";
 import { PreviewPane } from "./PreviewPane";
 import { SlotFields } from "./SlotFields";
 
@@ -65,7 +67,11 @@ function Composer() {
   const saveDraft = useSaveDraft(projectId);
   const propose = usePropose(projectId);
 
-  const [fields, setFields] = useState<ComposerFields>(EMPTY_FIELDS);
+  // US-45: accepting a suggestion for one's own proposal opens a post that supersedes it.
+  const prefill = (useLocation().state as { prefill?: Prefill } | null)?.prefill ?? null;
+  const [fields, setFields] = useState<ComposerFields>(
+    prefill ? { ...EMPTY_FIELDS, template: "free_text", slots: { statement: prefill.proposed_body } } : EMPTY_FIELDS,
+  );
   const [draftId, setDraftId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("clean");
   const [similarText, setSimilarText] = useState("");
@@ -140,7 +146,12 @@ function Composer() {
   const submit = useCallback(() => {
     if (!ready || propose.isPending) return;
     propose.mutate(
-      { fields: cleanFields(fields, template, { draft: false }), draftId },
+      {
+        fields: cleanFields(fields, template, { draft: false }),
+        draftId,
+        supersedes: prefill?.requirement_id,
+        sourceSuggestionId: prefill?.source_suggestion_id,
+      },
       {
         onSuccess: (result) => {
           const label = result.requirement.source_req_id ?? "The requirement";
@@ -151,7 +162,7 @@ function Composer() {
           notify(error instanceof ApiError ? error.message : "Could not propose it", "error"),
       },
     );
-  }, [ready, propose, fields, template, draftId, notify, navigate, workspaceId, projectId]);
+  }, [ready, propose, fields, template, draftId, prefill, notify, navigate, workspaceId, projectId]);
 
   const resumable = useMemo(
     () => (drafts.data ?? []).filter((d) => d.id !== draftId),
@@ -376,7 +387,17 @@ function Composer() {
           missing={missing}
           similar={similar.data?.hints ?? []}
           similarLoading={similar.isFetching}
-        />
+        >
+          {can("req.propose") && (
+            <AuthoringPanel
+              projectId={projectId}
+              text={statement ?? Object.values(fields.slots).join(" ")}
+              onUseWording={(proposed) =>
+                update({ template: "free_text", slots: { statement: proposed } })
+              }
+            />
+          )}
+        </PreviewPane>
       </div>
 
       <footer className="composer-footer">

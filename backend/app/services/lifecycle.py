@@ -130,7 +130,7 @@ def open_high_findings(db: Session, requirement: Requirement) -> list[uuid.UUID]
             select(Finding.id)
             .where(
                 or_(Finding.requirement_id == requirement.id, Finding.candidate_pair_id.in_(pairs)),
-                Finding.is_stale.is_(False),
+                ~Finding.is_stale,
                 Finding.status.in_(OPEN),
                 Finding.severity == Severity.HIGH,
             )

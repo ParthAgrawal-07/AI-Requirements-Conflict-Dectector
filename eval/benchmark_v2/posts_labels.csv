@@ -1,0 +1,57 @@
+r1,r2,category,note,split
+P-01,REQ-032,Conflicting,Sessions end after 30 minutes of inactivity vs. sessions stay active until explicit logout.,dev
+P-02,REQ-034,Conflicting,Audit logs kept 3 years vs. 7 years.,heldout
+P-03,REQ-021,Conflicting,API timeout 30 seconds vs. 2 seconds.,dev
+P-04,REQ-026,Conflicting,Uploads up to 100 MB accepted vs. anything over 25 MB rejected.,dev
+P-05,REQ-059,Conflicting,Guests must sign in vs. guests download without signing in.,dev
+P-06,REQ-049,Conflicting,Permanent removal after 7 days vs. 30 days in the recycle bin.,heldout
+P-07,REQ-037,Conflicting,One active session per user vs. any number of devices at once.,dev
+P-08,REQ-027,Conflicting,Nightly batch vs. within 60 seconds of the request.,dev
+P-09,REQ-010,Duplicate,Both log every failed sign-in attempt.,dev
+P-10,REQ-003,Duplicate,Both record every successful sign-in.,dev
+P-11,REQ-002,Duplicate,Both encrypt all stored user data with AES-256.,heldout
+P-12,REQ-042,Duplicate,Both let users export their own data in a machine-readable format.,dev
+P-13,REQ-028,Duplicate,Both hash passwords with bcrypt before storage.,dev
+P-14,REQ-048,Duplicate,Both allow restoring a deleted document within 30 days.,heldout
+P-15,REQ-040,Dependent,Emailing on lock needs the account lock of REQ-040.,dev
+P-16,REQ-005,Dependent,Asking for the second factor needs MFA support (REQ-005).,dev
+P-17,REQ-046,Dependent,Extends the monthly usage report of REQ-046.,heldout
+P-18,REQ-034,Dependent,Archiving at the end of retention relies on the retention period of REQ-034.,dev
+P-19,REQ-027,Dependent,Handling a bounced reset email relies on the reset email of REQ-027.,dev
+P-20,,Ambiguous,"""fast"" has no measurable meaning.",dev
+P-21,,Ambiguous,"""a reasonable number"" is not a number.",dev
+P-22,,Ambiguous,"""in a timely fashion"" has no time limit.",heldout
+P-23,,Ambiguous,"""intuitive"" cannot be tested.",dev
+P-24,,Ambiguous,"""frequently enough"" has no frequency.",dev
+P-25,,Ambiguous,"""an appropriate period"" has no duration.",heldout
+P-26,,Incomplete,"No trigger and no recipient: when, and to whom?",dev
+P-27,,Incomplete,No recipient: who is notified?,dev
+P-28,,Incomplete,"No retry limit or interval.",heldout
+P-29,,Incomplete,"No trigger: when is the document locked, and by whom?",dev
+P-30,,Incomplete,No subject: which request is approved?,dev
+P-31,P-02,Conflicting,Two posts: audit logs kept 5 years vs. 3 years.,heldout
+P-31,REQ-034,Conflicting,Audit logs kept 5 years vs. 7 years.,heldout
+P-32,P-09,Duplicate,Two posts that both log every failed sign-in.,dev
+P-34,REQ-048,None,"Renaming keeps history; restoring deleted documents is a different feature.",dev
+P-35,REQ-042,None,Exporting the member list is not exporting a user's own data.,dev
+P-37,REQ-060,None,Showing upload progress does not conflict with the upload timeout.,dev
+P-39,REQ-011,None,A document description is unrelated to supported formats.,heldout
+P-36,REQ-044,None,Local time zone display does not conflict with showing the last sign-in time.,dev
+P-40,REQ-047,None,Creating a Shared folder is unrelated to storing an administrator's email.,dev
+P-01,REQ-004,None,"Admin sessions (5 minutes) are a stricter rule for a subset of employees, not a contradiction (as REQ-004/REQ-036).",dev
+P-01,REQ-020,None,Guests are external partners: the employee inactivity rule does not cover them.,dev
+P-02,REQ-035,Conflicting,Audit logs kept 3 years vs. deleted after 12 months.,heldout
+P-03,REQ-023,Conflicting,API timeout 30 seconds vs. 10 seconds.,dev
+P-06,REQ-048,Conflicting,Permanent removal after 7 days vs. restore within 30 days.,heldout
+P-07,REQ-036,Conflicting,One active session vs. up to 3 concurrent sessions.,dev
+P-09,REQ-014,Duplicate,REQ-014 restates REQ-010; the post duplicates both.,dev
+P-10,REQ-031,Duplicate,REQ-031 restates REQ-003; the post duplicates both.,dev
+P-11,REQ-012,Conflicting,All user data encrypted vs. preferences stored in plaintext (as REQ-002/REQ-012).,heldout
+P-12,REQ-043,Duplicate,REQ-043 restates REQ-042; the post duplicates both.,dev
+P-13,REQ-024,Conflicting,Irreversible bcrypt hashing vs. administrators viewing passwords in plaintext.,dev
+P-14,REQ-049,Dependent,Restoring within 30 days relies on the 30-day recycle bin (as REQ-048/REQ-049).,heldout
+P-15,REQ-041,Dependent,REQ-041 restates the account lock of REQ-040.,dev
+P-16,REQ-019,Dependent,REQ-019 restates the second factor of REQ-005.,dev
+P-31,REQ-035,Conflicting,Audit logs kept 5 years vs. deleted after 12 months.,heldout
+P-32,REQ-010,Duplicate,Both log every failed sign-in.,dev
+P-32,REQ-014,Duplicate,Both log every failed sign-in.,dev

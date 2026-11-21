@@ -13,7 +13,7 @@ from fastapi import APIRouter, Query
 
 from app.api.deps import DbSession, requires
 from app.core.errors import NotFoundError
-from app.models import FindingCategory, FindingStatus, Project
+from app.models import FindingCategory, FindingStatus, Project, Severity
 from app.schemas.common import ErrorResponse, Page
 from app.schemas.findings import FindingRead, FindingReviewRead, ReviewRequest
 from app.services import findings as finding_service
@@ -48,6 +48,7 @@ def list_findings(
             description="Who found them, comma-separated: ai, rule, person (US-56)",
         ),
     ] = None,
+    severity: Annotated[Severity | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> Page[FindingRead]:
@@ -62,6 +63,7 @@ def list_findings(
         requirement_id=requirement,
         low_confidence=low_confidence,
         sources=source.split(",") if source else None,
+        severity=severity,
         limit=limit,
         offset=offset,
     )

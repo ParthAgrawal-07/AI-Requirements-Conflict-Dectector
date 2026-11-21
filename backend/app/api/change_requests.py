@@ -98,6 +98,7 @@ class ChangeRequestRead(BaseModel):
     merged_at: datetime | None
     closed_at: datetime | None
     close_reason: str | None
+    source_suggestion_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -141,6 +142,7 @@ class ChangeRequestRead(BaseModel):
             merged_at=cr.merged_at,
             closed_at=cr.closed_at,
             close_reason=cr.close_reason,
+            source_suggestion_id=cr.source_suggestion_id,
             created_at=cr.created_at,
             updated_at=cr.updated_at,
         )
@@ -168,6 +170,8 @@ class ChangeRequestCreate(BaseModel):
     base_version: int | None = Field(default=None, ge=1, description="The version you read")
     resolves: list[int] = Field(default_factory=list, max_length=20, description="ISS numbers")
     draft: bool = False
+    # US-45: the accepted AI suggestion this proposal was pre-filled from.
+    source_suggestion_id: uuid.UUID | None = None
 
     @field_validator("proposed_body", "reason", "proposed_fields", mode="before")
     @classmethod
@@ -211,6 +215,7 @@ def create_change_request(
         base_version=body.base_version,
         resolves_numbers=body.resolves,
         draft=body.draft,
+        source_suggestion_id=body.source_suggestion_id,
     )
     return ChangeRequestRead.from_view(change_intake.view(db, change_request))
 

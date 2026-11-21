@@ -136,7 +136,7 @@ def count_open_findings(db: Session, project_id: uuid.UUID) -> int:
         db.scalar(
             select(func.count(Finding.id)).where(
                 Finding.project_id == project_id,
-                Finding.is_stale.is_(False),
+                ~Finding.is_stale,
                 # Flagged or confirmed: still open. Dismissed, merged or reclassified are settled.
                 Finding.status.in_((FindingStatus.FLAGGED, FindingStatus.CONFIRMED)),
             )
