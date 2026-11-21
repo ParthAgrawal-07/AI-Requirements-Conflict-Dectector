@@ -38,7 +38,9 @@ from app.api import (
     requirements,
     requirements_compose,
     roles,
+    severity,
     suggestions,
+    timeline,
     workspaces,
 )
 from app.core.auth import get_current_user
@@ -86,6 +88,8 @@ for _router in (
     lint_api.router,
     baselines.router,
     analytics.router,
+    timeline.router,
+    severity.router,
 ):
     api_router.include_router(_router, dependencies=_authenticated, responses=_unauthorized)
 
