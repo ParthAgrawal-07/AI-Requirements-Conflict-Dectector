@@ -10,6 +10,7 @@ import { useToast } from "../../components/Toast";
 import { CATEGORY_ICONS, useFindings } from "../findings/api";
 import { OwnerChip } from "../requirements/OwnerChip";
 import { OwnershipRequestDialog } from "../requirements/OwnershipRequestDialog";
+import { Timeline } from "../requirements/Timeline";
 import { ReviewActions } from "../review/ReviewActions";
 import { useMoveRequirement, useRequirement, type RequirementDetail } from "./api";
 
@@ -54,6 +55,7 @@ function Detail({ detail, projectId, names }: { detail: RequirementDetail; proje
   const [reason, setReason] = useState("");
   const [acceptRisk, setAcceptRisk] = useState(false);
   const [ownership, setOwnership] = useState(false);
+  const [history, setHistory] = useState(false);
   const highOpen = detail.readiness.open_high_findings.length > 0;
 
   const go = (state: RequirementState) =>
@@ -172,6 +174,11 @@ function Detail({ detail, projectId, names }: { detail: RequirementDetail; proje
           </article>
         ))}
       </section>
+
+      <Button size="sm" variant="ghost" aria-expanded={history} onClick={() => setHistory(!history)}>
+        {history ? "Hide the timeline" : "Show the timeline"}
+      </Button>
+      {history && <Timeline requirementId={detail.requirement_id} />}
 
       {ownership && (
         <OwnershipRequestDialog
