@@ -157,6 +157,8 @@ describe("Change editor from an accepted suggestion (US-45, US-33)", () => {
       "GET /api/v1/me/permissions?project=p1": permissions(["view", "rcr.open"]),
       "GET /api/v1/requirements/r31": { requirement_id: "r31", project_id: "p1", source_req_id: "REQ-031", body: "Payment screens shall time out after 5 minutes.", current_version: 1, state: "Approved", owner_id: null },
       "GET /api/v1/lint/catalogue": { version: 2, entries: [] },
+      "GET /api/v1/requirements/r31/impact": { affected: [], owners: [] },
+      "GET /api/v1/workspaces/w1/members": [],
       "GET /api/v1/projects/p1/issues": { items: [], total: 0, limit: 50, offset: 0 },
       "POST /api/v1/requirements/r31/change-requests": [201, { id: "cr9", number: 9 }],
     });
@@ -172,12 +174,12 @@ describe("Change editor from an accepted suggestion (US-45, US-33)", () => {
     const proposed = within(form).getByLabelText("Proposed text");
     expect(proposed).toHaveValue(prefill.proposed_body);
     expect(within(form).getByText(/Suggested by AI, accepted by you/)).toBeInTheDocument();
-    expect(within(form).getByRole("alert")).toHaveTextContent("Replace every [TBD — confirm]");
+    expect(within(form).getByText(/Replace every \[TBD — confirm\]/)).toHaveAttribute("role", "alert");
     expect(within(form).getByRole("button", { name: "Open change request" })).toBeDisabled();
 
     await user.clear(proposed);
     await user.type(proposed, "Payment screens shall time out after 10 minutes.");
-    expect(within(form).queryByRole("alert")).not.toBeInTheDocument();
+    expect(within(form).queryByText(/Replace every \[TBD — confirm\]/)).not.toBeInTheDocument();
     await user.click(within(form).getByRole("button", { name: "Open change request" }));
     await waitFor(() => expect(calls.some((c) => c.method === "POST")).toBe(true));
     const body = JSON.parse(String(calls.find((c) => c.method === "POST")?.body));
