@@ -18,6 +18,7 @@ from app.models import (
     IssueRequirement,
     Project,
     Requirement,
+    RequirementOrigin,
     RequirementState,
     User,
 )
@@ -190,6 +191,33 @@ def test_only_the_owner_supersedes_a_proposal(
         headers=headers_for(people["arjun"]),
     )
     assert response.status_code == 403
+
+
+def test_a_post_cannot_supersede_a_requirement_in_another_project(
+    client: TestClient,
+    db_session: Session,
+    setup: dict[str, Any],
+    people: dict[str, User],
+    make_project: Callable[..., Project],
+) -> None:
+    author = people["riya"]
+    other = Requirement(
+        project_id=make_project().id,
+        owner_id=author.id,
+        origin=RequirementOrigin.POST,
+        body="An unrelated proposal.",
+    )
+    db_session.add(other)
+    db_session.commit()
+
+    response = client.post(
+        f"/api/v1/projects/{setup['a'].project_id}/requirements",
+        json={"fields": FIELDS, "supersedes": str(other.id)},
+        headers=headers_for(author),
+    )
+
+    assert (response.status_code, response.json()["error"]["code"]) == (400, "unknown_requirement")
+    assert other.state == RequirementState.PROPOSED
 
 
 def test_a_channel_post_supersedes_too(

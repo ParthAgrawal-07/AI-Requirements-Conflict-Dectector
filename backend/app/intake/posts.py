@@ -93,9 +93,9 @@ def post_requirement(
         # Never delete a draft of another project as a side effect of this post.
         raise NotFoundError("Draft not found")
     from_suggestion.refuse_placeholders(fields.statement)
-    old = from_suggestion.check_supersede(db, author, supersedes) if supersedes else None
-    if old is not None and old.project_id != project.id:
-        raise NotFoundError("The requirement to supersede was not found")
+    old = (
+        from_suggestion.check_supersede(db, author, project.id, supersedes) if supersedes else None
+    )
     if source_suggestion_id is not None:
         if old is None:
             raise BadRequestError(

@@ -81,9 +81,15 @@ def issue_of(db: Session, suggestion: Suggestion) -> Issue | None:
     return issue if issue is not None and issue.status == "open" else None
 
 
-def check_supersede(db: Session, author: User, requirement_id: uuid.UUID) -> Requirement:
+def check_supersede(
+    db: Session, author: User, project_id: uuid.UUID, requirement_id: uuid.UUID
+) -> Requirement:
     """The author's own open proposal that a new post will replace."""
-    old = db.get(Requirement, requirement_id)
+    old = db.scalar(
+        select(Requirement).where(
+            Requirement.id == requirement_id, Requirement.project_id == project_id
+        )
+    )
     if old is None:
         raise BadRequestError(
             "The requirement to supersede was not found", code="unknown_requirement"
