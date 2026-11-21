@@ -1,0 +1,41 @@
+id,author,group,template,text
+P-01,Arjun,Security,event_driven,"When an employee is inactive for 30 minutes, the portal shall end the employee's session."
+P-02,Meera,Compliance,ubiquitous,The system shall retain audit log entries for 3 years.
+P-03,Kabir,Platform,ubiquitous,API requests shall time out after 30 seconds.
+P-04,Sana,Documents,unwanted_behaviour,"If an uploaded file is larger than 100 MB, then the system shall reject the upload."
+P-05,Riya,Partners,ubiquitous,Guests shall sign in before downloading any shared document.
+P-06,Sana,Documents,ubiquitous,Deleted documents shall be removed permanently after 7 days.
+P-07,Arjun,Security,ubiquitous,The system shall allow at most one active session per user.
+P-08,Kabir,Platform,ubiquitous,Password reset emails shall be sent in a nightly batch.
+P-09,Arjun,Security,ubiquitous,The system shall log every failed sign-in attempt.
+P-10,Arjun,Security,event_driven,"When a user signs in successfully, the system shall record the sign-in."
+P-11,Meera,Compliance,ubiquitous,The system shall encrypt all stored user data with AES-256.
+P-12,Riya,Partners,ubiquitous,Users shall be able to export the data held about them in a machine-readable format.
+P-13,Arjun,Security,ubiquitous,Passwords shall be hashed with bcrypt before they are stored.
+P-14,Sana,Documents,ubiquitous,Users shall be able to recover a deleted document for 30 days after deleting it.
+P-15,Arjun,Security,event_driven,"When an account is locked, the system shall email the account owner."
+P-16,Arjun,Security,optional_feature,"Where multi-factor authentication is enabled, the system shall ask for the second factor after the password."
+P-17,Kabir,Platform,ubiquitous,The monthly usage report shall include the number of documents uploaded by each user.
+P-18,Meera,Compliance,event_driven,"When an audit log entry reaches the end of its retention period, the system shall archive it to cold storage before deleting it."
+P-19,Kabir,Platform,unwanted_behaviour,"If a password reset email bounces, then the system shall notify the workspace administrator."
+P-20,Riya,Partners,ubiquitous,The search page shall load fast.
+P-21,Kabir,Platform,ubiquitous,The portal shall support a reasonable number of concurrent users.
+P-22,Sana,Documents,ubiquitous,Uploads shall be processed in a timely fashion.
+P-23,Riya,Partners,ubiquitous,The document viewer shall be intuitive.
+P-24,Kabir,Platform,ubiquitous,Notifications shall be sent frequently enough to keep users informed.
+P-25,Meera,Compliance,ubiquitous,The system shall keep old documents for an appropriate period.
+P-26,Arjun,Security,ubiquitous,The system shall send an alert.
+P-27,Riya,Partners,event_driven,"When a document is shared, the system shall send a notification."
+P-28,Sana,Documents,unwanted_behaviour,"If an upload fails, then the system shall retry the upload."
+P-29,Sana,Documents,ubiquitous,The system shall lock the document.
+P-30,Meera,Compliance,ubiquitous,Workspace administrators shall approve the request.
+P-31,Meera,Compliance,ubiquitous,Audit log entries shall be kept for 5 years.
+P-32,Arjun,Security,ubiquitous,Every failed sign-in shall be written to the security log.
+P-33,Sana,Documents,ubiquitous,The system shall show the file size next to every document in a folder listing.
+P-34,Sana,Documents,event_driven,"When a document is renamed, the system shall keep its version history."
+P-35,Kabir,Platform,ubiquitous,Workspace administrators shall be able to export the list of workspace members as a CSV file.
+P-36,Riya,Partners,ubiquitous,The portal shall display dates in the employee's local time zone.
+P-37,Sana,Documents,state_driven,"While a document is being uploaded, the portal shall show the upload progress as a percentage."
+P-38,Riya,Partners,optional_feature,"Where the browser language is German, the portal shall display its menus in German."
+P-39,Sana,Documents,ubiquitous,The system shall let an employee add a description of up to 500 characters to each document.
+P-40,Kabir,Platform,event_driven,"When a workspace is created, the system shall create an empty Shared folder in it."

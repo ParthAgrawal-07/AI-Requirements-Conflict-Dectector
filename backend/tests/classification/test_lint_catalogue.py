@@ -1,4 +1,4 @@
-"""Lint catalogue v1 (Keval, Sprint 0): valid shape, unique ids, patterns compile and catch what
+"""Lint catalogue v2 (Keval, US-51): valid shape, unique ids, patterns compile and catch what
 they are meant to catch — and nothing in a well-written requirement."""
 
 import json
@@ -16,7 +16,7 @@ SEVERITIES = {"info", "warning", "error"}
 @pytest.fixture(scope="module")
 def entries() -> list[dict[str, Any]]:
     data = json.loads(CATALOGUE.read_text(encoding="utf-8"))
-    assert data["version"] == 1
+    assert data["version"] == 2
     result: list[dict[str, Any]] = data["entries"]
     return result
 

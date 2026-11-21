@@ -69,7 +69,7 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_allowed_origins,
-        allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", REQUEST_ID_HEADER, auth.CSRF_HEADER],
         expose_headers=[REQUEST_ID_HEADER],
         # Only for the refresh cookie (US-19): it is HttpOnly and scoped to /api/v1/auth, and every

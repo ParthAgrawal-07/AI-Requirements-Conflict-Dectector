@@ -116,5 +116,11 @@ def register_with_code(
         raise
 
     membership = outcome if isinstance(outcome, Membership) else None
+    if membership is None:  # Madhav (US-38): the managers are told someone is waiting
+        from app.models import JoinRequest
+        from app.notifications import hooks
+
+        if isinstance(outcome, JoinRequest):
+            hooks.join_requested(db, outcome)
     status: Literal["joined", "pending_approval"] = "joined" if membership else "pending_approval"
     return SignupResult(user=user, status=status, membership=membership)

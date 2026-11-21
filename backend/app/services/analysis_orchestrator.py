@@ -364,6 +364,14 @@ def after_run(db: Session, run_id: uuid.UUID, transition: str = CLOSED) -> None:
     if run is None:
         return
     if transition == CLOSED and run.status is AnalysisRunStatus.DONE:
+        try:  # Heet (US-58): rule checks need no model; before the issues, so they get one too
+            from app.classification.llm_client import get_llm_client
+            from app.search import rule_checker
+
+            rule_checker.on_run(db, run, llm=get_llm_client())
+        except Exception:
+            db.rollback()
+            logger.exception("Rule checks for run %s failed", run_id)
         try:
             issues.ConflictIssueOpener(db).on_run(run)
         except Exception:
@@ -376,6 +384,15 @@ def after_run(db: Session, run_id: uuid.UUID, transition: str = CLOSED) -> None:
             logger.exception("Map delta for run %s failed", run_id)
         if run.error_message is None:  # Madhav (US-09): questions for its findings, queued
             send(CLARIFY_RUN, [str(run.id)])
+        try:  # Madhav (US-45, US-38): suggestions queued; owners told what was found
+            from app.notifications import hooks
+            from app.suggestions import tasks as suggestion_tasks
+
+            suggestion_tasks.for_run(db, run)
+            hooks.results_for_run(db, run)
+        except Exception:
+            db.rollback()
+            logger.exception("Suggestions or notifications for run %s failed", run_id)
     if run.status in (AnalysisRunStatus.DONE, AnalysisRunStatus.WAITING_BUDGET):
         try:
             publish_card(db, run)

@@ -46,6 +46,8 @@ celery_app.conf.update(
         "classification.*": {"queue": "analysis"},
         "analysis.*": {"queue": "analysis"},
         "consequence.*": {"queue": "analysis"},  # US-34: change-request checks call the LLM
+        # US-45, NFR-36: suggestions never delay findings, the map or the result card.
+        "suggestions.*": {"queue": "suggestions"},
     },
     # Periodic jobs, run by `celery -A app.core.celery_app beat`. Tasks are named by string so this
     # module never imports their code.
@@ -64,6 +66,7 @@ celery_app.autodiscover_tasks(
         "app.classification",
         "app.clarification",
         "app.consequences",
+        "app.suggestions",
     ]
 )
 
