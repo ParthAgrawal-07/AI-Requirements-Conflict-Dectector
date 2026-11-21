@@ -14,7 +14,12 @@ from app.core import security
 from app.core.permissions import DefaultRole
 from app.models import Project, User, Workspace
 from app.realtime import bus, gateway
-from app.realtime.events import MEMBERSHIP_REVOKED, Event, analysis_progress
+from app.realtime.events import (
+    MEMBERSHIP_REVOKED,
+    Event,
+    analysis_progress,
+    notification_created,
+)
 
 
 def _token(user: User) -> str:
@@ -192,3 +197,38 @@ def test_unsubscribe_stops_forwarding_that_project(
         event_bus.publish(_progress(kept, 22))
 
         assert socket.receive_json()["event"]["data"]["progress_percent"] == 22
+
+
+def test_a_notification_reaches_its_recipient_whatever_they_watch(
+    client: TestClient,
+    event_bus: bus.InProcessEventBus,
+    make_user: Callable[..., User],
+    workspace: Workspace,
+    make_project: Callable[..., Project],
+) -> None:
+    """US-38: the bell is live on the inbox page and while another project is open; a
+    notification still reaches no one else."""
+    member, colleague = make_user(role=DefaultRole.DEVELOPER), make_user(role=DefaultRole.DEVELOPER)
+    watched, elsewhere = make_project(), make_project()
+
+    def note(recipient: User, project: Project | None) -> Event:
+        return notification_created(
+            workspace_id=workspace.id, project_id=project.id if project else None,
+            notification_id=uuid.uuid4(), recipient_id=recipient.id, kind="assigned", group="assigned",
+        )  # fmt: skip
+
+    with client.websocket_connect("/ws") as socket:
+        socket.send_json({"type": "auth", "token": _token(member)})
+        socket.receive_json()
+        event_bus.publish(note(colleague, elsewhere))  # not theirs: never sent
+        event_bus.publish(note(member, None))  # nothing subscribed yet: the inbox page
+        assert socket.receive_json()["event"]["data"]["recipient_id"] == str(member.id)
+
+        socket.send_json({"type": "subscribe", "project_id": str(watched.id)})
+        assert socket.receive_json()["type"] == "subscribed"
+        event_bus.publish(note(member, elsewhere))
+        received = socket.receive_json()["event"]
+        assert (received["project_id"], received["data"]["recipient_id"]) == (
+            str(elsewhere.id),
+            str(member.id),
+        )

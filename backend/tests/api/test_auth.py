@@ -20,6 +20,7 @@ from app.core.errors import install_exception_handlers
 from app.core.permissions import DefaultRole
 from app.core.security import JWT_ALGORITHM, create_access_token
 from app.models import User, Workspace
+from tests.api.test_access_invariants import _api_routes
 from tests.conftest import TEST_PASSWORD
 
 LOGIN = "/api/v1/auth/login"
@@ -278,6 +279,26 @@ class TestErrorsAndMiddleware:
         )
         assert response.status_code == 200
         assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
+
+    def test_cors_preflight_passes_for_every_method_the_api_uses(
+        self, plain_client: TestClient
+    ) -> None:
+        """The browser refuses a request whose method the preflight does not allow, before sending
+        it. PUT was missing: the Setup wizard could not save the project brief, nor a manager a
+        member's project role, nor anyone the map layout, whenever the app and API were on
+        different origins (found running the app locally in the Sprint 0-5 review)."""
+        used = {method for method, _ in _api_routes()}
+        assert {"GET", "POST", "PUT", "PATCH", "DELETE"} <= used
+        for method in sorted(used):
+            response = plain_client.options(
+                LOGIN,
+                headers={
+                    "Origin": "http://localhost:5173",
+                    "Access-Control-Request-Method": method,
+                    "Access-Control-Request-Headers": "authorization,content-type",
+                },
+            )
+            assert response.status_code == 200, method
 
     def test_cors_does_not_allow_other_origins(self, plain_client: TestClient) -> None:
         response = plain_client.options(

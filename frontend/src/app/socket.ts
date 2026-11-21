@@ -255,8 +255,31 @@ export function applyEvent(queryClient: QueryClient, event: RealtimeEvent): void
       void queryClient.invalidateQueries({ queryKey: ["requirements", event.project_id] });
       void queryClient.invalidateQueries({ queryKey: ["issues", event.project_id] });
     }
+  } else if (event.type.startsWith("baseline.") && event.project_id) {
+    void queryClient.invalidateQueries({ queryKey: ["baselines", event.project_id] });
   } else if (event.type === "membership.revoked") {
     void queryClient.invalidateQueries({ queryKey: ["members", event.workspace_id] });
+  }
+  // US-13: the dashboard counts follow analyses, issues and change requests.
+  if (
+    event.project_id &&
+    (event.type === "analysis.completed" ||
+      event.type.startsWith("issue.") ||
+      event.type.startsWith("change_request."))
+  ) {
+    void queryClient.invalidateQueries({ queryKey: ["analytics", event.project_id] });
+    void queryClient.invalidateQueries({ queryKey: ["workspace-analytics", event.workspace_id] });
+  }
+  if (event.type === "notification.created") {
+    void queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    void queryClient.invalidateQueries({ queryKey: ["notification-counts"] });
+  }
+
+  if (event.type === "suggestion.ready" && typeof event.data.finding_id === "string") {
+    void queryClient.invalidateQueries({ queryKey: ["suggestion", event.data.finding_id] });
+  }
+  if (event.type === "change_request.opened" || event.type === "change_request.updated") {
+    void queryClient.invalidateQueries({ queryKey: ["decision", "change-requests", event.entity_id] });
   }
 }
 
