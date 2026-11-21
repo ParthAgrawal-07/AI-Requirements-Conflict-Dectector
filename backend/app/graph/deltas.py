@@ -137,9 +137,7 @@ def run_finished(db: Session, run: AnalysisRun) -> GraphDelta | None:
     """The delta for a closed analysis run: its findings as new edges, its subject placed on the
     map, and one sentence saying what was found."""
     findings = list(
-        db.scalars(
-            select(Finding).where(Finding.analysis_run_id == run.id, Finding.is_stale.is_(False))
-        )
+        db.scalars(select(Finding).where(Finding.analysis_run_id == run.id, ~Finding.is_stale))
     )
     if run.scope is AnalysisScope.REQUIREMENT:
         return _requirement_run_finished(db, run, findings)

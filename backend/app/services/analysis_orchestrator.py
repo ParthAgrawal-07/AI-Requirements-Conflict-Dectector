@@ -384,6 +384,15 @@ def after_run(db: Session, run_id: uuid.UUID, transition: str = CLOSED) -> None:
             logger.exception("Map delta for run %s failed", run_id)
         if run.error_message is None:  # Madhav (US-09): questions for its findings, queued
             send(CLARIFY_RUN, [str(run.id)])
+        try:  # Madhav (US-45, US-38): suggestions queued; owners told what was found
+            from app.notifications import hooks
+            from app.suggestions import tasks as suggestion_tasks
+
+            suggestion_tasks.for_run(db, run)
+            hooks.results_for_run(db, run)
+        except Exception:
+            db.rollback()
+            logger.exception("Suggestions or notifications for run %s failed", run_id)
     if run.status in (AnalysisRunStatus.DONE, AnalysisRunStatus.WAITING_BUDGET):
         try:
             publish_card(db, run)

@@ -40,6 +40,7 @@ from app.api import (
 )
 from app.core.auth import get_current_user
 from app.graph import api as graph_api
+from app.notifications import api as notifications_api
 from app.schemas.common import ErrorResponse
 from app.search import similar as search_similar
 from app.search import thresholds as search_thresholds
@@ -76,6 +77,7 @@ for _router in (
     consequences.router,
     search_thresholds.router,
     suggestions.router,
+    notifications_api.router,
 ):
     api_router.include_router(_router, dependencies=_authenticated, responses=_unauthorized)
 
