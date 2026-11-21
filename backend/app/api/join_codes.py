@@ -18,6 +18,7 @@ from app.core.config import get_settings
 from app.core.errors import ForbiddenError
 from app.core.rate_limit import RateLimiter, client_ip, enforce, get_rate_limiter
 from app.models import JoinRequest, JoinRequestStatus, Membership
+from app.notifications import hooks as notification_hooks
 from app.schemas.common import ErrorResponse
 from app.schemas.join_codes import (
     JoinCodeCreate,
@@ -145,6 +146,7 @@ def join_with_code(
             project_id=join_code_service.project_of(db, body.code),
         )
     assert isinstance(outcome, JoinRequest)  # noqa: S101 — redeem returns one of the two
+    notification_hooks.join_requested(db, outcome)  # Madhav (US-38): managers are told
     response.status_code = 202
     return JoinResult(
         status="pending_approval",

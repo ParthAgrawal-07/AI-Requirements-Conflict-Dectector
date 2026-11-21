@@ -274,6 +274,7 @@ export function applyEvent(queryClient: QueryClient, event: RealtimeEvent): void
     void queryClient.invalidateQueries({ queryKey: ["notifications"] });
     void queryClient.invalidateQueries({ queryKey: ["notification-counts"] });
   }
+
   if (event.type === "suggestion.ready" && typeof event.data.finding_id === "string") {
     void queryClient.invalidateQueries({ queryKey: ["suggestion", event.data.finding_id] });
   }

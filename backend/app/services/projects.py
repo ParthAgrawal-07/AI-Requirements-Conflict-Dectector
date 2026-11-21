@@ -100,6 +100,9 @@ def create_project(
 
     db.add(ProjectMember(project_id=project.id, user_id=creator.id))
     create_general_channel(db, project_id=project.id, creator_id=creator.id)  # US-28
+    from app.services.decision_rules import DecisionRuleEngine  # it reads services
+
+    DecisionRuleEngine(db).seed(project, actor_id=creator.id)  # US-57: default and examples
     db.add(
         AuditLog(
             workspace_id=workspace_id,

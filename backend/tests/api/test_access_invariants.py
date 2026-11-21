@@ -28,12 +28,16 @@ PUBLIC = {
 }
 # Any signed-in user, no workspace involved. Keep this list short and think before extending it.
 AUTHENTICATED_ONLY = {
+    ("GET", "/api/v1/lint/catalogue"),  # static catalogue (US-51)
+    # One’s own inbox, across workspaces (US-38).
+    ("GET", "/api/v1/notifications"),
+    ("GET", "/api/v1/notifications/counts"),
+    ("POST", "/api/v1/notifications/read"),
     ("GET", "/api/v1/auth/me"),
     ("GET", "/api/v1/me/permissions"),
     ("GET", "/api/v1/workspaces"),
     ("POST", "/api/v1/workspaces"),
     ("GET", "/api/v1/composer/templates"),  # static EARS catalogue, no tenant data (FR-81)
-    ("GET", "/api/v1/lint/catalogue"),  # the static lint catalogue the composer runs (US-51)
     ("POST", "/api/v1/join"),  # a signed-in user entering a code: not yet a member (US-25)
     # The composer's private drafts belong to their author (FR-81); the service requires that
     # they may still view the draft's project.

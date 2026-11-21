@@ -38,6 +38,7 @@ from app.models import (
     ChangeRequest,
     Channel,
     Clarification,
+    DecisionRule,
     Document,
     DocumentFormat,
     Finding,
@@ -51,6 +52,7 @@ from app.models import (
     Requirement,
     Role,
     RolePermission,
+    Suggestion,
     User,
     Workspace,
 )
@@ -100,7 +102,9 @@ class World:
     ownership_request: OwnershipRequest  # `target` asks to own that requirement
     issue: Issue
     change_request: ChangeRequest  # RCR-1 by the Owner on the finding's requirement
-    baselines: tuple[Baseline, Baseline]  # two empty snapshots to compare
+    suggestion: Suggestion  # ready AI options for `finding`
+    decision_rule_id: uuid.UUID
+    baselines: tuple[Baseline, Baseline]
     db: Session
 
 
@@ -334,6 +338,36 @@ CASES = [
     Case("POST", "/api/v1/change-requests/{change_request_id}/withdraw", own_change_request=True),
     # Sprint 4 — version history (Affan, US-12)
     Case("GET", "/api/v1/requirements/{requirement_id}/versions", ok=200),
+    # Sprint 5 — threshold preview and re-analysis (Heet, US-06)
+    Case("GET", "/api/v1/projects/{project_id}/thresholds/preview"),
+    Case("POST", "/api/v1/projects/{project_id}/reanalyse"),
+    # Sprint 5 — AI suggestions (Madhav, US-45)
+    Case("GET", "/api/v1/findings/{finding_id}/suggestions"),
+    Case(
+        "POST",
+        "/api/v1/findings/{finding_id}/suggestions/regenerate",
+        lambda _: {"instruction": "Keep it short"},
+    ),
+    Case("POST", "/api/v1/suggestions/{suggestion_id}/feedback", lambda _: {"action": "deferred"}),
+    Case(
+        "POST",
+        "/api/v1/suggestions/{suggestion_id}/rating",
+        lambda _: {"option_index": 0, "rating": 4},
+    ),
+    Case("GET", "/api/v1/projects/{project_id}/suggestions/stats"),
+    # Sprint 5 — decision rules and resolved decisions (US-57)
+    Case("GET", "/api/v1/projects/{project_id}/decision-rules", ok=200),
+    Case(
+        "POST",
+        "/api/v1/projects/{project_id}/decision-rules",
+        lambda _: {"name": "New rule", "owner_kind": "requirement_owner", "match_label": "API"},
+        ok=201,
+    ),
+    Case("PATCH", "/api/v1/decision-rules/{decision_rule_id}", lambda _: {"priority": 20}, ok=200),
+    Case("DELETE", "/api/v1/decision-rules/{decision_rule_id}", ok=204),
+    Case("GET", "/api/v1/findings/{finding_id}/decision", ok=200),
+    Case("GET", "/api/v1/issues/{issue_id}/decision", ok=200),
+    Case("GET", "/api/v1/change-requests/{change_request_id}/decision", ok=200),
     # Sprint 5 — baselines (Parth, US-40)
     Case(
         "POST",
@@ -347,8 +381,18 @@ CASES = [
     # Sprint 5 — authoring aids (Keval, US-51). POST lint needs req.propose; pre-flight and
     # wording need an active project — the world's project has not confirmed its context yet, so
     # they are refused with 412 (ContextGate) — past the permission check.
-    Case("POST", "/api/v1/projects/{project_id}/lint", lambda _: {"text": "A shall B."}, needs="req.propose"),
-    Case("POST", "/api/v1/projects/{project_id}/preflight", lambda _: {"text": "A shall B."}, needs="req.propose"),
+    Case(
+        "POST",
+        "/api/v1/projects/{project_id}/lint",
+        lambda _: {"text": "A shall B."},
+        needs="req.propose",
+    ),
+    Case(
+        "POST",
+        "/api/v1/projects/{project_id}/preflight",
+        lambda _: {"text": "A shall B."},
+        needs="req.propose",
+    ),
     Case(
         "POST",
         "/api/v1/projects/{project_id}/improve-wording",
@@ -469,12 +513,34 @@ def world(
         proposed_body="It shall answer within 2 s.",
         reason="Measurable",
     )
+    db_session.add(change_request)
+    suggestion = Suggestion(
+        finding_id=finding.id,
+        project_id=project.id,
+        category="Ambiguous",
+        status="ready",
+        options=[
+            {
+                "text": "It shall answer within 2 s.",
+                "target": None,
+                "target_requirement_id": str(vague.id),
+                "trade_off": "t",
+                "confidence": 0.6,
+                "tbd_slots": [],
+            }
+        ],
+    )
+    rule = DecisionRule(
+        project_id=project.id,
+        name="Existing rule",
+        owner_kind="requirement_owner",
+        match_label="API",
+    )
     baselines = tuple(
         Baseline(project_id=project.id, label=label, baseline_revision=0, requirement_count=0)
         for label in ("a", "b")
     )
-    db_session.add(change_request)
-    db_session.add_all([*baselines])
+    db_session.add_all((suggestion, rule, *baselines))
     db_session.commit()
     return World(
         workspace=workspace,
@@ -493,6 +559,8 @@ def world(
         ownership_request=ownership_request,
         issue=issue,
         change_request=change_request,
+        suggestion=suggestion,
+        decision_rule_id=rule.id,
         baselines=(baselines[0], baselines[1]),
         db=db_session,
     )
@@ -509,7 +577,7 @@ def api(
     monkeypatch.setattr(document_service, "dispatch_processing", lambda _id: "task-1")
     app.dependency_overrides[get_storage] = lambda: LocalFileStorage(tmp_path / "uploads")
     app.dependency_overrides[get_embedder] = HashingEmbedder
-    app.dependency_overrides[get_llm_client] = lambda: None  # no model: AI routes answer 503
+    app.dependency_overrides[get_llm_client] = lambda: None
     app.dependency_overrides[get_budget_guard] = UnlimitedBudget
     yield client
     for dependency in (get_storage, get_embedder, get_llm_client, get_budget_guard):
@@ -554,6 +622,8 @@ def _call(api: TestClient, case: Case, world: World, user: User) -> int:
         ownership_request_id=world.ownership_request.id,
         issue_id=world.issue.id,
         change_request_id=change_request_id,
+        suggestion_id=world.suggestion.id,
+        decision_rule_id=world.decision_rule_id,
         baseline_id=world.baselines[0].id,
         other_baseline_id=world.baselines[1].id,
     )

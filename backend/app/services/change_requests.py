@@ -257,7 +257,7 @@ def _findings_of(db: Session, requirement_id: uuid.UUID) -> list[uuid.UUID]:
         db.scalars(
             select(Finding.id).where(
                 or_(Finding.requirement_id == requirement_id, Finding.candidate_pair_id.in_(pairs)),
-                Finding.is_stale.is_(False),
+                ~Finding.is_stale,
             )
         )
     )
@@ -389,7 +389,44 @@ def merge(
     )
     for other in competing:
         announce(db, other, CHANGE_REQUEST_UPDATED, ctx.user, needs_update=True)
+    _notify_merged(db, change_request, requirement, ctx.user)
     return Merged(change_request, requirement.current_version, stale)
+
+
+def _notify_merged(
+    db: Session, change_request: ChangeRequest, requirement: Requirement, actor: User
+) -> None:
+    """US-38: the proposer, the owner, the owners of affected requirements and the people
+    assigned to the issues it resolved hear that it merged (best effort)."""
+    from app.consequences.impact import ImpactAnalyzer
+    from app.models.notification import MERGED as MERGED_KIND
+    from app.notifications import subjects
+    from app.notifications.service import NotificationService
+
+    project = db.get(Project, change_request.project_id)
+    if project is None:  # pragma: no cover
+        return
+    try:
+        people = {change_request.proposer_id, requirement.owner_id}
+        people |= {a.owner_id for a in ImpactAnalyzer(db).analyse(requirement).affected}
+        for issue in resolves(db, change_request.id):
+            people |= set(issues.assignee_ids(db, issue.id))
+        NotificationService(db).notify(
+            people,
+            MERGED_KIND,
+            workspace_id=project.workspace_id,
+            project_id=project.id,
+            actor_id=actor.id,
+            subject=subjects.change_request(
+                db,
+                change_request,
+                "{key} merged: {requirement} v" + str(requirement.current_version),
+            ),
+            change_request_id=change_request.id,
+            requirement_id=requirement.id,
+        )
+    except Exception:
+        db.rollback()
 
 
 def versions(db: Session, requirement_id: uuid.UUID) -> list[RequirementVersion]:

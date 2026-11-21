@@ -352,7 +352,16 @@ def open_issue(
             author.full_name if author else None, issue.number, _labels_of(linked)
         )
     _announce(db, issue, ISSUE_OPENED, actor=author, sentence=sentence, auto=auto)
+    _notify_assigned(db, issue, people, actor=author)
     return issue
+
+
+def _notify_assigned(
+    db: Session, issue: Issue, user_ids: Collection[uuid.UUID], *, actor: User | None
+) -> None:
+    from app.notifications import hooks  # Madhav (US-38); late import: hooks reads services
+
+    hooks.assigned(db, issue, user_ids, actor_id=actor.id if actor else None)
 
 
 def _may_edit(ctx: AccessContext, issue: Issue) -> bool:
@@ -376,6 +385,7 @@ def update_issue(
 ) -> Issue:
     """Edit, relabel, reassign, close (manual) or reopen — each part checked on its own."""
     changed: list[str] = []
+    added: set[uuid.UUID] = set()
     if title is not None or body is not None:
         if not _may_edit(ctx, issue):
             raise ForbiddenError("Only the author or an issue manager can edit an issue")
@@ -399,12 +409,14 @@ def update_issue(
             for user_id in current - wanted:
                 db.delete(db.get(IssueAssignee, (issue.id, user_id)))
             db.add_all(IssueAssignee(issue_id=issue.id, user_id=u) for u in wanted - current)
+            added = wanted - current
             if wanted != current:
                 changed.append("assignees")
     if changed:
         _audit(db, ctx.workspace_id, ctx.user, issue, AuditAction.ISSUE_UPDATED, fields=changed)
         db.commit()
         _announce(db, issue, ISSUE_UPDATED, actor=ctx.user, fields=changed)
+        _notify_assigned(db, issue, added, actor=ctx.user)
     if status is not None and status != issue.status:
         if not _may_close(db, ctx, issue):
             raise ForbiddenError("Only the author, an assignee or an issue manager can do this")
@@ -554,7 +566,7 @@ class ConflictIssueOpener:
             .where(
                 Finding.analysis_run_id == run.id,
                 Finding.category.in_(AUTO_CATEGORIES),
-                Finding.is_stale.is_(False),
+                ~Finding.is_stale,
             )
             .order_by(Finding.created_at, Finding.id)
         ).all()

@@ -494,6 +494,20 @@
   .change-request-layout { grid-template-columns: 1fr; }
 }
 
+/* Sprint 5 (Dhavni): notification bell and inbox */
+.bell { position: relative; text-decoration: none; font-size: 18px; padding: 0 var(--space-2); }
+.bell-count { position: absolute; top: -6px; right: -6px; min-width: 18px; padding: 0 4px; border-radius: 9px; background: var(--danger); color: var(--paper); font-size: 11px; text-align: center; }
+.inbox-layout { display: grid; grid-template-columns: 220px 1fr; gap: var(--space-5); }
+.inbox-groups { display: grid; align-content: start; gap: var(--space-1); }
+.inbox-groups .count { float: right; font-variant-numeric: tabular-nums; }
+.inbox-list { list-style: none; padding: 0; margin: var(--space-3) 0 0; display: grid; gap: var(--space-2); }
+.inbox-list li { display: grid; gap: 2px; padding: var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.inbox-list li.unread { border-left: 3px solid var(--accent); font-weight: 600; }
+.preview-columns { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
+@media (max-width: 720px) {
+  .inbox-layout, .preview-columns { grid-template-columns: 1fr; }
+}
+
 /* ── Sprint 5 (Pranshu): authoring aids, dashboard, baselines, decision rules ────────────── */
 .authoring-panel { display: grid; gap: var(--space-4); margin-top: var(--space-4); }
 .quality-meter { margin: 0 0 var(--space-2); letter-spacing: 0.1em; }
@@ -527,15 +541,3 @@
 .suggestion-actions { display: grid; gap: var(--space-2); margin-top: var(--space-3); }
 .preference-marks { color: var(--approved); font-weight: 600; }
 mark.tbd { background: var(--proposed-soft); color: var(--proposed); font-weight: 600; }
-.bell { position: relative; text-decoration: none; font-size: 18px; padding: 0 var(--space-2); }
-.bell-count { position: absolute; top: -6px; right: -6px; min-width: 18px; padding: 0 4px; border-radius: 9px; background: var(--danger); color: var(--paper); font-size: 11px; text-align: center; }
-.inbox-layout { display: grid; grid-template-columns: 220px 1fr; gap: var(--space-5); }
-.inbox-groups { display: grid; align-content: start; gap: var(--space-1); }
-.inbox-groups .count { float: right; font-variant-numeric: tabular-nums; }
-.inbox-list { list-style: none; padding: 0; margin: var(--space-3) 0 0; display: grid; gap: var(--space-2); }
-.inbox-list li { display: grid; gap: 2px; padding: var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-sm); }
-.inbox-list li.unread { border-left: 3px solid var(--accent); font-weight: 600; }
-.preview-columns { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
-@media (max-width: 720px) {
-  .inbox-layout, .preview-columns { grid-template-columns: 1fr; }
-}

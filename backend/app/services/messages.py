@@ -229,7 +229,14 @@ def post_message(
     if commit:
         db.commit()
         announce(MESSAGE_CREATED, project, channel, message)
+        _notify_mentions(db, project, channel, message)
     return message
+
+
+def _notify_mentions(db: Session, project: Project, channel: Channel, message: Message) -> None:
+    from app.notifications import hooks  # Madhav (US-38); late import: hooks reads services
+
+    hooks.mentioned(db, project, channel, message)
 
 
 SYSTEM_KINDS = (MessageKind.ANALYSIS_CARD, MessageKind.SYSTEM)
@@ -273,6 +280,7 @@ def post_system_message(
     if commit:
         db.commit()
         announce(MESSAGE_CREATED, project, channel, message)
+        _notify_mentions(db, project, channel, message)
     return message
 
 
