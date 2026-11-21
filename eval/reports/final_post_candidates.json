@@ -1,0 +1,49 @@
+{
+  "style": "post",
+  "context_pack": false,
+  "prompt_version": "v2",
+  "embedder": "all-MiniLM-L6-v2",
+  "k": 10,
+  "similarity_threshold": 0.75,
+  "split": "all",
+  "requirements_analysed": 40,
+  "requirements_extracted": 60,
+  "labels": 56,
+  "candidate_pairs": 22,
+  "candidate_recall": 0.4864864864864865,
+  "candidate_recall_by_category": {
+    "Conflicting": {
+      "labelled": 17,
+      "candidates": 10
+    },
+    "Duplicate": {
+      "labelled": 12,
+      "candidates": 8
+    },
+    "Dependent": {
+      "labelled": 8,
+      "candidates": 0
+    }
+  },
+  "missed_by_prefilter": [
+    "P-01\u2013REQ-032 (Conflicting)",
+    "P-02\u2013REQ-035 (Conflicting)",
+    "P-04\u2013REQ-026 (Conflicting)",
+    "P-06\u2013REQ-048 (Conflicting)",
+    "P-07\u2013REQ-037 (Conflicting)",
+    "P-10\u2013REQ-003 (Duplicate)",
+    "P-10\u2013REQ-031 (Duplicate)",
+    "P-11\u2013REQ-012 (Conflicting)",
+    "P-12\u2013REQ-042 (Duplicate)",
+    "P-13\u2013REQ-024 (Conflicting)",
+    "P-14\u2013REQ-049 (Dependent)",
+    "P-15\u2013REQ-040 (Dependent)",
+    "P-15\u2013REQ-041 (Dependent)",
+    "P-16\u2013REQ-005 (Dependent)",
+    "P-16\u2013REQ-019 (Dependent)",
+    "P-17\u2013REQ-046 (Dependent)",
+    "P-18\u2013REQ-034 (Dependent)",
+    "P-19\u2013REQ-027 (Dependent)",
+    "P-32\u2013REQ-010 (Duplicate)"
+  ]
+}
