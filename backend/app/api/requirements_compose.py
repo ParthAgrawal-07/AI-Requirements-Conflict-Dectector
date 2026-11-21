@@ -55,6 +55,12 @@ def propose_requirement(
         window_seconds=60,
     )
     result = post_service.post_to_project(
-        db, project=project, author=ctx.user, fields=body.fields, draft_id=body.draft_id
+        db,
+        project=project,
+        author=ctx.user,
+        fields=body.fields,
+        draft_id=body.draft_id,
+        supersedes=body.supersedes,
+        source_suggestion_id=body.source_suggestion_id,
     )
     return RequirementPostRead.build(db, result)

@@ -138,7 +138,15 @@ Contract: [`docs/contracts/composer-and-context.md`](../contracts/composer-and-c
 | `GET /me/drafts/{id}` | signed in, author only | One draft (`404` for anyone else) |
 | `PATCH /me/drafts/{id}` | signed in, author only | Autosave: replace `fields` |
 | `DELETE /me/drafts/{id}` | signed in, author only | `204` |
-| `POST /channels/{c}/requirement-posts` | `req.propose` | `{fields, draft_id?}` → `201 {message, requirement}`: a card plus a Proposed requirement; `409` if the channel is archived, `409 project_in_setup` while the project is in setup; rate-limited like messages |
+| `POST /channels/{c}/requirement-posts` | `req.propose` | `{fields, draft_id?, supersedes?, source_suggestion_id?}` → `201 {message, requirement}`: a card plus a Proposed requirement; `409` if the channel is archived, `409 project_in_setup` while the project is in setup; rate-limited like messages |
+
+*From an accepted suggestion (US-45, Sprint 5).* `POST /projects/{p}/requirements` (the composer's *Propose*) and the
+channel route take the same two optional fields. `supersedes` names the poster's own Proposed (or Under review)
+requirement: the new post rejects it with "Superseded by REQ-n", audited. `source_suggestion_id` needs `supersedes`
+(`400 supersedes_required`) and an acceptance of that suggestion by the poster on record. Errors:
+`403` when the poster does not own the requirement, `409 not_a_proposal` when it is past review,
+`400 unknown_requirement`, plus the suggestion errors listed under change requests. A statement that still holds
+`[TBD — confirm]` is `400 tbd_unfilled`.
 
 ### Change requests  *(US-33, FR-62, FR-89, FR-98 — Sprint 4)*
 
@@ -148,7 +156,7 @@ from the baseline (`deprecate`). It records `base_version`, the version the prop
 
 | Method & path | Permission | Purpose |
 |---|---|---|
-| `POST /requirements/{id}/change-requests` | `rcr.open` | `{kind?, proposed_body?, reason, base_version?, resolves?, draft?}` → `201` change request |
+| `POST /requirements/{id}/change-requests` | `rcr.open` | `{kind?, proposed_body?, reason, base_version?, resolves?, draft?, source_suggestion_id?}` → `201` change request |
 | `GET /projects/{p}/change-requests?status=&requirement=&limit=&offset=` | `view` | Newest first, paged (`limit` 1–200) |
 | `GET /change-requests/{id}` | `view` | One request with `base_body` (text at `base_version`) and `current_body` (text now) |
 
@@ -161,6 +169,11 @@ from the baseline (`deprecate`). It records `base_version`, the version the prop
   `409 not_in_baseline` when deprecating a requirement that is not Approved or Implemented, `409 project_in_setup`
   while the project is in Setup, `400 proposed_body_required`, `400 no_change`, `400 unexpected_body`.
 * `draft: true` keeps the request out of review and off the map until its proposer opens it.
+* `source_suggestion_id` *(US-45, Sprint 5)*: the accepted AI suggestion the proposal was pre-filled from. It is kept
+  on the request (and returned) and the finding's open auto issue is added to the resolved issues, so the merge
+  closes it. Errors: `400 unknown_suggestion` (not in this project), `409 suggestion_unusable` (replaced or not
+  ready), `400 suggestion_mismatch` (no option targets this requirement), `409 not_accepted` (the proposer has not
+  accepted it). A `proposed_body` that still holds `[TBD — confirm]` is `400 tbd_unfilled`.
 
 **Review and merge** *(US-35, FR-65, FR-98)*:
 

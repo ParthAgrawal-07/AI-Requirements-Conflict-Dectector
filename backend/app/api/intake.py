@@ -46,6 +46,9 @@ class RequirementPostCreate(BaseModel):
     fields: ComposerFields
     # The draft this post came from; it is deleted with the post.
     draft_id: uuid.UUID | None = None
+    # US-45: a post written from an accepted suggestion replaces the member's own proposal.
+    supersedes: uuid.UUID | None = None
+    source_suggestion_id: uuid.UUID | None = None
 
 
 class RequirementPostRead(BaseModel):
@@ -93,6 +96,12 @@ def post_requirement(
         window_seconds=60,
     )
     result = post_service.post_requirement(
-        db, channel=channel, author=ctx.user, fields=body.fields, draft_id=body.draft_id
+        db,
+        channel=channel,
+        author=ctx.user,
+        fields=body.fields,
+        draft_id=body.draft_id,
+        supersedes=body.supersedes,
+        source_suggestion_id=body.source_suggestion_id,
     )
     return RequirementPostRead.build(db, result)

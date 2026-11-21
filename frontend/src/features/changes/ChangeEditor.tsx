@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ApiError } from "../../api/client";
 import { usePermissions } from "../../app/usePermissions";
 import { Button } from "../../components/Button";
 import { useToast } from "../../components/Toast";
 import { WordDiff } from "../../components/WordDiff";
 import { useMembers } from "../channels/api";
+import { AuthoringPanel } from "../composer/AuthoringPanel";
+import { TBD, type Prefill } from "../findings/suggestions";
 import { useIssues } from "../issues/api";
 import { useRequirement, type RequirementDetail } from "../map/api";
 import {
@@ -81,9 +83,12 @@ function NewChangeForm({
   // The version and text the author is editing. A refresh to a newer version does not move it:
   // the author decides when to take the new text as the base (the server refuses a stale base).
   const [base, setBase] = useState({ version: requirement.current_version, body: requirement.body });
+  // US-45: opened by accepting an AI suggestion for this requirement.
+  const state = useLocation().state as { prefill?: Prefill } | null;
+  const prefill = state?.prefill?.requirement_id === requirement.requirement_id ? state.prefill : null;
   const [kind, setKind] = useState<ChangeKind>("modify");
-  const [text, setText] = useState(requirement.body);
-  const [reason, setReason] = useState("");
+  const [text, setText] = useState(prefill?.proposed_body ?? requirement.body);
+  const [reason, setReason] = useState(prefill ? "Resolves the finding with the accepted AI suggestion" : "");
   const [resolves, setResolves] = useState<number[]>(preselected);
   const issues = useIssues(projectId, { status: "open", requirement: requirement.requirement_id, limit: 50, offset: 0 });
   const listed = new Set((issues.data?.items ?? []).map((issue) => issue.number));
@@ -99,6 +104,7 @@ function NewChangeForm({
   const label = requirement.source_req_id ?? "the requirement";
   const blank = kind === "modify" && !text.trim();
   const unchanged = kind === "modify" && text.trim() === base.body.trim();
+  const placeholders = kind === "modify" && text.includes(TBD);
   const moved = requirement.current_version !== base.version;
   const root = `/w/${workspaceId}/p/${projectId}`;
 
@@ -111,6 +117,7 @@ function NewChangeForm({
         base_version: base.version,
         resolves,
         draft,
+        source_suggestion_id: prefill?.source_suggestion_id,
       },
       {
         onSuccess: (change) => {
@@ -171,6 +178,14 @@ function NewChangeForm({
           Deprecate
         </label>
       </fieldset>
+      {prefill && (
+        <p className="banner" role="status">
+          Suggested by AI, accepted by you. Review it before opening: people decide.
+        </p>
+      )}
+      {placeholders && (
+        <p role="alert">Replace every {TBD} with the value it stands for before opening the request.</p>
+      )}
       {kind === "modify" ? (
         <ProposalText current={base.body} text={text} onChange={setText} readOnly={saving} />
       ) : (
@@ -224,16 +239,24 @@ function NewChangeForm({
           ))}
         </fieldset>
       )}
+      {kind === "modify" && (
+        <AuthoringPanel projectId={projectId} text={text} requirementId={requirement.requirement_id} onUseWording={setText} />
+      )}
       <Preflight requirement={requirement} kind={kind} resolving={resolves.length} />
       <div className="row-actions">
         <Button
-          disabled={blocked || blank || unchanged || reason.trim().length < 3}
+          disabled={blocked || blank || unchanged || placeholders || reason.trim().length < 3}
           loading={open.isPending}
           onClick={() => submit(true)}
         >
           Save as draft
         </Button>
-        <Button type="submit" variant="primary" disabled={blocked || blank || unchanged} loading={open.isPending}>
+        <Button
+          type="submit"
+          variant="primary"
+          disabled={blocked || blank || unchanged || placeholders}
+          loading={open.isPending}
+        >
           Open change request
         </Button>
       </div>
