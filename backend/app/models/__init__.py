@@ -39,11 +39,13 @@ from app.models.graph import NodePosition
 from app.models.issue import Comment, Issue, IssueAssignee, IssueRequirement
 from app.models.join_code import JoinCode, JoinRequest
 from app.models.membership import Membership, ProjectMember
+from app.models.notification import Notification
 from app.models.ownership import OwnershipRequest
 from app.models.project import Project
 from app.models.requirement import Requirement, RequirementVersion
 from app.models.review import FindingReview, RequirementTransition
 from app.models.role import Role, RolePermission
+from app.models.suggestion import Suggestion, SuggestionFeedback
 from app.models.user import User
 from app.models.workspace import Workspace
 
@@ -87,6 +89,7 @@ __all__ = [
     "Message",
     "MessageKind",
     "NodePosition",
+    "Notification",
     "OwnershipRequest",
     "PlatformRole",
     "Project",
@@ -106,6 +109,8 @@ __all__ = [
     "Role",
     "RolePermission",
     "Severity",
+    "Suggestion",
+    "SuggestionFeedback",
     "User",
     "Workspace",
 ]

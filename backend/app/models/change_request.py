@@ -74,6 +74,10 @@ class ChangeRequest(UUIDPrimaryKeyMixin, Base):
     closed_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     close_reason: Mapped[str | None] = mapped_column(Text)
+    # The AI suggestion it was pre-filled from (US-45, migration 0008); people wrote the rest.
+    source_suggestion_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("suggestions.id", ondelete="SET NULL")
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
