@@ -1,13 +1,15 @@
 import { Badge } from "../../components/Badge";
 import { CATEGORY_ICONS, STATUS_LABEL, type Finding } from "./api";
+import { SeverityBadge } from "./SeverityBadge";
 
 export interface FindingCardProps {
   finding: Finding;
   onOpen?: (finding: Finding) => void;
 }
 
-/** A finding in a list (US-07): category badge, confidence 0–100%, the low-confidence marker,
- *  the explanation and the requirement IDs involved. "AI" says who produced it (DR-04). */
+/** A finding in a list (US-07): category badge, severity (how bad, US-08) beside confidence 0–100%
+ *  (how sure), the low-confidence marker, the explanation and the requirement IDs involved.
+ *  "AI" says who produced it (DR-04). */
 export function FindingCard({ finding, onOpen }: FindingCardProps) {
   const labels = finding.requirements.map((r) => r.label ?? "unnumbered requirement");
   return (
@@ -16,6 +18,7 @@ export function FindingCard({ finding, onOpen }: FindingCardProps) {
         <Badge tone={finding.category === "Conflicting" ? "conflict" : "proposed"} icon={CATEGORY_ICONS[finding.category]}>
           {finding.category}
         </Badge>
+        <SeverityBadge finding={finding} />
         <span className="confidence" title="How sure the analysis is that the category is right">
           {finding.confidence_percent}% confidence
         </span>

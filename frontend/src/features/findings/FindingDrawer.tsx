@@ -7,6 +7,7 @@ import { Button } from "../../components/Button";
 import { Drawer } from "../../components/Drawer";
 import { useToast } from "../../components/Toast";
 import { ReviewActions } from "../review/ReviewActions";
+import { SeverityControl } from "./SeverityControl";
 import { SuggestionPanel } from "./SuggestionPanel";
 import {
   CATEGORY_ICONS,
@@ -134,6 +135,7 @@ export function FindingDrawer({ projectId, findingId, onClose }: FindingDrawerPr
             </Badge>{" "}
             <strong>{data.confidence_percent}% confidence</strong> <Badge tone="ai">AI analysis</Badge>
           </p>
+          <SeverityControl projectId={projectId} finding={data} />
           {data.low_confidence && (
             <p className="low-confidence" role="note">
               <span aria-hidden="true">⚠ </span>Low confidence — recommend manual review
