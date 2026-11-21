@@ -30,6 +30,7 @@ from sqlalchemy import func, select, tuple_
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.consequences import tasks as consequence_tasks
 from app.context.service import ensure_analysis_allowed
 from app.core.errors import AppError, BadRequestError, ConflictError
 from app.graph import deltas, narrator
@@ -50,6 +51,7 @@ from app.models.change_request import DEPRECATE, DRAFT, MODIFY, OPEN
 from app.realtime import bus
 from app.realtime.events import CHANGE_REQUEST_OPENED, change_request_event
 from app.services.access import AccessContext
+from app.services.reviews import ReviewPolicy
 
 logger = logging.getLogger(__name__)
 
@@ -287,6 +289,9 @@ def open_change_request(
         # a second RCR on retry. Clients re-read on reconnect; the map catches up on its next delta.
         db.rollback()
         logger.exception("Announcing %s failed", key(change_request))
+    if change_request.status == OPEN:
+        ReviewPolicy(db).request(change_request)  # Parth (US-35): the reviewers it needs
+        consequence_tasks.queue_checks(change_request.id)  # Madhav (US-34)
     return change_request
 
 

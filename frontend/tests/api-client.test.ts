@@ -46,6 +46,31 @@ describe("apiFetch", () => {
     expect((failure as ApiError).fieldErrors).toEqual({ email: "not an email" });
   });
 
+  it("keeps details that are not field errors, such as a blocked merge's unmet conditions", async () => {
+    mockApi({
+      "POST /api/v1/change-requests/c1/merge": [
+        409,
+        {
+          error: {
+            code: "merge_blocked",
+            message: "This change request cannot be merged yet",
+            request_id: "r",
+            details: [{ code: "checks_pending", message: "The checks have not run on this revision yet" }],
+          },
+        },
+      ],
+    });
+
+    const failure = (await apiFetch("/change-requests/c1/merge", { json: {} }).catch((e: unknown) => e)) as ApiError;
+    expect(failure.fieldErrors).toEqual({});
+    expect(failure.details).toEqual([{ code: "checks_pending", message: "The checks have not run on this revision yet" }]);
+  });
+
+  it("resolves a queued action's empty 202 to undefined", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 202 })));
+    await expect(apiFetch("/change-requests/c1/checks/rerun", { method: "POST" })).resolves.toBeUndefined();
+  });
+
   it("calls the unauthorized handler when a signed-in request gets 401", async () => {
     mockApi({ "GET /api/v1/auth/me": [401, { error: { code: "not_authenticated", message: "x" } }] });
     const handler = vi.fn();

@@ -5,11 +5,16 @@ relies on that, so a new model file must be imported here.
 """
 
 from app.models.analysis import AnalysisRun, CandidatePair, Clarification, Finding
+from app.models.attributes import RequirementAttribute
 from app.models.audit import AuditLog
 from app.models.base import Base
+from app.models.baseline import Baseline, BaselineItem
 from app.models.change_request import ChangeRequest, ChangeRequestIssue, ChangeRequestRevision
+from app.models.change_review import Review, ReviewComment, ReviewRequest
 from app.models.channel import Channel, ChannelMember, ChannelRead, Message
+from app.models.consequence import ConsequenceReport
 from app.models.context import DocumentSection, ProjectContext
+from app.models.decision_rule import DecisionRule
 from app.models.document import Document
 from app.models.draft import RequirementDraft
 from app.models.embedding import EMBEDDING_DIM, Embedding
@@ -36,11 +41,13 @@ from app.models.graph import NodePosition
 from app.models.issue import Comment, Issue, IssueAssignee, IssueRequirement
 from app.models.join_code import JoinCode, JoinRequest
 from app.models.membership import Membership, ProjectMember
+from app.models.notification import Notification
 from app.models.ownership import OwnershipRequest
 from app.models.project import Project
 from app.models.requirement import Requirement, RequirementVersion
 from app.models.review import FindingReview, RequirementTransition
 from app.models.role import Role, RolePermission
+from app.models.suggestion import Suggestion, SuggestionFeedback
 from app.models.user import User
 from app.models.workspace import Workspace
 
@@ -52,6 +59,8 @@ __all__ = [
     "AuditAction",
     "AuditLog",
     "Base",
+    "Baseline",
+    "BaselineItem",
     "CandidatePair",
     "ChangeRequest",
     "ChangeRequestIssue",
@@ -62,6 +71,8 @@ __all__ = [
     "ChannelRead",
     "Clarification",
     "Comment",
+    "ConsequenceReport",
+    "DecisionRule",
     "Document",
     "DocumentSection",
     "DocumentFormat",
@@ -83,6 +94,7 @@ __all__ = [
     "Message",
     "MessageKind",
     "NodePosition",
+    "Notification",
     "OwnershipRequest",
     "PlatformRole",
     "Project",
@@ -90,14 +102,20 @@ __all__ = [
     "ProjectMember",
     "ProjectStatus",
     "Requirement",
+    "RequirementAttribute",
     "RequirementDraft",
     "RequirementOrigin",
     "RequirementState",
     "RequirementTransition",
     "RequirementVersion",
+    "Review",
+    "ReviewComment",
+    "ReviewRequest",
     "Role",
     "RolePermission",
     "Severity",
+    "Suggestion",
+    "SuggestionFeedback",
     "User",
     "Workspace",
 ]

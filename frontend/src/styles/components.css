@@ -444,6 +444,56 @@
 .readiness { list-style: none; padding: 0; margin: 0 0 var(--space-2); display: grid; gap: var(--space-1); font-size: 13px; }
 .review-actions { margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px dashed var(--line); }
 
+/* ── Issues (US-52, US-56) and version history (US-12) ──────────────────────────────────── */
+.issue-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.issue-row { padding: var(--space-3) var(--space-4); }
+.issue-title { margin: 0 0 var(--space-1); display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.issue-labels { display: flex; flex-wrap: wrap; gap: var(--space-1); margin: var(--space-1) 0 0; }
+.label-chip { font-size: 12px; padding: 1px 8px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--paper-sunken); }
+.issue-body { white-space: pre-wrap; }
+.inline-list { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.comment-list { list-style: none; padding: 0; margin: 0 0 var(--space-3); display: grid; gap: var(--space-3); }
+.comment { border-left: 3px solid var(--line); padding-left: var(--space-3); }
+.comment p { margin: 0; }
+.version-list { list-style: none; padding: 0; margin: 0; display: grid; gap: var(--space-4); }
+.version-meta { margin: 0 0 var(--space-1); }
+.word-diff { margin: 0; line-height: 1.6; }
+.word-diff del { background: var(--conflict-soft); color: inherit; text-decoration: line-through; }
+.word-diff ins { background: var(--approved-soft); color: inherit; text-decoration: underline; }
+
+/* ── Change editor and change request page (US-33–US-35, interface design §7) ──────────── */
+.change-request-layout { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: var(--space-5); align-items: start; }
+.change-request-aside { display: grid; gap: var(--space-4); }
+.change-editor { max-width: 760px; }
+.decision { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.decision legend { font-weight: 600; margin-bottom: var(--space-1); }
+.banner-warning { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; justify-content: space-between; border: 1px solid var(--proposed); border-radius: var(--radius-sm); margin: var(--space-3) 0; }
+.banner-warning p, .banner-warning ul { margin: 0; }
+.comment.dismissed { opacity: 0.7; }
+.diff-view { display: grid; gap: var(--space-4); }
+.diff-block h3 { margin: 0 0 var(--space-1); }
+.proposal-text { white-space: pre-wrap; }
+.pending-comment { display: flex; gap: var(--space-2); align-items: end; }
+.pending-comment label { flex: 1; }
+.inline-form { display: flex; gap: var(--space-2); align-items: center; }
+.merge-box { margin-top: var(--space-5); padding: var(--space-4); border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--paper-raised); }
+.merge-box-done { border-style: dashed; }
+.checks-tab { display: grid; gap: var(--space-3); }
+.findings-delta details { margin-top: var(--space-1); }
+.delta-counts { list-style: none; padding: 0; margin: 0 0 var(--space-2); display: flex; flex-wrap: wrap; gap: var(--space-4); }
+.delta-list { margin: var(--space-1) 0 0; padding-left: var(--space-4); display: grid; gap: var(--space-1); }
+.check-list { list-style: none; padding: 0; margin: 0; display: grid; gap: var(--space-2); }
+.check { display: grid; grid-template-columns: 1.5em 1fr; gap: var(--space-2); }
+.check-icon { font-weight: 700; text-align: center; }
+.check-pass .check-icon { color: var(--approved); }
+.check-warning .check-icon { color: var(--proposed); }
+.check-fail .check-icon { color: var(--conflict); }
+.narrative { border-left: 3px solid var(--line-strong); padding-left: var(--space-3); }
+.preflight { border-top: 1px dashed var(--line); padding-top: var(--space-3); }
+@media (max-width: 900px) {
+  .change-request-layout { grid-template-columns: 1fr; }
+}
+
 /* Sprint 5 (Dhavni): notification bell and inbox */
 .bell { position: relative; text-decoration: none; font-size: 18px; padding: 0 var(--space-2); }
 .bell-count { position: absolute; top: -6px; right: -6px; min-width: 18px; padding: 0 4px; border-radius: 9px; background: var(--danger); color: var(--paper); font-size: 11px; text-align: center; }

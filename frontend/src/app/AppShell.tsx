@@ -1,8 +1,8 @@
 import { useEffect } from "react";
 import { NavLink, Outlet, useNavigate, useParams } from "react-router-dom";
 import { ChannelList } from "../features/channels/ChannelList";
-import { ProjectSwitcher } from "../features/projects/ProjectSwitcher";
 import { Bell } from "../features/notifications/Bell";
+import { ProjectSwitcher } from "../features/projects/ProjectSwitcher";
 import { rememberLastProject } from "../features/projects/api";
 import { Button } from "../components/Button";
 import { useAuth } from "./auth";

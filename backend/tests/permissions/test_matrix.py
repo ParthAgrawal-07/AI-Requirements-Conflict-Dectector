@@ -37,6 +37,7 @@ from app.models import (
     ChangeRequest,
     Channel,
     Clarification,
+    DecisionRule,
     Document,
     DocumentFormat,
     Finding,
@@ -50,6 +51,7 @@ from app.models import (
     Requirement,
     Role,
     RolePermission,
+    Suggestion,
     User,
     Workspace,
 )
@@ -99,6 +101,8 @@ class World:
     ownership_request: OwnershipRequest  # `target` asks to own that requirement
     issue: Issue
     change_request: ChangeRequest  # RCR-1 by the Owner on the finding's requirement
+    suggestion: Suggestion  # ready AI options for `finding`
+    decision_rule_id: uuid.UUID
     db: Session
 
 
@@ -112,6 +116,8 @@ class Case:
     needs: str | None = None
     # Author-only routes: {message_id} is a message the calling member posted just before.
     own_message: bool = False
+    # Proposer-only routes: {change_request_id} is a change request the calling member opened.
+    own_change_request: bool = False
     # The status a holder of the permission must get, when the request is meant to succeed; so a
     # 500 inside the route cannot pass as "allowed".
     ok: int | None = None
@@ -286,6 +292,80 @@ CASES = [
     ),
     Case("GET", "/api/v1/projects/{project_id}/change-requests", ok=200),
     Case("GET", "/api/v1/change-requests/{change_request_id}", ok=200),
+    # Sprint 4 — raise a concern (Abhyudit, US-56)
+    Case(
+        "POST",
+        "/api/v1/projects/{project_id}/concerns",
+        lambda w: {
+            "category": "Ambiguous",
+            "requirement_ids": [str(w.finding.requirement_id)],
+            "explanation": "Nobody can test what fast means here.",
+        },
+    ),
+    # Sprint 4 — impact and consequence checks (Madhav, US-11, US-34)
+    Case("GET", "/api/v1/requirements/{requirement_id}/impact"),
+    Case("GET", "/api/v1/change-requests/{change_request_id}/checks"),
+    Case("POST", "/api/v1/change-requests/{change_request_id}/checks/rerun"),
+    # Sprint 4 — review and merge (Parth, US-35). The world's request is not
+    # approved, so a merger gets 409 (unmet conditions) — through the permission, refused later.
+    Case(
+        "PATCH",
+        "/api/v1/change-requests/{change_request_id}",
+        lambda _: {"reason": "A clearer reason"},
+        own_change_request=True,
+    ),
+    Case("GET", "/api/v1/change-requests/{change_request_id}/reviews"),
+    Case(
+        "POST",
+        "/api/v1/change-requests/{change_request_id}/reviews",
+        lambda _: {"decision": "comment", "rationale": "Reads well."},
+    ),
+    Case(
+        "POST",
+        "/api/v1/change-requests/{change_request_id}/reviewers",
+        lambda w: {"reviewer_id": str(w.target.id)},
+        needs="rcr.merge",
+    ),
+    Case("GET", "/api/v1/change-requests/{change_request_id}/agreement"),
+    Case("POST", "/api/v1/change-requests/{change_request_id}/merge", lambda _: {}),
+    Case(
+        "POST",
+        "/api/v1/change-requests/{change_request_id}/close",
+        lambda _: {"reason": "Not needed after all"},
+    ),
+    Case("POST", "/api/v1/change-requests/{change_request_id}/withdraw", own_change_request=True),
+    # Sprint 4 — version history (Affan, US-12)
+    Case("GET", "/api/v1/requirements/{requirement_id}/versions", ok=200),
+    # Sprint 5 — threshold preview and re-analysis (Heet, US-06)
+    Case("GET", "/api/v1/projects/{project_id}/thresholds/preview"),
+    Case("POST", "/api/v1/projects/{project_id}/reanalyse"),
+    # Sprint 5 — AI suggestions (Madhav, US-45)
+    Case("GET", "/api/v1/findings/{finding_id}/suggestions"),
+    Case(
+        "POST",
+        "/api/v1/findings/{finding_id}/suggestions/regenerate",
+        lambda _: {"instruction": "Keep it short"},
+    ),
+    Case("POST", "/api/v1/suggestions/{suggestion_id}/feedback", lambda _: {"action": "deferred"}),
+    Case(
+        "POST",
+        "/api/v1/suggestions/{suggestion_id}/rating",
+        lambda _: {"option_index": 0, "rating": 4},
+    ),
+    Case("GET", "/api/v1/projects/{project_id}/suggestions/stats"),
+    # Sprint 5 — decision rules and resolved decisions (US-57)
+    Case("GET", "/api/v1/projects/{project_id}/decision-rules", ok=200),
+    Case(
+        "POST",
+        "/api/v1/projects/{project_id}/decision-rules",
+        lambda _: {"name": "New rule", "owner_kind": "requirement_owner", "match_label": "API"},
+        ok=201,
+    ),
+    Case("PATCH", "/api/v1/decision-rules/{decision_rule_id}", lambda _: {"priority": 20}, ok=200),
+    Case("DELETE", "/api/v1/decision-rules/{decision_rule_id}", ok=204),
+    Case("GET", "/api/v1/findings/{finding_id}/decision", ok=200),
+    Case("GET", "/api/v1/issues/{issue_id}/decision", ok=200),
+    Case("GET", "/api/v1/change-requests/{change_request_id}/decision", ok=200),
 ]
 
 
@@ -401,6 +481,29 @@ def world(
         reason="Measurable",
     )
     db_session.add(change_request)
+    suggestion = Suggestion(
+        finding_id=finding.id,
+        project_id=project.id,
+        category="Ambiguous",
+        status="ready",
+        options=[
+            {
+                "text": "It shall answer within 2 s.",
+                "target": None,
+                "target_requirement_id": str(vague.id),
+                "trade_off": "t",
+                "confidence": 0.6,
+                "tbd_slots": [],
+            }
+        ],
+    )
+    rule = DecisionRule(
+        project_id=project.id,
+        name="Existing rule",
+        owner_kind="requirement_owner",
+        match_label="API",
+    )
+    db_session.add_all((suggestion, rule))
     db_session.commit()
     return World(
         workspace=workspace,
@@ -419,6 +522,8 @@ def world(
         ownership_request=ownership_request,
         issue=issue,
         change_request=change_request,
+        suggestion=suggestion,
+        decision_rule_id=rule.id,
         db=db_session,
     )
 
@@ -444,6 +549,20 @@ def _call(api: TestClient, case: Case, world: World, user: User) -> int:
         world.db.add(own)
         world.db.commit()
         message_id = own.id
+    change_request_id = world.change_request.id
+    if case.own_change_request:
+        mine = ChangeRequest(
+            project_id=world.project.id,
+            requirement_id=world.change_request.requirement_id,
+            number=world.change_request.number + 1 + world.db.query(ChangeRequest).count(),
+            proposer_id=user.id,
+            base_version=1,
+            proposed_body="It shall answer within 3 s.",
+            reason="Mine",
+        )
+        world.db.add(mine)
+        world.db.commit()
+        change_request_id = mine.id
     path = case.path.format(
         message_id=message_id,
         finding_id=world.finding.id,
@@ -460,7 +579,9 @@ def _call(api: TestClient, case: Case, world: World, user: User) -> int:
         clarification_id=world.clarification.id,
         ownership_request_id=world.ownership_request.id,
         issue_id=world.issue.id,
-        change_request_id=world.change_request.id,
+        change_request_id=change_request_id,
+        suggestion_id=world.suggestion.id,
+        decision_rule_id=world.decision_rule_id,
     )
     headers = {"Authorization": f"Bearer {security.create_access_token(user.id)[0]}"}
     body = case.body(world)

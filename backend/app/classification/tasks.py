@@ -66,7 +66,13 @@ def _subject(requirement: Requirement) -> Subject:
 
 def _live_pair_finding(db: Session, pair_id: uuid.UUID) -> Finding | None:
     return db.scalar(
-        select(Finding).where(Finding.candidate_pair_id == pair_id, Finding.is_stale.is_(False))
+        select(Finding).where(
+            Finding.candidate_pair_id == pair_id,
+            ~Finding.is_stale,
+            # Only the AI's own finding: a raised concern or a rule finding never stands in for
+            # the analysis, which may still be asked to confirm a rule (US-58).
+            Finding.source == "ai",
+        )
     )
 
 
@@ -127,9 +133,7 @@ def classify_candidate_pair(
         db.commit()
         return None
     except BudgetExceededError:
-        # A failed pair being retried, or a done pair whose text changed, is pending again.
-        pair.classification_status = ClassificationStatus.PENDING
-        pair.last_error = "budget_exhausted"
+        pair.last_error = "budget_exhausted"  # stays pending
         db.commit()
         raise
 

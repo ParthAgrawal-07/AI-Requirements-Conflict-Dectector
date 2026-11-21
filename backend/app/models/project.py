@@ -5,8 +5,8 @@ budget and approval settings. A project starts in ``setup`` and becomes ``active
 its context is confirmed (FR-103, US-60); no analysis may run before that (ContextGate,
 ``app.services.projects.ensure_project_active``).
 
-Columns added by later migrations: ``graph_revision`` (0006d), ``baseline_revision`` (0007),
-``use_feedback_examples`` (0010b). The context itself lives in ``project_contexts`` (0011,
+Columns added by later migrations: ``graph_revision`` (0006d), ``baseline_revision`` (0007b),
+``use_feedback_examples`` (0008). The context itself lives in ``project_contexts`` (0011,
 Bansil, ``app.models.context``).
 """
 
@@ -45,6 +45,7 @@ class Project(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         CheckConstraint("required_approvals BETWEEN 1 AND 3", name="required_approvals_range"),
         CheckConstraint("context_version >= 0", name="context_version_non_negative"),
         CheckConstraint("graph_revision >= 0", name="graph_revision_non_negative"),
+        CheckConstraint("baseline_revision >= 0", name="baseline_revision_non_negative"),
         Index("ix_projects_workspace_id_status", "workspace_id", "status"),
     )
 
@@ -78,6 +79,12 @@ class Project(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     required_approvals: Mapped[int] = mapped_column(default=1, server_default=text("1"))
     # Live map (US-14, ADR-21): +1 per ``graph.delta``, owned by ``app.graph.deltas`` (Dhavni).
     graph_revision: Mapped[int] = mapped_column(default=0, server_default=text("0"))
+    # +1 on every merged change request (US-35, migration 0007b): a consequence report computed
+    # against an older baseline is stale (FR-64).
+    baseline_revision: Mapped[int] = mapped_column(default=0, server_default=text("0"))
+    # US-45, SX-30: re-use this project's accepted suggestions as prompt examples — an
+    # experiment, off unless the CP2 evaluation shows it helps (migration 0008).
+    use_feedback_examples: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
 
     # Users are deactivated, never deleted, so SET NULL only matters for odd cleanup scripts.
     created_by: Mapped[uuid.UUID | None] = mapped_column(

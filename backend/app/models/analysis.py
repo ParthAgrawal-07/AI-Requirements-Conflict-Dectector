@@ -86,7 +86,8 @@ class CandidatePair(UUIDPrimaryKeyMixin, Base):
 
 
 class Finding(UUIDPrimaryKeyMixin, TimestampMixin, Base):
-    """An issue detected by the LLM classifier and reviewed by a human (FR-13, FR-14, FR-18)."""
+    """An issue found by the LLM classifier, a rule check or a person, reviewed by a human
+    (FR-13, FR-14, FR-18, FR-97, FR-101)."""
 
     __tablename__ = "findings"
     __table_args__ = (
@@ -97,17 +98,31 @@ class Finding(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         CheckConstraint(
             "merged_into_id IS NULL OR merged_into_id <> id", name="not_merged_into_itself"
         ),
+        CheckConstraint("source IN ('ai', 'rule', 'person')", name="source_values"),
+        CheckConstraint("(source = 'rule') = (rule_id IS NOT NULL)", name="rule_has_rule_id"),
         Index("ix_findings_document_id_status", "document_id", "status"),
         Index("ix_findings_document_id_category", "document_id", "category"),
         Index("ix_findings_project_id_status", "project_id", "status"),
-        # Idempotent classification (migration 0006c): one live finding per pair. A finding made
-        # stale by an edit (S4) no longer counts. Single-requirement checks are kept idempotent
-        # by ``requirements.single_checked_version``.
+        # Idempotent classification (migration 0006c): one live AI finding per pair. A finding
+        # made stale by an edit (S4) no longer counts; a person's concern (0010a) and rule
+        # findings (0010b, one per pair and rule) live beside it.
+        # Single-requirement checks are kept idempotent by ``requirements.single_checked_version``.
         Index(
             "uq_findings_live_pair",
             "candidate_pair_id",
             unique=True,
-            postgresql_where=text("candidate_pair_id IS NOT NULL AND NOT is_stale"),
+            postgresql_where=text(
+                "candidate_pair_id IS NOT NULL AND NOT is_stale AND source = 'ai'"
+            ),
+        ),
+        Index(
+            "uq_findings_live_rule",
+            "candidate_pair_id",
+            "rule_id",
+            unique=True,
+            postgresql_where=text(
+                "candidate_pair_id IS NOT NULL AND NOT is_stale AND source = 'rule'"
+            ),
         ),
     )
 
@@ -162,6 +177,18 @@ class Finding(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     # The project context version the classifier was given (FR-105, migration 0011).
     context_version: Mapped[int | None]
+    # Who found it (ADR-25, migration 0010a): the AI, a rule check (S5) or a person's concern
+    # (US-56) — then who raised it, what they cite, and whether the AI and rules had missed it.
+    source: Mapped[str] = mapped_column(String(16), default="ai", server_default="ai")
+    raised_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    external_ref: Mapped[str | None] = mapped_column(String(200))
+    ai_miss: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
+    # The rule check that fired, for ``source = 'rule'`` (US-58, migration 0010b).
+    rule_id: Mapped[str | None] = mapped_column(String(64))
+
+    # Who decides, as resolved by the project's decision rules (US-57, migration 0010c);
+    # refreshed at the item's next update, never retroactively.
+    decision: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
     candidate_pair: Mapped[CandidatePair | None] = relationship()
     requirement: Mapped[Requirement | None] = relationship()

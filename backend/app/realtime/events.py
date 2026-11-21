@@ -34,6 +34,7 @@ ISSUE_COMMENTED = "issue.commented"
 # Change requests (US-33, US-35, S4): opened, then edited, reviewed, merged, closed or withdrawn.
 CHANGE_REQUEST_OPENED = "change_request.opened"
 CHANGE_REQUEST_UPDATED = "change_request.updated"
+CHANGE_REQUEST_CHECKED = "change_request.checked"  # a consequence report is ready (US-34)
 # Channels (US-28, Madhav). ``data.private`` is true for a private channel: the gateway then
 # forwards the event only to sockets subscribed to that channel by id (re-checked membership).
 CHANNEL_CREATED = "channel.created"
@@ -43,6 +44,14 @@ CHANNEL_MEMBER_REMOVED = "channel.member_removed"  # the gateway drops that user
 MESSAGE_CREATED = "message.created"
 MESSAGE_UPDATED = "message.updated"
 MESSAGE_DELETED = "message.deleted"
+# Change requests: review and merge (US-35, Parth). Ids only.
+CHANGE_REQUEST_REVIEWED = "change_request.reviewed"
+CHANGE_REQUEST_MERGED = "change_request.merged"
+CHANGE_REQUEST_CLOSED = "change_request.closed"  # closed without merge, or withdrawn
+# Notifications (US-38, Madhav): ``data.recipient_id`` — the gateway sends it to that person only.
+NOTIFICATION_CREATED = "notification.created"
+# AI suggestions (US-45, Madhav): a finding's options are ready (or failed); read over REST.
+SUGGESTION_READY = "suggestion.ready"
 
 EVENT_TYPES = frozenset(
     {
@@ -57,12 +66,18 @@ EVENT_TYPES = frozenset(
         ISSUE_COMMENTED,
         CHANGE_REQUEST_OPENED,
         CHANGE_REQUEST_UPDATED,
+        CHANGE_REQUEST_CHECKED,
         CHANNEL_CREATED,
         CHANNEL_UPDATED,
         CHANNEL_MEMBER_REMOVED,
         MESSAGE_CREATED,
         MESSAGE_UPDATED,
         MESSAGE_DELETED,
+        CHANGE_REQUEST_REVIEWED,
+        CHANGE_REQUEST_MERGED,
+        CHANGE_REQUEST_CLOSED,
+        NOTIFICATION_CREATED,
+        SUGGESTION_READY,
     }
 )
 
@@ -263,4 +278,46 @@ def analysis_completed(
             "checks_total": checks_total,
             "checks_failed": checks_failed,
         },
+    )
+
+
+def notification_created(
+    *,
+    workspace_id: uuid.UUID,
+    project_id: uuid.UUID | None,
+    notification_id: uuid.UUID,
+    recipient_id: uuid.UUID,
+    kind: str,
+    group: str,
+) -> Event:
+    """Someone has a new (or refreshed) notification. Ids and its kind only; read it over REST."""
+    return Event(
+        type=NOTIFICATION_CREATED,
+        workspace_id=workspace_id,
+        project_id=project_id,
+        entity_id=notification_id,
+        data={
+            "notification_id": str(notification_id),
+            "recipient_id": str(recipient_id),
+            "kind": kind,
+            "group": group,
+        },
+    )
+
+
+def suggestion_ready(
+    *,
+    workspace_id: uuid.UUID,
+    project_id: uuid.UUID,
+    suggestion_id: uuid.UUID,
+    finding_id: uuid.UUID,
+    status: str,
+) -> Event:
+    """A finding's suggestions are ready or failed (US-45). The options are read over REST."""
+    return Event(
+        type=SUGGESTION_READY,
+        workspace_id=workspace_id,
+        project_id=project_id,
+        entity_id=suggestion_id,
+        data={"suggestion_id": str(suggestion_id), "finding_id": str(finding_id), "status": status},
     )

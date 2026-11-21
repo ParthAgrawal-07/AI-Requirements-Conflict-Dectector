@@ -58,18 +58,22 @@
 
 ## 4. Team and Areas of Ownership
 
-| Member | Primary area | Code they own |
+From Sprint 3 the work is divided **by feature, not by layer**: each owner builds a feature's backend, UI and
+tests, testers also own features, and code lines across Sprints 2–6 are balanced to within about ±5% per
+person. Full rules, line counts and roles: [Sprint Plan §2](../planning/v5/IT314_RCD_Sprint_Plan_v5.md#2-team-and-areas-of-ownership).
+
+| Member | Role from Sprint 3 | Features they own (backend + UI + tests) |
 |---|---|---|
-| **Parth** | Backend lead: auth, memberships, permissions and roles, review state, lifecycle, approvals and merge, versions, baselines, audit | `app/core/auth`, `app/services/{membership,roles,change_requests,approvals,baselines}`, `alembic/` |
-| **Dhavni didi** | DevOps and real-time: Docker, CI/CD, Celery, WebSocket gateway, event bus, graph API and deltas, issues backend, deployment | `app/realtime/`, `app/graph/`, `app/services/issues.py`, `.github/`, `docker/` |
-| **Bansil** | Ingestion and authoring: extraction, project context, requirement posts and drafts, ownership, change-request intake, votes, watches and links, updated SRS generator and export | `app/ingestion/`, `app/intake/`, `app/export/` |
-| **Pranshu** | Frontend lead: shell, login, channels, composer, requirements table, issues UI, dashboard, baselines, map preview and time slider, analytics | `frontend/src/{app,features/channels,composer,requirements,issues,dashboard,baselines,analytics}` |
-| **Heet** | Embeddings and retrieval: vector store, candidates, incremental retrieval, similar-requirement hints, relationship queries, search | `app/embeddings/`, `app/search/` |
-| **Keval** | Classification and LLM: clients, prompts, context pack, classifier, severity, budget, lint catalogue, pre-flight and AI wording, SRS section prompts | `app/classification/`, `app/lint/` |
-| **Madhav** | Clarification and consequences: questions, impact engine, consequence checks, risk, notifications, join codes backend, AI resolution suggestions | `app/clarification/`, `app/consequences/`, `app/notifications/`, `app/services/join_codes.py` |
-| **Abhijeet** | Frontend: members, roles and join codes UI, project setup wizard, findings and review, live map UI, change editor and change-request page, inbox, compliance UI | `frontend/src/features/{members,findings,review,map,changes,notifications,compliance}` |
-| **Abhyudit** | QA — accuracy and backend: benchmark, evaluation harness, API and database tests | `eval/`, `backend/tests/` (integration) |
-| **Affan** | QA — E2E, performance, security: Playwright, permission tests, join-code abuse tests, WebSocket and load tests, accessibility | `e2e/`, `load/` |
+| **Parth** | Backend lead, integration lead; reviews every migration and permission change | US-37 lifecycle · US-35 merge and agreement guard · US-57 decision rules engine |
+| **Dhavni didi** | Real-time, map backend, DevOps | US-14 deltas and narrator · US-52 auto issues · US-38 bell and inbox UI · US-50 preview layer and history · US-18 compliance UI · S5 load test |
+| **Bansil** | Authoring and the updated SRS | US-36 ownership · US-33 change editor · US-51 authoring panel · US-61 SRS generation and fidelity · US-41 exporters |
+| **Pranshu** | Composer, change requests, baselines, SRS API; app shell | US-30 composer · US-33 change-request page · US-40 baselines · US-51 authoring-aids API · US-61 SRS API · US-41 export API · US-15 AI feedback API |
+| **Heet** | Retrieval, impact, reviews, change log | US-31 retrieval · US-11 impact · US-35 reviews · US-58 rule checks · US-06 thresholds · US-55 change log · US-50 time slider |
+| **Keval** | LLM and AI quality; reviews every LLM call | US-31 classification · US-34 narrative · US-51 lint engine and pre-flight · US-58 extraction · US-15 feedback loop and view · US-61 prompts and SRS screen |
+| **Madhav** | Clarification and consequences | US-09 clarification · US-34 consequence checks · US-45 suggestion service · S6 security tests |
+| **Abhijeet** | Map UI, issues, notifications and compliance backends, changes API | US-14 map UI · US-52 issue pages · US-38 notifications backend · US-18 compliance backend · US-55 changes API |
+| **Abhyudit** | Testing (accuracy) + features | US-31 requirement runs · US-56 concerns · US-13 dashboard · US-45 suggestion panel · US-42 timeline · US-59 open items · US-08 severity |
+| **Affan** | Testing (E2E, security) + features | US-10 finding review · US-12 version history · US-35 merge box · US-57 decision owners · US-53 discussion and votes |
 
 Scrum Master rotates: Parth (S0–S1), Dhavni didi (S2), Bansil (S3), Pranshu (S4), Heet (S5), Keval (S6), Madhav (S7). The team names one fixed Product Owner proxy for the semester.
 
