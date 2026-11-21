@@ -186,6 +186,10 @@ class Finding(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # The rule check that fired, for ``source = 'rule'`` (US-58, migration 0010b).
     rule_id: Mapped[str | None] = mapped_column(String(64))
 
+    # Who decides, as resolved by the project's decision rules (US-57, migration 0010c);
+    # refreshed at the item's next update, never retroactively.
+    decision: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+
     candidate_pair: Mapped[CandidatePair | None] = relationship()
     requirement: Mapped[Requirement | None] = relationship()
     clarification: Mapped[Clarification | None] = relationship(

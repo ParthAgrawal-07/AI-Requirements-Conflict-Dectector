@@ -64,6 +64,10 @@ EXPECTED_TABLES = {
     "notifications",
     "suggestions",
     "suggestion_feedback",
+    # Sprint 5 (0010c_decision_rules_baselines)
+    "decision_rules",
+    "baselines",
+    "baseline_items",
 }
 
 

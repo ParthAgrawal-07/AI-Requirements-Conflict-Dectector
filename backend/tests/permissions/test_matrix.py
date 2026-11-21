@@ -37,6 +37,7 @@ from app.models import (
     ChangeRequest,
     Channel,
     Clarification,
+    DecisionRule,
     Document,
     DocumentFormat,
     Finding,
@@ -101,6 +102,7 @@ class World:
     issue: Issue
     change_request: ChangeRequest  # RCR-1 by the Owner on the finding's requirement
     suggestion: Suggestion  # ready AI options for `finding`
+    decision_rule_id: uuid.UUID
     db: Session
 
 
@@ -351,6 +353,19 @@ CASES = [
         lambda _: {"option_index": 0, "rating": 4},
     ),
     Case("GET", "/api/v1/projects/{project_id}/suggestions/stats"),
+    # Sprint 5 — decision rules and resolved decisions (US-57)
+    Case("GET", "/api/v1/projects/{project_id}/decision-rules", ok=200),
+    Case(
+        "POST",
+        "/api/v1/projects/{project_id}/decision-rules",
+        lambda _: {"name": "New rule", "owner_kind": "requirement_owner", "match_label": "API"},
+        ok=201,
+    ),
+    Case("PATCH", "/api/v1/decision-rules/{decision_rule_id}", lambda _: {"priority": 20}, ok=200),
+    Case("DELETE", "/api/v1/decision-rules/{decision_rule_id}", ok=204),
+    Case("GET", "/api/v1/findings/{finding_id}/decision", ok=200),
+    Case("GET", "/api/v1/issues/{issue_id}/decision", ok=200),
+    Case("GET", "/api/v1/change-requests/{change_request_id}/decision", ok=200),
 ]
 
 
@@ -482,7 +497,13 @@ def world(
             }
         ],
     )
-    db_session.add(suggestion)
+    rule = DecisionRule(
+        project_id=project.id,
+        name="Existing rule",
+        owner_kind="requirement_owner",
+        match_label="API",
+    )
+    db_session.add_all((suggestion, rule))
     db_session.commit()
     return World(
         workspace=workspace,
@@ -502,6 +523,7 @@ def world(
         issue=issue,
         change_request=change_request,
         suggestion=suggestion,
+        decision_rule_id=rule.id,
         db=db_session,
     )
 
@@ -559,6 +581,7 @@ def _call(api: TestClient, case: Case, world: World, user: User) -> int:
         issue_id=world.issue.id,
         change_request_id=change_request_id,
         suggestion_id=world.suggestion.id,
+        decision_rule_id=world.decision_rule_id,
     )
     headers = {"Authorization": f"Bearer {security.create_access_token(user.id)[0]}"}
     body = case.body(world)

@@ -18,7 +18,16 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base, UUIDPrimaryKeyMixin
 
 APPROVE, REQUEST_CHANGES, COMMENT = "approve", "request_changes", "comment"
-REASONS = ("owner", "direct_conflict", "merge_quota", "compliance", "transitive", "requested")
+REASONS = (
+    "owner",
+    "direct_conflict",
+    "merge_quota",
+    "compliance",
+    "transitive",
+    "requested",
+    "decision_owner",  # US-57: named by a decision rule
+    "decision_rule",
+)
 
 
 class ReviewRequest(Base):
@@ -26,7 +35,7 @@ class ReviewRequest(Base):
     __table_args__ = (
         CheckConstraint(
             "reason IN ('owner', 'direct_conflict', 'merge_quota', 'compliance', 'transitive', "
-            "'requested')",
+            "'requested', 'decision_owner', 'decision_rule')",
             name="reason_values",
         ),
         Index("ix_review_requests_reviewer_id", "reviewer_id"),
