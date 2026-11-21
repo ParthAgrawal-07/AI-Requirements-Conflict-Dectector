@@ -125,7 +125,7 @@ class _Session:
         self.user = user
         self.user_id = str(user.id)  # read without touching the DB from the forwarding task
         self.member_of = set(member_of)  # where their notifications come from (read at sign-in)
-        self.listening = set(member_of)  # workspaces the fanout receives events of
+        self.listening: set[uuid.UUID] = set()  # active fanout subscriptions
         self.workspaces: set[uuid.UUID] = set()
         self.projects: set[uuid.UUID] = set()
         self.whole_workspaces: set[uuid.UUID] = set()
@@ -257,8 +257,12 @@ async def websocket_endpoint(websocket: WebSocket, db: Annotated[Session, Depend
     state = _Session(user, member_of)
     fanout = make_fanout()
     for workspace_id in member_of:
-        with contextlib.suppress(Exception):
+        try:
             await fanout.add(workspace_id)
+        except RedisError:
+            logger.warning("Could not subscribe to workspace %s: Redis unavailable", workspace_id)
+        else:
+            state.listening.add(workspace_id)
     forward = asyncio.create_task(_forward(websocket, fanout, state))
     try:
         while True:

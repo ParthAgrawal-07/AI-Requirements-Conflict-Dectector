@@ -39,6 +39,7 @@ from app.models.graph import NodePosition
 from app.models.issue import Comment, Issue, IssueAssignee, IssueRequirement
 from app.models.join_code import JoinCode, JoinRequest
 from app.models.membership import Membership, ProjectMember
+from app.models.notification import Notification
 from app.models.ownership import OwnershipRequest
 from app.models.project import Project
 from app.models.requirement import Requirement, RequirementVersion
@@ -88,6 +89,7 @@ __all__ = [
     "Message",
     "MessageKind",
     "NodePosition",
+    "Notification",
     "OwnershipRequest",
     "PlatformRole",
     "Project",
