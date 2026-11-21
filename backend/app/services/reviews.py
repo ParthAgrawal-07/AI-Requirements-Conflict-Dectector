@@ -44,6 +44,7 @@ from app.models import (
 from app.models.change_request import ACTIVE, DRAFT
 from app.models.change_review import APPROVE, COMMENT, REQUEST_CHANGES
 from app.search.relations import RelationKind
+from app.services import decision_rules
 from app.services.access import AccessContext, Scope, build_access_context
 
 
@@ -91,6 +92,16 @@ class ReviewPolicy:
                 wanted[user_id] = Wanted(user_id, required, reason)
 
         ask(requirement.owner_id, required=True, reason="owner")
+        decision, facts = decision_rules.decision_for(db, change_request, store=False)
+        engine = decision_rules.DecisionRuleEngine(db)
+        for user in engine.owners(project, decision, facts):  # US-57
+            ask(user.id, required=True, reason="decision_owner")
+        for spec in decision.required_reviewers:
+            for user in engine.spec_users(project, spec):
+                ask(user.id, required=True, reason="decision_rule")
+        for spec in decision.optional_reviewers:
+            for user in engine.spec_users(project, spec):
+                ask(user.id, required=False, reason="decision_rule")
         impact = ImpactAnalyzer(db).analyse(requirement, kind=change_request.kind)
         for affected in impact.affected:
             if affected.depth == 1 and affected.relation is RelationKind.CONFLICT:
@@ -116,6 +127,8 @@ class ReviewPolicy:
                 select(ReviewRequest).where(ReviewRequest.change_request_id == change_request.id)
             )
         }
+        decision_rules.refresh(db, change_request)  # US-57: who decides, as of now
+        created: list[uuid.UUID] = []
         for want in self.reviewers(change_request):
             row = existing.get(want.reviewer_id)
             if row is None:
@@ -127,10 +140,39 @@ class ReviewPolicy:
                 )
                 db.add(row)
                 existing[want.reviewer_id] = row
+                created.append(want.reviewer_id)
             elif want.required and not row.required:
                 row.required, row.reason = True, want.reason
         db.commit()
+        notify_review_requested(db, change_request, created)
         return list(existing.values())
+
+
+def notify_review_requested(
+    db: Session, change_request: ChangeRequest, reviewer_ids: list[uuid.UUID]
+) -> None:
+    """US-38: the people just asked to review hear about it (best effort)."""
+    from app.models.notification import REVIEW_REQUESTED
+    from app.notifications import subjects
+    from app.notifications.service import NotificationService
+
+    project = db.get(Project, change_request.project_id)
+    if project is None or not reviewer_ids:
+        return
+    try:
+        NotificationService(db).notify(
+            reviewer_ids,
+            REVIEW_REQUESTED,
+            workspace_id=project.workspace_id,
+            project_id=project.id,
+            actor_id=change_request.proposer_id,
+            subject=subjects.change_request(
+                db, change_request, "Review requested: {key} on {requirement}"
+            ),
+            change_request_id=change_request.id,
+        )
+    except Exception:
+        db.rollback()
 
 
 def requests_of(db: Session, change_request_id: uuid.UUID) -> list[ReviewRequest]:

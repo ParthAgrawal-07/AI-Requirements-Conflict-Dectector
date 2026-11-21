@@ -37,6 +37,7 @@ from app.models import (
     ChangeRequest,
     Channel,
     Clarification,
+    DecisionRule,
     Document,
     DocumentFormat,
     Finding,
@@ -50,6 +51,7 @@ from app.models import (
     Requirement,
     Role,
     RolePermission,
+    Suggestion,
     User,
     Workspace,
 )
@@ -99,6 +101,8 @@ class World:
     ownership_request: OwnershipRequest  # `target` asks to own that requirement
     issue: Issue
     change_request: ChangeRequest  # RCR-1 by the Owner on the finding's requirement
+    suggestion: Suggestion  # ready AI options for `finding`
+    decision_rule_id: uuid.UUID
     db: Session
 
 
@@ -332,6 +336,36 @@ CASES = [
     Case("POST", "/api/v1/change-requests/{change_request_id}/withdraw", own_change_request=True),
     # Sprint 4 — version history (Affan, US-12)
     Case("GET", "/api/v1/requirements/{requirement_id}/versions", ok=200),
+    # Sprint 5 — threshold preview and re-analysis (Heet, US-06)
+    Case("GET", "/api/v1/projects/{project_id}/thresholds/preview"),
+    Case("POST", "/api/v1/projects/{project_id}/reanalyse"),
+    # Sprint 5 — AI suggestions (Madhav, US-45)
+    Case("GET", "/api/v1/findings/{finding_id}/suggestions"),
+    Case(
+        "POST",
+        "/api/v1/findings/{finding_id}/suggestions/regenerate",
+        lambda _: {"instruction": "Keep it short"},
+    ),
+    Case("POST", "/api/v1/suggestions/{suggestion_id}/feedback", lambda _: {"action": "deferred"}),
+    Case(
+        "POST",
+        "/api/v1/suggestions/{suggestion_id}/rating",
+        lambda _: {"option_index": 0, "rating": 4},
+    ),
+    Case("GET", "/api/v1/projects/{project_id}/suggestions/stats"),
+    # Sprint 5 — decision rules and resolved decisions (US-57)
+    Case("GET", "/api/v1/projects/{project_id}/decision-rules", ok=200),
+    Case(
+        "POST",
+        "/api/v1/projects/{project_id}/decision-rules",
+        lambda _: {"name": "New rule", "owner_kind": "requirement_owner", "match_label": "API"},
+        ok=201,
+    ),
+    Case("PATCH", "/api/v1/decision-rules/{decision_rule_id}", lambda _: {"priority": 20}, ok=200),
+    Case("DELETE", "/api/v1/decision-rules/{decision_rule_id}", ok=204),
+    Case("GET", "/api/v1/findings/{finding_id}/decision", ok=200),
+    Case("GET", "/api/v1/issues/{issue_id}/decision", ok=200),
+    Case("GET", "/api/v1/change-requests/{change_request_id}/decision", ok=200),
 ]
 
 
@@ -447,6 +481,29 @@ def world(
         reason="Measurable",
     )
     db_session.add(change_request)
+    suggestion = Suggestion(
+        finding_id=finding.id,
+        project_id=project.id,
+        category="Ambiguous",
+        status="ready",
+        options=[
+            {
+                "text": "It shall answer within 2 s.",
+                "target": None,
+                "target_requirement_id": str(vague.id),
+                "trade_off": "t",
+                "confidence": 0.6,
+                "tbd_slots": [],
+            }
+        ],
+    )
+    rule = DecisionRule(
+        project_id=project.id,
+        name="Existing rule",
+        owner_kind="requirement_owner",
+        match_label="API",
+    )
+    db_session.add_all((suggestion, rule))
     db_session.commit()
     return World(
         workspace=workspace,
@@ -465,6 +522,8 @@ def world(
         ownership_request=ownership_request,
         issue=issue,
         change_request=change_request,
+        suggestion=suggestion,
+        decision_rule_id=rule.id,
         db=db_session,
     )
 
@@ -521,6 +580,8 @@ def _call(api: TestClient, case: Case, world: World, user: User) -> int:
         ownership_request_id=world.ownership_request.id,
         issue_id=world.issue.id,
         change_request_id=change_request_id,
+        suggestion_id=world.suggestion.id,
+        decision_rule_id=world.decision_rule_id,
     )
     headers = {"Authorization": f"Bearer {security.create_access_token(user.id)[0]}"}
     body = case.body(world)

@@ -1,0 +1,26 @@
+## Conflicting
+The two requirements cannot both hold. Good options: a compromise wording that keeps what each
+side needs, scoped by condition (e.g. "30 minutes generally, 5 minutes on payment screens"); or
+"keep one, change the other", saying in the trade-off why one should give way. Each option
+replaces the text of one requirement (`target`).
+
+## Duplicate
+The requirements say the same thing. Give one merged wording that keeps every detail either of
+them states, and name the requirement to keep as `target`; the trade-off says what the other one
+loses (its ID, its owner's wording).
+
+## Ambiguous
+The requirement can be read more than one way, or uses a word that cannot be tested. Give a
+measurable rewrite: replace each vague word with a number or a testable criterion taken from the
+text or the project context, or `[TBD — confirm]` when neither gives it.
+
+## Incomplete
+The requirement is missing a part: who, when, under what condition, how much, or what happens on
+failure. Fill in the missing parts. Every value you could not take from the text or the context is
+`[TBD — confirm]` — never a guess.
+
+## Dependent
+One requirement cannot be implemented or tested without the other. Options say which link to
+record and the order to implement in, e.g. "Record that REQ-7 depends on REQ-3; implement REQ-3
+first." `target` is null unless the option also rewrites a requirement to make the dependency
+explicit.
