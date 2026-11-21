@@ -218,8 +218,8 @@ def test_two_runs_at_once_share_one_pair(
     scratch_engine: Engine, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Real concurrency (found by the CP2 load test): the first run has inserted the pair but not
-    committed when the second looks; the second waits on it, then reuses the row instead of failing
-    on the unique pair constraint."""
+    committed when the second looks. The second waits, then leaves classification to the first
+    run."""
     _run_migrations(scratch_engine)
     with Session(scratch_engine) as setup:
         workspace = Workspace(name="Race")
@@ -278,4 +278,5 @@ def test_two_runs_at_once_share_one_pair(
         (pair,) = pairs(second)
 
     assert (earlier.created, later.created) == (1, 0)
-    assert earlier.pending == later.pending == [pair.id]
+    assert earlier.pending == [pair.id]
+    assert later.pending == []
