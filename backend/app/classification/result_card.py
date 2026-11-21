@@ -125,11 +125,11 @@ def render(db: Session, run: AnalysisRun, requirement: Requirement, findings: li
         )
     if not findings and not run.error_message:
         tail.append(f"{CLEAN} {CONCERN_HINT}")
-    owners = _owners(db, requirement, findings)
-    if findings and owners:
-        tail.append("Owners: " + " ".join(f"<@{owner}>" for owner in owners))
-
     others = _other_requirements(db, requirement, findings)
+    owners = _owners(requirement, others)
+    if findings and owners:
+        tail.append(_owner_line(owners))
+
     questions = _questions(db, findings)
     # Whole findings only, most severe first, so the owners' mentions at the end always fit.
     budget = MAX_MESSAGE_CHARS - len("\n".join(head + tail)) - 60
@@ -147,9 +147,24 @@ def render(db: Session, run: AnalysisRun, requirement: Requirement, findings: li
     return "\n".join(head + body + tail)
 
 
+def _owner_line(owners: list[uuid.UUID]) -> str:
+    """The owners to notify, cut to a quarter of the card so the card always fits; the owners
+    left out are counted (they still see the card in the thread and on the map)."""
+    limit = MAX_MESSAGE_CHARS // 4
+    line = "Owners:"
+    for shown, owner in enumerate(owners):
+        mention = f" <@{owner}>"
+        if len(line) + len(mention) > limit:
+            return f"{line} and {len(owners) - shown} more"
+        line += mention
+    return line
+
+
 def _findings(db: Session, run: AnalysisRun) -> list[Finding]:
     findings = list(
-        db.scalars(select(Finding).where(Finding.analysis_run_id == run.id, ~Finding.is_stale))
+        db.scalars(
+            select(Finding).where(Finding.analysis_run_id == run.id, Finding.is_stale.is_(False))
+        )
     )
     return sorted(
         findings, key=lambda f: (_SEVERITY_ORDER.get(f.severity, 3), -f.confidence, f.created_at)
@@ -173,7 +188,7 @@ def _other_requirements(
     pairs = {
         p.id: p for p in db.scalars(select(CandidatePair).where(CandidatePair.id.in_(pair_ids)))
     }
-    result: dict[uuid.UUID, Requirement] = {}
+    other_ids: dict[uuid.UUID, uuid.UUID] = {}
     for finding in findings:
         pair = pairs.get(finding.candidate_pair_id) if finding.candidate_pair_id else None
         if pair is None:
@@ -183,10 +198,17 @@ def _other_requirements(
             if pair.requirement_a_id == requirement.id
             else pair.requirement_a_id
         )
-        other = db.get(Requirement, other_id)
-        if other is not None:
-            result[finding.id] = other
-    return result
+        other_ids[finding.id] = other_id
+    rows = {
+        r.id: r
+        for r in db.scalars(
+            select(Requirement).where(
+                Requirement.project_id == requirement.project_id,
+                Requirement.id.in_(list(set(other_ids.values()))),
+            )
+        )
+    }
+    return {fid: rows[rid] for fid, rid in other_ids.items() if rid in rows}
 
 
 def _questions(db: Session, findings: list[Finding]) -> dict[uuid.UUID, str]:
@@ -200,10 +222,10 @@ def _questions(db: Session, findings: list[Finding]) -> dict[uuid.UUID, str]:
     }
 
 
-def _owners(db: Session, requirement: Requirement, findings: list[Finding]) -> list[uuid.UUID]:
+def _owners(requirement: Requirement, others: dict[uuid.UUID, Requirement]) -> list[uuid.UUID]:
     """The posted requirement's owner first, then the owners of the others, each once."""
     owners: list[uuid.UUID] = []
-    candidates = [requirement, *_other_requirements(db, requirement, findings).values()]
+    candidates = [requirement, *others.values()]
     for item in candidates:
         if item.owner_id is not None and item.owner_id not in owners:
             owners.append(item.owner_id)
