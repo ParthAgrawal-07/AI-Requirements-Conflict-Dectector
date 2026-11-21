@@ -1,0 +1,5 @@
+# Auto-detect text files and normalize line endings to LF on commit
+* text=auto
+
+# Ensure shell scripts always keep LF endings across checkouts on Windows
+*.sh text eol=lf
