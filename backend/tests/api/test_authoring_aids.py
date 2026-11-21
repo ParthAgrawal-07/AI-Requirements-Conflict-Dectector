@@ -2,6 +2,7 @@
 
 import json
 from collections.abc import Callable, Iterator
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -10,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.classification.budget import CountingBudget, get_budget_guard
 from app.classification.llm_client import FakeTransport, LLMClient, get_llm_client
+from app.core import rate_limit
 from app.core.permissions import DefaultRole
 from app.core.rate_limit import InMemoryRateLimiter, get_rate_limiter
 from app.embeddings.incremental import embed_requirements
@@ -192,8 +194,14 @@ def test_preflight_waits_for_the_project_context(
 
 
 def test_preflight_is_rate_limited(
-    client: TestClient, project: Project, writer: User, setup: Setup
+    client: TestClient,
+    project: Project,
+    writer: User,
+    setup: Setup,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # All seven requests must hit the same fixed rate-limit window.
+    monkeypatch.setattr(rate_limit, "time", SimpleNamespace(time=lambda: 120.0))
     setup.llm = None
     codes = [
         client.post(url(project, "preflight"), json={"text": DRAFT},

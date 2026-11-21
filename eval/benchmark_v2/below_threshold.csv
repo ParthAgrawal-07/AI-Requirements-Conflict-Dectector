@@ -1,0 +1,19 @@
+id,a_text,b_text,category,expected_rule,note,split
+BT-01,Customer statements are kept for 7 years.,Statements are deleted after 5 years.,Conflicting,numeric_limit,Retention 7 years vs deletion after 5 years.,dev
+BT-02,The session shall expire after 30 minutes of inactivity.,The session shall time out after 5 minutes.,Conflicting,numeric_limit,Same session timeout with two values.,dev
+BT-03,The system shall lock the account after 5 failed login attempts.,The system shall lock the account after 3 failed attempts.,Conflicting,numeric_limit,Lockout threshold 5 vs 3.,dev
+BT-04,The API shall respond within 2 seconds.,API responses may take up to 10 seconds.,Conflicting,numeric_limit,Response time maximum 2 s vs 10 s.,dev
+BT-05,Passwords shall be at least 12 characters long.,Passwords shall be at most 8 characters long.,Conflicting,numeric_limit,Minimum 12 above maximum 8.,heldout
+BT-06,The system shall not store card numbers.,The system shall store card numbers for refunds.,Conflicting,negation,Shall not store vs shall store.,dev
+BT-07,The mobile app shall not cache account balances.,The mobile app shall cache account balances for offline viewing.,Conflicting,negation,Shall not cache vs shall cache.,dev
+BT-08,The platform shall never email passwords.,The platform shall email passwords to new users.,Conflicting,negation,Never email vs email to new users.,heldout
+BT-09,Only administrators shall approve refunds.,Support agents shall approve refunds.,Conflicting,actor,Exclusive actor vs another actor.,dev
+BT-10,Only the compliance officer shall export the audit trail.,Project managers shall export the audit trail.,Conflicting,actor,Exclusive export right given to another role.,heldout
+BT-11,"When a payment fails, the system shall retry the payment.","When a payment fails, the system shall cancel the payment.",Conflicting,condition_overlap,Same trigger with two different responses.,dev
+BT-12,"When the upload exceeds the limit, the system shall reject the upload.","When the upload exceeds the limit, the system shall compress the upload.",Conflicting,condition_overlap,Same trigger with two different responses.,heldout
+BT-13,All data shall remain inside India.,Backups shall be replicated to a European data centre.,Conflicting,none,Data residency vs offshore backups: no shared attribute; AI or people only.,dev
+BT-14,The checkout shall need no account.,Every order shall belong to a registered customer.,Conflicting,none,Guest checkout vs mandatory registration in different words.,dev
+BT-15,Reports shall be generated nightly.,Managers shall see report figures that are at most one hour old.,Conflicting,none,Nightly batch vs one-hour freshness (one written as a word).,heldout
+BT-16,Passwords shall be at least 12 characters long.,Passwords shall be at most 64 characters long.,None,none,A range: compatible limits. A rule firing here is a false positive.,dev
+BT-17,Support agents shall approve refunds.,Administrators shall approve refunds.,None,none,Two actors with no exclusivity. A rule firing here is a false positive.,dev
+BT-18,The system shall log failed logins.,The system shall email the security team.,None,none,Unrelated actions. A rule firing here is a false positive.,heldout
