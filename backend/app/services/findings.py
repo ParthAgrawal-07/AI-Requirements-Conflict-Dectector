@@ -24,6 +24,7 @@ from app.models import (
     FindingStatus,
     Project,
     Requirement,
+    Severity,
     User,
 )
 from app.services.access import AccessContext, Scope, register_scope_resolver
@@ -94,15 +95,18 @@ def list_findings(
     requirement_id: uuid.UUID | None = None,
     low_confidence: bool | None = None,
     sources: list[str] | None = None,
+    severity: Severity | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> tuple[list[FindingView], int]:
     """A page of the project's live findings, most confident first, and the total."""
-    conditions = [Finding.project_id == project.id, Finding.is_stale.is_(False)]
+    conditions = [Finding.project_id == project.id, ~Finding.is_stale]
     if category is not None:
         conditions.append(Finding.category == category)
     if status is not None:
         conditions.append(Finding.status == status)
+    if severity is not None:  # US-13 drill-down
+        conditions.append(Finding.severity == severity)
     if low_confidence is True:
         conditions.append(Finding.confidence < project.confidence_threshold)
     elif low_confidence is False:

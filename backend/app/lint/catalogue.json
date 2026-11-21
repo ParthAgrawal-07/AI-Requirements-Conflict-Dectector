@@ -1,6 +1,6 @@
 {
-  "version": 1,
-  "description": "Requirement lint catalogue v1 (Keval, Sprint 0; US-51 uses it from Sprint 3). Patterns are case-insensitive regular expressions written in the common subset of Python `re` and JavaScript RegExp, so the composer can run them in the browser with no AI call.",
+  "version": 2,
+  "description": "Requirement lint catalogue v2 (Keval: v1 in Sprint 0, v2 for US-51 in Sprint 5). Patterns are case-insensitive regular expressions written in the common subset of Python `re` and JavaScript RegExp, so the composer runs them in the browser with no AI call (NFR-34) and `app.lint.engine` runs the same file on the server.",
   "entries": [
     {
       "id": "vague.speed",
@@ -89,6 +89,22 @@
       "message": "Weak modal: is this mandatory?",
       "hint": "Use \"shall\" for mandatory behaviour; record optional behaviour with the Where… template.",
       "severity": "info"
+    },
+    {
+      "id": "measure.missing",
+      "category": "measure",
+      "pattern": "\\b(within|at least|at most|no more than|no less than|maximum|minimum|response time|availability|throughput|latency|timeout|uptime|capacity)\\b(?![^.;]*\\d)",
+      "message": "A measure without a number.",
+      "hint": "Give the value and unit, e.g. \"within 2 seconds\" or \"99.5% per month\".",
+      "severity": "warning"
+    },
+    {
+      "id": "compound.multiple_shall",
+      "category": "compound",
+      "pattern": "\\b(shall)\\b(?=[\\s\\S]*\\bshall\\b)",
+      "message": "More than one \"shall\": this may be two requirements.",
+      "hint": "Split it so each requirement can be tested, approved and changed on its own.",
+      "severity": "warning"
     }
   ]
 }

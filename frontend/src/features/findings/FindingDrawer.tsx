@@ -7,6 +7,7 @@ import { Button } from "../../components/Button";
 import { Drawer } from "../../components/Drawer";
 import { useToast } from "../../components/Toast";
 import { ReviewActions } from "../review/ReviewActions";
+import { SuggestionPanel } from "./SuggestionPanel";
 import {
   CATEGORY_ICONS,
   highlight,
@@ -167,6 +168,7 @@ export function FindingDrawer({ projectId, findingId, onClose }: FindingDrawerPr
           {data.clarification && (
             <ClarificationPanel projectId={projectId} finding={data} clarification={data.clarification} />
           )}
+          <SuggestionPanel findingId={data.id} />
           <ReviewActions finding={data} projectId={projectId} />
         </>
       )}

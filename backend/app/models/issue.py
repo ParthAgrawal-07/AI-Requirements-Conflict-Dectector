@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import (
     CheckConstraint,
@@ -77,6 +78,9 @@ class Issue(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     closed_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Who decides, as resolved by the project's decision rules (US-57, migration 0010c);
+    # refreshed at the item's next update, never retroactively.
+    decision: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
 
 class IssueRequirement(Base):
