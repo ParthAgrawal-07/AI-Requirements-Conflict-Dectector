@@ -36,7 +36,11 @@ def test_every_prompt_file_has_a_system_and_user_part() -> None:
         for kind in ("pair", "single")
         for version in ("v1", "v2")
         for part in ("system", "user")
-    } | {"narrative_v1_system", "narrative_v1_user"}  # US-34 (Sprint 4)
+    } | {"narrative_v1_system", "narrative_v1_user"} | {  # US-34 (Sprint 4)
+        f"{kind}_v1_{part}"  # US-51, US-45, US-58 (Sprint 5)
+        for kind in ("wording", "suggest", "attributes")
+        for part in ("system", "user")
+    }
 
 
 def test_unknown_prompt_version_raises() -> None:

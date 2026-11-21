@@ -74,7 +74,7 @@ services:
     environment:
       RUN_MIGRATIONS: "0"
     # Listens on every queue (US-03). In production run one worker per queue to scale them apart.
-    command: ["celery", "-A", "app.core.celery_app", "worker", "-Q", "celery,documents,analysis", "--loglevel=INFO"]
+    command: ["celery", "-A", "app.core.celery_app", "worker", "-Q", "celery,documents,analysis,suggestions", "--loglevel=INFO"]
     depends_on:
       db:
         condition: service_healthy

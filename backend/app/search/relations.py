@@ -112,7 +112,7 @@ def finding_edges(db: Session, requirement_ids: Collection[uuid.UUID]) -> list[E
         select(Finding, CandidatePair)
         .join(CandidatePair, CandidatePair.id == Finding.candidate_pair_id)
         .where(
-            Finding.is_stale.is_(False),
+            ~Finding.is_stale,
             Finding.status.in_(LIVE_STATUSES),
             Finding.category.in_(list(_PAIR_KINDS)),
             (CandidatePair.requirement_a_id.in_(ids)) | (CandidatePair.requirement_b_id.in_(ids)),
