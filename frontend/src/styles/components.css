@@ -541,3 +541,137 @@
 .suggestion-actions { display: grid; gap: var(--space-2); margin-top: var(--space-3); }
 .preference-marks { color: var(--approved); font-weight: 600; }
 mark.tbd { background: var(--proposed-soft); color: var(--proposed); font-weight: 600; }
+
+/* Discussion in the requirement drawer (US-53) */
+.discussion .votes p { margin-block: var(--space-1); }
+.discussion .vote-reasons,
+.discussion .link-list,
+.discussion .comment-list { list-style: none; margin: 0; padding: 0; }
+.discussion .link-list li,
+.discussion .comment-list li { padding-block: var(--space-1); border-bottom: 1px solid var(--border, #e5e1d8); }
+.discussion h4 { margin-block: var(--space-2) var(--space-1); font-size: 0.9rem; }
+.vote-tally { margin-block: var(--space-2); }
+
+/* ── Sprint 6 (Pranshu): map history and preview, changes panel, timeline, updated SRS ───── */
+.map-body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--space-4); align-items: start; }
+.map-main { display: grid; gap: var(--space-3); min-width: 0; }
+.preview-layer { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
+.preview-layer fieldset { border: 0; margin: 0; padding: 0; }
+.preview-source { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.time-slider { display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content; gap: var(--space-1) var(--space-3); align-items: center; }
+.time-slider input[type="range"] { width: 100%; accent-color: var(--accent); }
+.time-ticks { grid-column: 2; display: flex; justify-content: space-between; list-style: none; margin: 0; padding: 0; font-family: var(--font-mono); font-size: 11px; color: var(--ink-faint); }
+.time-ticks .tick-baseline { color: var(--ink); font-weight: 600; }
+.time-slider-empty { margin: 0; }
+.changes-panel { border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper-raised); padding: var(--space-3); display: grid; gap: var(--space-2); }
+.changes-panel h2 { margin: 0; }
+.changes-panel .feed-list { max-height: 420px; }
+.changes-filters { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.summary-box { border-top: 1px solid var(--line); padding-top: var(--space-3); display: grid; gap: var(--space-2); }
+.ai-paragraph { border-left: 3px solid var(--line-strong); padding-left: var(--space-2); }
+.timeline { display: grid; gap: var(--space-2); }
+.timeline h3 { margin: 0; font-size: 15px; }
+.timeline-list { list-style: none; margin: 0; padding: 0 0 0 var(--space-3); border-left: 2px solid var(--line); display: grid; gap: var(--space-2); }
+.timeline-list li { position: relative; line-height: 1.45; }
+.timeline-list li::before { content: ""; position: absolute; left: calc(-1 * var(--space-3) - 5px); top: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--line-strong); }
+.timeline-list li.timeline-finding::before { background: var(--conflict); }
+.timeline-list li.timeline-merge::before { background: var(--approved); }
+.srs-page { display: grid; gap: var(--space-4); }
+.readiness-card { display: grid; gap: var(--space-3); }
+.readiness { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
+.srs-review { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: var(--space-4); align-items: start; }
+.srs-sections ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.srs-sections [aria-current="true"] { background: var(--accent-soft); font-weight: 600; }
+.srs-section { display: grid; gap: var(--space-2); }
+.srs-section h3 { margin: 0; font-size: 15px; }
+.srs-body { white-space: pre-wrap; font-family: var(--font-sans); font-size: 14px; line-height: 1.55; margin: 0; max-height: 480px; overflow: auto; background: var(--paper-sunken); border-radius: var(--radius-sm); padding: var(--space-3); }
+.srs-gate { display: grid; gap: var(--space-2); margin-top: var(--space-3); }
+.srs-compare { border: 1px solid var(--line); border-radius: var(--radius); padding: var(--space-3); margin-top: var(--space-3); }
+.excluded-banner { border: 1px solid var(--proposed); background: var(--proposed-soft); border-radius: var(--radius); padding: var(--space-3); display: grid; gap: var(--space-2); margin-bottom: var(--space-3); }
+.excluded-banner p { margin: 0; }
+@media (max-width: 900px) {
+  .map-body, .srs-review { grid-template-columns: 1fr; }
+  .time-slider { grid-template-columns: 1fr; }
+  .time-ticks { grid-column: 1; }
+}
+
+/* ── Sprint 6 (Abhijeet): severity, protected flag, compliance queue, AI feedback ─────────── */
+.severity { display: inline-flex; gap: var(--space-1); align-items: center; font-size: 13px; font-weight: 600; }
+.severity [aria-hidden="true"] { font-size: 10px; letter-spacing: -1px; }
+.severity-high { color: var(--danger); }
+.severity-medium { color: var(--proposed); }
+.severity-low { color: var(--ink-soft); }
+.severity-control p { margin: 0 0 var(--space-1); }
+.protection-control { margin: var(--space-2) 0; }
+.compliance-page section, .ai-feedback section { margin-top: var(--space-5); }
+.surfaced-list, .reason-list { margin: 0; padding-left: var(--space-4); display: grid; gap: var(--space-1); }
+.feedback-category { border: 1px solid var(--line); border-radius: var(--radius); padding: var(--space-3); margin-bottom: var(--space-2); background: var(--paper-raised); }
+.feedback-category summary { cursor: pointer; }
+.feedback-category .table { margin-top: var(--space-3); }
+
+/* Discussion in the requirement drawer (US-53) */
+.discussion .votes p { margin-block: var(--space-1); }
+.discussion .vote-reasons,
+.discussion .link-list,
+.discussion .comment-list { list-style: none; margin: 0; padding: 0; }
+.discussion .link-list li,
+.discussion .comment-list li { padding-block: var(--space-1); border-bottom: 1px solid var(--border, #e5e1d8); }
+.discussion h4 { margin-block: var(--space-2) var(--space-1); font-size: 0.9rem; }
+.vote-tally { margin-block: var(--space-2); }
+
+/* ── Sprint 6 (Pranshu): map history and preview, changes panel, timeline, updated SRS ───── */
+.map-body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--space-4); align-items: start; }
+.map-main { display: grid; gap: var(--space-3); min-width: 0; }
+.preview-layer { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
+.preview-layer fieldset { border: 0; margin: 0; padding: 0; }
+.preview-source { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.time-slider { display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content; gap: var(--space-1) var(--space-3); align-items: center; }
+.time-slider input[type="range"] { width: 100%; accent-color: var(--accent); }
+.time-ticks { grid-column: 2; display: flex; justify-content: space-between; list-style: none; margin: 0; padding: 0; font-family: var(--font-mono); font-size: 11px; color: var(--ink-faint); }
+.time-ticks .tick-baseline { color: var(--ink); font-weight: 600; }
+.time-slider-empty { margin: 0; }
+.changes-panel { border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper-raised); padding: var(--space-3); display: grid; gap: var(--space-2); }
+.changes-panel h2 { margin: 0; }
+.changes-panel .feed-list { max-height: 420px; }
+.changes-filters { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.summary-box { border-top: 1px solid var(--line); padding-top: var(--space-3); display: grid; gap: var(--space-2); }
+.ai-paragraph { border-left: 3px solid var(--line-strong); padding-left: var(--space-2); }
+.timeline { display: grid; gap: var(--space-2); }
+.timeline h3 { margin: 0; font-size: 15px; }
+.timeline-list { list-style: none; margin: 0; padding: 0 0 0 var(--space-3); border-left: 2px solid var(--line); display: grid; gap: var(--space-2); }
+.timeline-list li { position: relative; line-height: 1.45; }
+.timeline-list li::before { content: ""; position: absolute; left: calc(-1 * var(--space-3) - 5px); top: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--line-strong); }
+.timeline-list li.timeline-finding::before { background: var(--conflict); }
+.timeline-list li.timeline-merge::before { background: var(--approved); }
+.srs-page { display: grid; gap: var(--space-4); }
+.readiness-card { display: grid; gap: var(--space-3); }
+.readiness { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
+.srs-review { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: var(--space-4); align-items: start; }
+.srs-sections ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.srs-sections [aria-current="true"] { background: var(--accent-soft); font-weight: 600; }
+.srs-section { display: grid; gap: var(--space-2); }
+.srs-section h3 { margin: 0; font-size: 15px; }
+.srs-body { white-space: pre-wrap; font-family: var(--font-sans); font-size: 14px; line-height: 1.55; margin: 0; max-height: 480px; overflow: auto; background: var(--paper-sunken); border-radius: var(--radius-sm); padding: var(--space-3); }
+.srs-gate { display: grid; gap: var(--space-2); margin-top: var(--space-3); }
+.srs-compare { border: 1px solid var(--line); border-radius: var(--radius); padding: var(--space-3); margin-top: var(--space-3); }
+.excluded-banner { border: 1px solid var(--proposed); background: var(--proposed-soft); border-radius: var(--radius); padding: var(--space-3); display: grid; gap: var(--space-2); margin-bottom: var(--space-3); }
+.excluded-banner p { margin: 0; }
+@media (max-width: 900px) {
+  .map-body, .srs-review { grid-template-columns: 1fr; }
+  .time-slider { grid-template-columns: 1fr; }
+  .time-ticks { grid-column: 1; }
+}
+
+/* ── Sprint 6 (Abhijeet): severity, protected flag, compliance queue, AI feedback ─────────── */
+.severity { display: inline-flex; gap: var(--space-1); align-items: center; font-size: 13px; font-weight: 600; }
+.severity [aria-hidden="true"] { font-size: 10px; letter-spacing: -1px; }
+.severity-high { color: var(--danger); }
+.severity-medium { color: var(--proposed); }
+.severity-low { color: var(--ink-soft); }
+.severity-control p { margin: 0 0 var(--space-1); }
+.protection-control { margin: var(--space-2) 0; }
+.compliance-page section, .ai-feedback section { margin-top: var(--space-5); }
+.surfaced-list, .reason-list { margin: 0; padding-left: var(--space-4); display: grid; gap: var(--space-1); }
+.feedback-category { border: 1px solid var(--line); border-radius: var(--radius); padding: var(--space-3); margin-bottom: var(--space-2); background: var(--paper-raised); }
+.feedback-category summary { cursor: pointer; }
+.feedback-category .table { margin-top: var(--space-3); }
