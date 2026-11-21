@@ -364,6 +364,14 @@ def after_run(db: Session, run_id: uuid.UUID, transition: str = CLOSED) -> None:
     if run is None:
         return
     if transition == CLOSED and run.status is AnalysisRunStatus.DONE:
+        try:  # Heet (US-58): rule checks need no model; before the issues, so they get one too
+            from app.classification.llm_client import get_llm_client
+            from app.search import rule_checker
+
+            rule_checker.on_run(db, run, llm=get_llm_client())
+        except Exception:
+            db.rollback()
+            logger.exception("Rule checks for run %s failed", run_id)
         try:
             issues.ConflictIssueOpener(db).on_run(run)
         except Exception:

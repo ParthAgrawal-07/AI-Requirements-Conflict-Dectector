@@ -1,11 +1,6 @@
-Finding Category: $category
-Explanation: $explanation
+${context_pack}${examples}<finding category="$category">
+$rationale
+</finding>
 
-Requirements involved:
 $requirements
-
-$context
-
-$examples
-
-$instruction
+${instruction}Propose the options.

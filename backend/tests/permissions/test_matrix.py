@@ -334,6 +334,9 @@ CASES = [
     Case("POST", "/api/v1/change-requests/{change_request_id}/withdraw", own_change_request=True),
     # Sprint 4 — version history (Affan, US-12)
     Case("GET", "/api/v1/requirements/{requirement_id}/versions", ok=200),
+    # Sprint 5 — threshold preview and re-analysis (Heet, US-06)
+    Case("GET", "/api/v1/projects/{project_id}/thresholds/preview"),
+    Case("POST", "/api/v1/projects/{project_id}/reanalyse"),
     # Sprint 5 — AI suggestions (Madhav, US-45)
     Case("GET", "/api/v1/findings/{finding_id}/suggestions"),
     Case(
