@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { NavLink, Outlet, useNavigate, useParams } from "react-router-dom";
 import { ChannelList } from "../features/channels/ChannelList";
+import { Bell } from "../features/notifications/Bell";
 import { ProjectSwitcher } from "../features/projects/ProjectSwitcher";
 import { rememberLastProject } from "../features/projects/api";
 import { Button } from "../components/Button";
@@ -49,6 +50,7 @@ export function AppShell() {
         </NavLink>
         <ProjectSwitcher workspaceId={workspaceId} projectId={projectId} />
         <div className="topbar-spacer" />
+        <Bell />
         <span className="muted" style={{ fontSize: 14 }}>
           {user?.full_name}
         </span>
