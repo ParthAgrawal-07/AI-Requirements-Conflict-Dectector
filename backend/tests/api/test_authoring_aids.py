@@ -194,7 +194,11 @@ def test_preflight_waits_for_the_project_context(
 
 
 def test_preflight_is_rate_limited(
-    client: TestClient, project: Project, writer: User, setup: Setup, monkeypatch: pytest.MonkeyPatch
+    client: TestClient,
+    project: Project,
+    writer: User,
+    setup: Setup,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # All seven requests must hit the same fixed rate-limit window.
     monkeypatch.setattr(rate_limit, "time", SimpleNamespace(time=lambda: 120.0))
