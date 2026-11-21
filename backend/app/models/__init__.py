@@ -8,9 +8,9 @@ from app.models.analysis import AnalysisRun, CandidatePair, Clarification, Findi
 from app.models.attributes import RequirementAttribute
 from app.models.audit import AuditLog
 from app.models.base import Base
+from app.models.baseline import Baseline, BaselineItem
 from app.models.change_request import ChangeRequest, ChangeRequestIssue, ChangeRequestRevision
 from app.models.change_review import Review, ReviewComment, ReviewRequest
-from app.models.baseline import Baseline, BaselineItem
 from app.models.channel import Channel, ChannelMember, ChannelRead, Message
 from app.models.consequence import ConsequenceReport
 from app.models.context import DocumentSection, ProjectContext
