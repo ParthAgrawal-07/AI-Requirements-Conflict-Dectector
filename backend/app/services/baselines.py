@@ -117,6 +117,12 @@ def snapshot(
         )
         for r in requirements
     )
+    try:
+        from app.graph import revisions
+
+        revisions.capture_baseline(db, project, baseline)  # Dhavni (US-50): the time slider
+    except (ImportError, AttributeError):
+        pass
     db.add(
         AuditLog(
             workspace_id=project.workspace_id,

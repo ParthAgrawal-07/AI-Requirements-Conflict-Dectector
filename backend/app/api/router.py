@@ -14,6 +14,7 @@ from typing import Any
 from fastapi import APIRouter, Depends
 
 from app.api import (
+    ai_feedback,
     analysis_runs,
     analytics,
     auth,
@@ -27,6 +28,7 @@ from app.api import (
     decision_rules,
     documents,
     drafts,
+    exports,
     findings,
     intake,
     issues,
@@ -38,6 +40,7 @@ from app.api import (
     requirements,
     requirements_compose,
     roles,
+    srs,
     suggestions,
     workspaces,
 )
@@ -86,6 +89,9 @@ for _router in (
     lint_api.router,
     baselines.router,
     analytics.router,
+    ai_feedback.router,
+    srs.router,
+    exports.router,
 ):
     api_router.include_router(_router, dependencies=_authenticated, responses=_unauthorized)
 

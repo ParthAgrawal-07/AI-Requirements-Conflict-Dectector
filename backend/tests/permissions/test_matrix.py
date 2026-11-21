@@ -22,6 +22,8 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from app.classification.budget import UnlimitedBudget, get_budget_guard
+from app.classification.llm_client import get_llm_client
 from app.core import security
 from app.core.permissions import (
     DEFAULT_ROLE_PERMISSIONS,
@@ -43,6 +45,7 @@ from app.models import (
     DocumentFormat,
     Finding,
     FindingCategory,
+    GraphState,
     Issue,
     IssueRequirement,
     JoinRequest,
@@ -50,8 +53,11 @@ from app.models import (
     OwnershipRequest,
     Project,
     Requirement,
+    RequirementLink,
     Role,
     RolePermission,
+    SrsDocument,
+    SrsSection,
     Suggestion,
     User,
     Workspace,
@@ -97,14 +103,18 @@ class World:
     custom_role: Role  # an unused custom role ("Client reviewer")
     message: Message  # a chat message by the Owner in `channel`
     finding: Finding  # an Ambiguous finding about a requirement of `document`
+    ownership_request: OwnershipRequest  # `target` asks to own that requirement
     run: AnalysisRun  # a finished analysis of `document`
     clarification: Clarification  # the question about `finding`
-    ownership_request: OwnershipRequest  # `target` asks to own that requirement
-    issue: Issue
+    issue: Issue  # ISS-1 by the Owner about the finding's requirement
     change_request: ChangeRequest  # RCR-1 by the Owner on the finding's requirement
     suggestion: Suggestion  # ready AI options for `finding`
-    decision_rule_id: uuid.UUID
-    baselines: tuple[Baseline, Baseline]
+    decision_rule: DecisionRule  # a non-default rule of the project
+    baselines: tuple[Baseline, Baseline]  # two empty snapshots to compare
+    graph_snapshot: GraphState  # the map frozen with the first baseline (US-50)
+    other_requirement: Requirement  # a second requirement of `document` (links)
+    link: RequirementLink  # the finding's requirement depends on `other_requirement`
+    srs: tuple[SrsDocument, SrsDocument]  # a draft (with section 1.1_purpose) and another
     db: Session
 
 
@@ -211,11 +221,9 @@ CASES = [
     # Sprint 2 — findings (US-07)
     Case("GET", "/api/v1/projects/{project_id}/findings"),
     Case("GET", "/api/v1/findings/{finding_id}"),
-    # Sprint 3 — a run's results, behind the result card (Keval, US-31)
-    Case("GET", "/api/v1/analysis-runs/{analysis_run_id}"),
-    # Sprint 3 — lifecycle and sign-off (Parth, US-37). The world's requirement is Proposed and not
-    # protected: holders of baseline.manage may start its review; the sign-off is refused with 409
-    # (not protected) — past the permission check.
+    # Sprint 3 — lifecycle, sign-off and review (Parth, US-37, US-10). The world's requirement is
+    # Proposed and not protected: holders of baseline.manage may start its review; the sign-off is
+    # refused with 409 (not protected) — past the permission check; the review confirms the finding.
     Case("GET", "/api/v1/requirements/{requirement_id}"),
     Case(
         "PATCH",
@@ -224,6 +232,8 @@ CASES = [
         needs="baseline.manage",
     ),
     Case("POST", "/api/v1/requirements/{requirement_id}/signoff", lambda _: {"version": 1}),
+    Case("POST", "/api/v1/findings/{finding_id}/review", lambda _: {"action": "confirm"}),
+    Case("GET", "/api/v1/findings/{finding_id}/reviews"),
     # Sprint 3 — clarification questions (Madhav, US-09). The world's finding already has one,
     # so requesting another is a 409 — past the permission check.
     Case("GET", "/api/v1/findings/{finding_id}/clarification"),
@@ -232,14 +242,24 @@ CASES = [
         "POST",
         "/api/v1/clarifications/{clarification_id}/answer",
         lambda _: {"resolution": "Under 2 seconds at p95"},
-        needs="req.comment",
     ),
-    # Sprint 3 — finding review (Affan, US-10): the world's finding is about an unprotected
-    # requirement, so a protected-only finding.review does not count (see the test below).
-    Case("POST", "/api/v1/findings/{finding_id}/review", lambda _: {"action": "confirm"}),
-    Case("GET", "/api/v1/findings/{finding_id}/reviews"),
-    # Sprint 3 — ownership (Bansil, US-36). Deciding is for the owner or whoever may reassign; the
-    # world's requirement has no owner, so it needs baseline.manage.
+    # Sprint 3 — a run's results, behind the result card (Keval, US-31)
+    Case("GET", "/api/v1/analysis-runs/{analysis_run_id}"),
+    # Sprint 3 — the composer and ownership (Bansil, US-30, US-36). Deciding is for the owner or
+    # whoever may reassign; the world's requirement has no owner, so it needs baseline.manage.
+    Case(
+        "POST",
+        "/api/v1/projects/{project_id}/requirements",
+        lambda w: {
+            "fields": {
+                "template": "free_text",
+                "slots": {"statement": "The system shall keep audit logs for seven years."},
+                "type": "functional",
+                "priority": "must",
+                "channel_id": str(w.channel.id),
+            }
+        },
+    ),
     Case("POST", "/api/v1/requirements/{requirement_id}/ownership-requests", lambda _: {}),
     Case("GET", "/api/v1/requirements/{requirement_id}/ownership-requests"),
     Case(
@@ -258,43 +278,26 @@ CASES = [
     ),
     # Sprint 3 — similar-requirement hints (Heet, FR-83)
     Case("POST", "/api/v1/projects/{project_id}/similar", lambda _: {"text": "audit logs"}),
-    # Sprint 4 — issues (Dhavni, US-52).
+    # Sprint 4 — issues (Dhavni, US-52). Labels are for issue managers; the world's issue is
+    # the Owner's, so nobody else may edit its title either.
     Case("GET", "/api/v1/projects/{project_id}/issues"),
     Case(
         "POST",
         "/api/v1/projects/{project_id}/issues",
-        lambda w: {
-            "title": "Unclear speed",
-            "requirement_ids": [str(w.finding.requirement_id)],
-        },
+        lambda w: {"title": "Unclear speed", "requirement_ids": [str(w.finding.requirement_id)]},
     ),
     Case("GET", "/api/v1/issues/{issue_id}"),
     Case("PATCH", "/api/v1/issues/{issue_id}", lambda _: {"labels": ["ux"]}, needs="issue.manage"),
     Case("GET", "/api/v1/issues/{issue_id}/comments"),
     Case("POST", "/api/v1/issues/{issue_id}/comments", lambda _: {"body": "Agreed."}),
-    # Sprint 3 — requirement composer (Pranshu, US-30)
-    Case(
-        "POST",
-        "/api/v1/projects/{project_id}/requirements",
-        lambda _: {
-            "fields": {
-                "template": "free_text",
-                "slots": {"statement": "The system shall keep audit logs for seven years."},
-                "type": "functional",
-                "priority": "must",
-            }
-        },
-    ),
-    # Sprint 4 — change requests (Bansil, US-33)
+    # Sprint 4 — change requests and raised concerns (Bansil, US-33, US-56)
     Case(
         "POST",
         "/api/v1/requirements/{requirement_id}/change-requests",
         lambda _: {"proposed_body": "It shall answer within 2 s.", "reason": "Make it measurable"},
-        ok=201,
     ),
-    Case("GET", "/api/v1/projects/{project_id}/change-requests", ok=200),
-    Case("GET", "/api/v1/change-requests/{change_request_id}", ok=200),
-    # Sprint 4 — raise a concern (Abhyudit, US-56)
+    Case("GET", "/api/v1/projects/{project_id}/change-requests"),
+    Case("GET", "/api/v1/change-requests/{change_request_id}"),
     Case(
         "POST",
         "/api/v1/projects/{project_id}/concerns",
@@ -308,7 +311,7 @@ CASES = [
     Case("GET", "/api/v1/requirements/{requirement_id}/impact"),
     Case("GET", "/api/v1/change-requests/{change_request_id}/checks"),
     Case("POST", "/api/v1/change-requests/{change_request_id}/checks/rerun"),
-    # Sprint 4 — review and merge (Parth, US-35). The world's request is not
+    # Sprint 4 — review, merge and versions (Parth, US-35, US-12). The world's request is not
     # approved, so a merger gets 409 (unmet conditions) — through the permission, refused later.
     Case(
         "PATCH",
@@ -336,12 +339,18 @@ CASES = [
         lambda _: {"reason": "Not needed after all"},
     ),
     Case("POST", "/api/v1/change-requests/{change_request_id}/withdraw", own_change_request=True),
-    # Sprint 4 — version history (Affan, US-12)
-    Case("GET", "/api/v1/requirements/{requirement_id}/versions", ok=200),
-    # Sprint 5 — threshold preview and re-analysis (Heet, US-06)
+    Case("GET", "/api/v1/requirements/{requirement_id}/versions"),
+    Case("POST", "/api/v1/projects/{project_id}/lint", lambda _: {"text": "It shall be fast."}),
+    Case(
+        "POST", "/api/v1/projects/{project_id}/preflight", lambda _: {"text": "It shall be fast."}
+    ),
+    Case(
+        "POST",
+        "/api/v1/projects/{project_id}/improve-wording",
+        lambda _: {"text": "It shall be fast."},
+    ),
     Case("GET", "/api/v1/projects/{project_id}/thresholds/preview"),
     Case("POST", "/api/v1/projects/{project_id}/reanalyse"),
-    # Sprint 5 — AI suggestions (Madhav, US-45)
     Case("GET", "/api/v1/findings/{finding_id}/suggestions"),
     Case(
         "POST",
@@ -355,52 +364,95 @@ CASES = [
         lambda _: {"option_index": 0, "rating": 4},
     ),
     Case("GET", "/api/v1/projects/{project_id}/suggestions/stats"),
-    # Sprint 5 — decision rules and resolved decisions (US-57)
-    Case("GET", "/api/v1/projects/{project_id}/decision-rules", ok=200),
+    Case("GET", "/api/v1/projects/{project_id}/decision-rules"),
     Case(
         "POST",
         "/api/v1/projects/{project_id}/decision-rules",
-        lambda _: {"name": "New rule", "owner_kind": "requirement_owner", "match_label": "API"},
-        ok=201,
+        lambda _: {"name": "M", "match_label": "x", "owner_kind": "requirement_owner"},
     ),
-    Case("PATCH", "/api/v1/decision-rules/{decision_rule_id}", lambda _: {"priority": 20}, ok=200),
-    Case("DELETE", "/api/v1/decision-rules/{decision_rule_id}", ok=204),
-    Case("GET", "/api/v1/findings/{finding_id}/decision", ok=200),
-    Case("GET", "/api/v1/issues/{issue_id}/decision", ok=200),
-    Case("GET", "/api/v1/projects/{project_id}/analytics", ok=200),
-    Case("GET", "/api/v1/workspaces/{workspace_id}/analytics", ok=200),
-    Case("GET", "/api/v1/change-requests/{change_request_id}/decision", ok=200),
-    # Sprint 5 — baselines (Parth, US-40)
-    Case(
-        "POST",
-        "/api/v1/projects/{project_id}/baselines",
-        lambda _: {"label": "Snap"},
-        needs="baseline.manage",
-    ),
+    Case("PATCH", "/api/v1/decision-rules/{decision_rule_id}", lambda _: {"priority": 7}),
+    Case("DELETE", "/api/v1/decision-rules/{decision_rule_id}"),
+    Case("GET", "/api/v1/findings/{finding_id}/decision"),
+    Case("GET", "/api/v1/issues/{issue_id}/decision"),
+    Case("GET", "/api/v1/change-requests/{change_request_id}/decision"),
+    Case("POST", "/api/v1/projects/{project_id}/baselines", lambda _: {"label": "v-matrix"}),
     Case("GET", "/api/v1/projects/{project_id}/baselines"),
     Case("GET", "/api/v1/baselines/{baseline_id}"),
     Case("GET", "/api/v1/baselines/{baseline_id}/compare/{other_baseline_id}"),
-    # Sprint 5 — authoring aids (Keval, US-51). POST lint needs req.propose; pre-flight and
-    # wording need an active project — the world's project has not confirmed its context yet, so
-    # they are refused with 412 (ContextGate) — past the permission check.
+    Case("GET", "/api/v1/projects/{project_id}/analytics"),
+    Case("GET", "/api/v1/workspaces/{workspace_id}/analytics"),
+    # Sprint 6 — change log, time slider, preview, timeline (Dhavni)
+    Case("GET", "/api/v1/projects/{project_id}/changes"),
+    Case("GET", "/api/v1/projects/{project_id}/changes/summary"),
+    Case("PUT", "/api/v1/projects/{project_id}/changes/seen"),
+    Case("GET", "/api/v1/projects/{project_id}/graph/revisions"),
+    Case("GET", "/api/v1/projects/{project_id}/graph/revisions/{graph_snapshot_id}"),
+    Case("GET", "/api/v1/change-requests/{change_request_id}/graph-preview"),
+    Case("GET", "/api/v1/requirements/{requirement_id}/timeline"),
+    # Sprint 6 — discussion, votes, watch and links (Madhav)
+    Case("GET", "/api/v1/requirements/{requirement_id}/social"),
+    Case("GET", "/api/v1/requirements/{requirement_id}/comments"),
+    Case("POST", "/api/v1/requirements/{requirement_id}/comments", lambda _: {"body": "Agreed."}),
+    Case("GET", "/api/v1/requirements/{requirement_id}/votes"),
+    Case("PUT", "/api/v1/requirements/{requirement_id}/vote", lambda _: {"stance": "support"}),
+    Case("DELETE", "/api/v1/requirements/{requirement_id}/vote"),
+    Case("GET", "/api/v1/change-requests/{change_request_id}/votes"),
+    Case("PUT", "/api/v1/change-requests/{change_request_id}/vote", lambda _: {"stance": "oppose"}),
+    Case("DELETE", "/api/v1/change-requests/{change_request_id}/vote"),
+    Case("GET", "/api/v1/requirements/{requirement_id}/watch"),
+    Case("PUT", "/api/v1/requirements/{requirement_id}/watch"),
+    Case("DELETE", "/api/v1/requirements/{requirement_id}/watch"),
+    Case("GET", "/api/v1/issues/{issue_id}/watch"),
+    Case("PUT", "/api/v1/issues/{issue_id}/watch"),
+    Case("DELETE", "/api/v1/issues/{issue_id}/watch"),
+    Case("GET", "/api/v1/change-requests/{change_request_id}/watch"),
+    Case("PUT", "/api/v1/change-requests/{change_request_id}/watch"),
+    Case("DELETE", "/api/v1/change-requests/{change_request_id}/watch"),
+    Case("GET", "/api/v1/requirements/{requirement_id}/links"),
     Case(
         "POST",
-        "/api/v1/projects/{project_id}/lint",
-        lambda _: {"text": "A shall B."},
-        needs="req.propose",
+        "/api/v1/requirements/{requirement_id}/links",
+        lambda w: {"target_id": str(w.other_requirement.id), "kind": "related_to"},
+    ),
+    Case("DELETE", "/api/v1/requirements/{requirement_id}/links/{link_id}"),
+    # Sprint 6 — severity, AI feedback, change summary paragraph (Keval)
+    Case(
+        "PATCH",
+        "/api/v1/findings/{finding_id}/severity",
+        lambda _: {"severity": "high", "reason": "Patient safety"},
+    ),
+    Case("GET", "/api/v1/projects/{project_id}/ai-feedback"),
+    Case("PUT", "/api/v1/projects/{project_id}/ai-feedback/threshold", lambda _: {"threshold": 3}),
+    Case("POST", "/api/v1/projects/{project_id}/changes/summary", lambda _: {"narrative": False}),
+    # Sprint 6 — compliance protection (Parth)
+    Case(
+        "PUT",
+        "/api/v1/requirements/{requirement_id}/protection",
+        lambda _: {"protected": True, "reason": "GDPR"},
     ),
     Case(
         "POST",
-        "/api/v1/projects/{project_id}/preflight",
-        lambda _: {"text": "A shall B."},
-        needs="req.propose",
+        "/api/v1/projects/{project_id}/protection",
+        lambda w: {"requirement_ids": [str(w.finding.requirement_id)]},
     ),
-    Case(
-        "POST",
-        "/api/v1/projects/{project_id}/improve-wording",
-        lambda _: {"text": "A shall B."},
-        needs="req.propose",
-    ),
+    Case("GET", "/api/v1/projects/{project_id}/compliance/queue", needs="req.protect"),
+    Case("GET", "/api/v1/projects/{project_id}/compliance/audit"),
+    # Sprint 6 — updated SRS, exports, open items (Bansil)
+    Case("GET", "/api/v1/projects/{project_id}/srs/readiness"),
+    Case("POST", "/api/v1/projects/{project_id}/srs", lambda _: {}),
+    Case("GET", "/api/v1/projects/{project_id}/srs"),
+    Case("GET", "/api/v1/srs/{srs_id}"),
+    Case("PATCH", "/api/v1/srs/{srs_id}/sections/{key}", lambda _: {"action": "accept"}),
+    Case("POST", "/api/v1/srs/{srs_id}/fidelity"),
+    Case("POST", "/api/v1/srs/{srs_id}/publish"),
+    Case("POST", "/api/v1/srs/{srs_id}/discard"),
+    Case("GET", "/api/v1/srs/{srs_id}/compare/{other_srs_id}"),
+    Case("GET", "/api/v1/srs/{srs_id}/export"),
+    Case("GET", "/api/v1/srs/{srs_id}/open-items"),
+    Case("GET", "/api/v1/baselines/{baseline_id}/export"),
+    Case("GET", "/api/v1/projects/{project_id}/export"),
+    Case("GET", "/api/v1/baselines/{baseline_id}/open-items"),
+    Case("GET", "/api/v1/projects/{project_id}/open-items"),
 ]
 
 
@@ -477,17 +529,8 @@ def world(
         original_ai_output={},
     )
     db_session.add(finding)
-    run = AnalysisRun(
-        project_id=project.id,
-        scope=AnalysisScope.DOCUMENT,
-        subject_id=document.id,
-        status=AnalysisRunStatus.DONE,
-    )
-    db_session.add(run)
     db_session.commit()
     ownership_request = OwnershipRequest(requirement_id=vague.id, requester_id=target.id)
-    db_session.add(ownership_request)
-    db_session.commit()
     run = AnalysisRun(
         project_id=project.id,
         scope=AnalysisScope.DOCUMENT,
@@ -495,17 +538,12 @@ def world(
         status=AnalysisRunStatus.DONE,
     )
     clarification = Clarification(finding_id=finding.id, question="What does 'fast' mean?")
-    issue = Issue(
-        project_id=project.id,
-        number=1,
-        title="Matrix issue",
-        author_id=owner.id,
-    )
+    db_session.add_all([ownership_request, run, clarification])
+    db_session.commit()
+    issue = Issue(project_id=project.id, number=1, title="Matrix issue", author_id=owner.id)
     db_session.add(issue)
     db_session.flush()
     db_session.add(IssueRequirement(issue_id=issue.id, requirement_id=vague.id))
-    db_session.add_all([run, clarification])
-    db_session.commit()
     change_request = ChangeRequest(
         project_id=project.id,
         requirement_id=vague.id,
@@ -521,28 +559,41 @@ def world(
         project_id=project.id,
         category="Ambiguous",
         status="ready",
-        options=[
-            {
-                "text": "It shall answer within 2 s.",
-                "target": None,
-                "target_requirement_id": str(vague.id),
-                "trade_off": "t",
-                "confidence": 0.6,
-                "tbd_slots": [],
-            }
-        ],
-    )
-    rule = DecisionRule(
-        project_id=project.id,
-        name="Existing rule",
-        owner_kind="requirement_owner",
-        match_label="API",
-    )
+        options=[{"text": "It shall answer within 2 s.", "target": None,
+                  "target_requirement_id": str(vague.id), "trade_off": "t",
+                  "confidence": 0.6, "tbd_slots": []}],
+    )  # fmt: skip
+    db_session.add(suggestion)
+    decision_rule = DecisionRule(project_id=project.id, name="Matrix", match_label="m",
+                                 owner_kind="requirement_owner")  # fmt: skip
     baselines = tuple(
         Baseline(project_id=project.id, label=label, baseline_revision=0, requirement_count=0)
         for label in ("a", "b")
     )
-    db_session.add_all((suggestion, rule, *baselines))
+    db_session.add_all([decision_rule, *baselines])
+    db_session.commit()
+    graph_snapshot = GraphState(project_id=project.id, graph_revision=0, baseline_revision=0,
+                                baseline_id=baselines[0].id, nodes=[], edges=[])  # fmt: skip
+    db_session.add(graph_snapshot)
+    db_session.commit()
+    other = Requirement(document_id=document.id, project_id=project.id, body="It shall log.")
+    db_session.add(other)
+    db_session.flush()
+    link = RequirementLink(project_id=project.id, source_id=vague.id, target_id=other.id,
+                           kind="depends_on")  # fmt: skip
+    db_session.add(link)
+    db_session.commit()
+    srs = tuple(
+        SrsDocument(project_id=project.id, baseline_revision=0, status="draft",
+                    requirements=[{"requirement_id": str(vague.id), "label": None,
+                                   "version": 1, "state": "Approved",
+                                   "body": "It shall be fast."}])
+        for _ in range(2)
+    )  # fmt: skip
+    db_session.add_all(srs)
+    db_session.flush()
+    db_session.add(SrsSection(srs_id=srs[0].id, key="1.1_purpose", order=1, title="1.1 Purpose",
+                              kind="narrative", body="Why.", source="llm", status="pending"))  # fmt: skip
     db_session.commit()
     return World(
         workspace=workspace,
@@ -556,14 +607,18 @@ def world(
         custom_role=custom_role,
         message=message,
         finding=finding,
+        ownership_request=ownership_request,
         run=run,
         clarification=clarification,
-        ownership_request=ownership_request,
         issue=issue,
         change_request=change_request,
         suggestion=suggestion,
-        decision_rule_id=rule.id,
+        decision_rule=decision_rule,
         baselines=(baselines[0], baselines[1]),
+        graph_snapshot=graph_snapshot,
+        other_requirement=other,
+        link=link,
+        srs=(srs[0], srs[1]),
         db=db_session,
     )
 
@@ -572,14 +627,12 @@ def world(
 def api(
     client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> Iterator[TestClient]:
-    from app.classification.budget import UnlimitedBudget, get_budget_guard
-    from app.classification.llm_client import get_llm_client
     from app.main import app
 
     monkeypatch.setattr(document_service, "dispatch_processing", lambda _id: "task-1")
     app.dependency_overrides[get_storage] = lambda: LocalFileStorage(tmp_path / "uploads")
     app.dependency_overrides[get_embedder] = HashingEmbedder
-    app.dependency_overrides[get_llm_client] = lambda: None
+    app.dependency_overrides[get_llm_client] = lambda: None  # no model: AI routes answer 503
     app.dependency_overrides[get_budget_guard] = UnlimitedBudget
     yield client
     for dependency in (get_storage, get_embedder, get_llm_client, get_budget_guard):
@@ -618,16 +671,21 @@ def _call(api: TestClient, case: Case, world: World, user: User) -> int:
         channel_id=world.channel.id,
         user_id=world.target.id,
         role_id=world.custom_role.id,
-        analysis_run_id=world.run.id,
         requirement_id=world.finding.requirement_id,
-        clarification_id=world.clarification.id,
         ownership_request_id=world.ownership_request.id,
+        analysis_run_id=world.run.id,
+        clarification_id=world.clarification.id,
         issue_id=world.issue.id,
         change_request_id=change_request_id,
         suggestion_id=world.suggestion.id,
-        decision_rule_id=world.decision_rule_id,
+        decision_rule_id=world.decision_rule.id,
         baseline_id=world.baselines[0].id,
         other_baseline_id=world.baselines[1].id,
+        graph_snapshot_id=world.graph_snapshot.id,
+        link_id=world.link.id,
+        srs_id=world.srs[0].id,
+        other_srs_id=world.srs[1].id,
+        key="1.1_purpose",
     )
     headers = {"Authorization": f"Bearer {security.create_access_token(user.id)[0]}"}
     body = case.body(world)

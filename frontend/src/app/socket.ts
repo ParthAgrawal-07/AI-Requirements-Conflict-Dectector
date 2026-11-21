@@ -257,6 +257,9 @@ export function applyEvent(queryClient: QueryClient, event: RealtimeEvent): void
     }
   } else if (event.type.startsWith("baseline.") && event.project_id) {
     void queryClient.invalidateQueries({ queryKey: ["baselines", event.project_id] });
+  } else if (event.type.startsWith("srs.") && event.project_id) {
+    void queryClient.invalidateQueries({ queryKey: ["srs-list", event.project_id] });
+    if (event.entity_id) void queryClient.invalidateQueries({ queryKey: ["srs", event.entity_id] });
   } else if (event.type === "membership.revoked") {
     void queryClient.invalidateQueries({ queryKey: ["members", event.workspace_id] });
   }
