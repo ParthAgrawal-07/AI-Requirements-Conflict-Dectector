@@ -37,7 +37,7 @@ from app.models.enums import (
     RequirementState,
     Severity,
 )
-from app.models.graph import NodePosition
+from app.models.graph import ChangeLogVisit, GraphEvent, GraphState, NodePosition
 from app.models.issue import Comment, Issue, IssueAssignee, IssueRequirement
 from app.models.join_code import JoinCode, JoinRequest
 from app.models.membership import Membership, ProjectMember
@@ -52,6 +52,9 @@ from app.models.user import User
 from app.models.workspace import Workspace
 
 __all__ = [
+    "ChangeLogVisit",
+    "GraphEvent",
+    "GraphState",
     "EMBEDDING_DIM",
     "AnalysisRun",
     "AnalysisRunStatus",

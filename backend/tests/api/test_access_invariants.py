@@ -33,6 +33,7 @@ AUTHENTICATED_ONLY = {
     ("GET", "/api/v1/notifications"),
     ("GET", "/api/v1/notifications/counts"),
     ("POST", "/api/v1/notifications/read"),
+    ("PUT", "/api/v1/projects/{project_id}/changes/seen"),
     ("GET", "/api/v1/auth/me"),
     ("GET", "/api/v1/me/permissions"),
     ("GET", "/api/v1/workspaces"),
