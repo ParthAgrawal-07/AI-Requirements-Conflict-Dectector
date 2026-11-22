@@ -112,7 +112,7 @@ class Settings(BaseSettings):
     # US-51: limit authoring requests per member in addition to the project budget.
     preflight_requests_per_minute: int = Field(default=6, ge=1, le=1000)
     wording_requests_per_minute: int = Field(default=6, ge=1, le=1000)
-    llm_provider: Literal["gemini", "groq"] = "gemini"
+    llm_provider: Literal["gemini", "groq", "anthropic"] = "gemini"
     llm_fallback_provider: Literal["groq", "none"] | None = "groq"
     gemini_api_key: SecretStr | None = None
     gemini_model: str = "gemini-2.5-flash"

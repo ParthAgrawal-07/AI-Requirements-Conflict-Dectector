@@ -83,6 +83,11 @@ class Requirement(BaseModel):
     review_reasons: tuple[str, ...] = ()
     extracted_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
+    @property
+    def word_count(self) -> int:
+        """Approximate word count, useful for quality metrics and long-requirement flags."""
+        return len(self.raw_text.split())
+
 
 class ExcludedText(BaseModel):
     """Text the segmenter decided is not a requirement (kept so it can be audited)."""
