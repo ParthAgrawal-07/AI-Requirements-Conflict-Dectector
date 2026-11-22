@@ -541,3 +541,12 @@
 .suggestion-actions { display: grid; gap: var(--space-2); margin-top: var(--space-3); }
 .preference-marks { color: var(--approved); font-weight: 600; }
 mark.tbd { background: var(--proposed-soft); color: var(--proposed); font-weight: 600; }
+
+/* Sprint 6 (US-18): Compliance UI */
+.protection-control {
+  margin: var(--space-2) 0;
+}
+
+.compliance-page section {
+  margin-top: var(--space-5);
+}

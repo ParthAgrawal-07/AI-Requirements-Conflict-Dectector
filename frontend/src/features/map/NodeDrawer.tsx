@@ -10,6 +10,8 @@ import { useToast } from "../../components/Toast";
 import { CATEGORY_ICONS, useFindings } from "../findings/api";
 import { OwnerChip } from "../requirements/OwnerChip";
 import { OwnershipRequestDialog } from "../requirements/OwnershipRequestDialog";
+import { ProtectedBadge } from "../compliance/ProtectedBadge";
+import { ProtectionControl } from "../compliance/ProtectionControl";
 import { ReviewActions } from "../review/ReviewActions";
 import { useMoveRequirement, useRequirement, type RequirementDetail } from "./api";
 
@@ -81,12 +83,14 @@ function Detail({ detail, projectId, names }: { detail: RequirementDetail; proje
           {detail.state.replace("_", " ")} · v{detail.current_version}
         </Badge>{" "}
         {detail.priority && <span className="muted small">{detail.priority.toUpperCase()}</span>}{" "}
-        {detail.is_protected && (
-          <Badge tone="neutral" icon="⚑">
-            Protected
-          </Badge>
-        )}
+        {detail.is_protected && <ProtectedBadge />}
       </p>
+      <ProtectionControl
+          projectId={projectId}
+          requirementId={detail.requirement_id}
+          label={detail.source_req_id}
+          isProtected={detail.is_protected}
+      />
       <blockquote className="requirement-quote">{detail.body}</blockquote>
       <p>
         <OwnerChip ownerName={detail.owner_name} group={detail.stakeholder_group} />{" "}

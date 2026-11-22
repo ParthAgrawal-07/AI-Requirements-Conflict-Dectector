@@ -136,6 +136,42 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   return (text ? JSON.parse(text) : undefined) as T;
 }
 
+export async function apiDownload(
+  path: string,
+  filename: string,
+  query?: RequestOptions["query"],
+): Promise<void> {
+  const options: RequestOptions = { query };
+  const cookieRoute = COOKIE_ROUTES.includes(path);
+  const sentToken = accessToken;
+  let response = await send(path, options, sentToken, cookieRoute);
+
+  if (response.status === 401 && sentToken && !cookieRoute) {
+    const token = accessToken !== sentToken ? accessToken : await refreshAccessToken();
+    if (token) {
+      response = await send(path, options, token, cookieRoute);
+    }
+    if (response.status === 401) {
+      onUnauthorized?.();
+    }
+  }
+
+  if (!response.ok) {
+    throw await toError(response);
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 async function send(
   path: string,
   options: RequestOptions,

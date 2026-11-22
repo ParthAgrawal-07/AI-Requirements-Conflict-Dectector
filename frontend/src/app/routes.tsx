@@ -9,6 +9,7 @@ import { ChangeRequestList } from "../features/changes/ChangeRequestList";
 import { ChangeRequestPage } from "../features/changes/ChangeRequestPage";
 import { ChannelView } from "../features/channels/ChannelView";
 import { ComposerPage } from "../features/composer/ComposerPage";
+import { ComplianceQueue } from "../features/compliance/ComplianceQueue";
 import { DashboardPage } from "../features/dashboard/DashboardPage";
 import { FindingsPage } from "../features/findings/FindingsPage";
 import { IssueList } from "../features/issues/IssueList";
@@ -135,6 +136,7 @@ export const routes: RouteObject[] = [
               { path: "changes/new", element: <ChangeEditor /> },
               { path: "changes/:changeRequestId", element: <ChangeRequestPage /> },
               { path: "insights", element: <DashboardPage /> },
+              { path: "compliance", element: <ComplianceQueue /> },
               ...LATER.map((item) => ({
                 path: item.path,
                 element: <ComingSoon title={item.title} sprint={item.sprint} />,
