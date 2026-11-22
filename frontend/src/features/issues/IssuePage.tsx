@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { WatchButton } from "../discussion/WatchButton";
 import { SuggestionPanel } from "../findings/SuggestionPanel";
+import { DecisionOwner } from "../members/DecisionOwner";
 import { Link, useParams } from "react-router-dom";
 import { ApiError } from "../../api/client";
 import { useProjectRealtime } from "../../app/socket";
@@ -52,7 +54,9 @@ function IssueDetail({ issue, workspaceId, projectId }: { issue: Issue; workspac
         <h1>
           <span className="mono">{issue.key}</span> {issue.title}
         </h1>
+        <WatchButton subject="issues" id={issue.id} />
       </header>
+      <DecisionOwner kind="issues" id={issue.id} />
       <p>
         <Badge tone={issue.status === "open" ? "conflict" : "neutral"} icon={issue.status === "open" ? "●" : "✓"}>
           {issue.status === "open" ? "Open" : "Closed"}

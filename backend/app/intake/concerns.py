@@ -18,12 +18,10 @@ person-sourced finding needs its decision owner (Sprint 5, US-57); until then it
 any finding.
 """
 
-import logging
 import uuid
 from dataclasses import dataclass
 
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.core.errors import BadRequestError
@@ -44,8 +42,6 @@ from app.models import (
 from app.search.relations import LIVE_STATUSES
 from app.services import issues
 from app.services.access import AccessContext
-
-logger = logging.getLogger(__name__)
 
 PAIR = (FindingCategory.CONFLICTING, FindingCategory.DUPLICATE, FindingCategory.DEPENDENT)
 
@@ -93,24 +89,13 @@ def _pair(db: Session, a: Requirement, b: Requirement) -> CandidatePair:
         )
     )
     if pair is None:
-        # Two concerns about an unseen pair can arrive together: insert-or-ignore on the pair's
-        # unique key (as candidate generation does), then read whichever row won.
-        db.execute(
-            pg_insert(CandidatePair)
-            .values(
-                requirement_a_id=first,
-                requirement_b_id=second,
-                similarity_score=_similarity(db, first, second),
-            )
-            .on_conflict_do_nothing(index_elements=["requirement_a_id", "requirement_b_id"])
+        pair = CandidatePair(
+            requirement_a_id=first,
+            requirement_b_id=second,
+            similarity_score=_similarity(db, first, second),
         )
-        pair = db.scalar(
-            select(CandidatePair).where(
-                CandidatePair.requirement_a_id == first, CandidatePair.requirement_b_id == second
-            )
-        )
-        if pair is None:  # pragma: no cover — the row exists after the insert above
-            raise LookupError((first, second))
+        db.add(pair)
+        db.flush()
     return pair
 
 
@@ -126,7 +111,7 @@ def _analysis_saw_it(db: Session, pair: CandidatePair | None, requirement: Requi
             .where(
                 subject,
                 Finding.source != "person",
-                Finding.is_stale.is_(False),
+                ~Finding.is_stale,
                 Finding.status.in_(LIVE_STATUSES),
             )
             .limit(1)
@@ -162,6 +147,7 @@ def raise_concern(
         requirement_id=None if pair else requirements[0].id,
         category=category,
         severity=severity,
+        severity_source="person",  # US-08: the author's choice, overridable by a reviewer
         confidence=1.0,  # a person's statement, not a model's estimate
         rationale=explanation.strip(),
         explanation=explanation.strip(),
@@ -189,6 +175,16 @@ def raise_concern(
     db.commit()
 
     labels = sorted(deltas.label_of(r) for r in requirements)
+    deltas.publish(
+        db,
+        project.id,
+        deltas.Change(
+            new_findings={finding.id},
+            sentences=[narrator.concern_raised(ctx.user.full_name, KIND[category], labels)],
+            kind="concern",
+        ),
+        actor=ctx.user,
+    )
     body = finding.explanation or ""
     if finding.external_ref:
         body += f"\n\nReference: {finding.external_ref}"
@@ -204,19 +200,4 @@ def raise_concern(
         finding=finding,
         members_only=True,
     )
-    # The finding and its issue are stored first; the map is told afterwards, best effort, so a
-    # failed announcement can neither skip the issue nor fail a concern that is already saved.
-    try:
-        deltas.publish(
-            db,
-            project.id,
-            deltas.Change(
-                new_findings={finding.id},
-                sentences=[narrator.concern_raised(ctx.user.full_name, KIND[category], labels)],
-            ),
-            actor=ctx.user,
-        )
-    except Exception:
-        db.rollback()
-        logger.exception("Map delta for concern %s failed", finding.id)
     return Concern(finding, issue)

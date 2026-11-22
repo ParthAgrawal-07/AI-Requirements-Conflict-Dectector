@@ -54,6 +54,10 @@ class RequirementDetail(RequirementRead):
     tags: list[str]
     origin_message_id: uuid.UUID | None
     signed_off_version: int | None
+    # US-18: who protected it, when and why (None for one protected before Sprint 6).
+    protected_by: uuid.UUID | None = None
+    protected_at: datetime | None = None
+    protection_reason: str | None = None
     allowed_transitions: list[RequirementState]
     readiness: ReadinessRead
     transitions: list[TransitionRead]
@@ -77,6 +81,9 @@ class RequirementDetail(RequirementRead):
             tags=list(fields.get("tags") or []),
             origin_message_id=requirement.origin_message_id,
             signed_off_version=requirement.signed_off_version,
+            protected_by=requirement.protected_by,
+            protected_at=requirement.protected_at,
+            protection_reason=requirement.protection_reason,
             allowed_transitions=allowed,
             readiness=ReadinessRead(
                 analysis_current=readiness.analysis_current,
@@ -114,33 +121,3 @@ class SignOffRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     version: int = Field(ge=1)
-
-
-# ── Ownership requests (Bansil — US-36, FR-59) ──────────────────────────────────────────────
-class OwnershipRequestCreate(BaseModel):
-    """``POST /requirements/{id}/ownership-requests``: ask to own a requirement."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    note: str | None = Field(default=None, max_length=2000)
-
-
-class OwnershipDecision(BaseModel):
-    """``POST /ownership-requests/{id}/decision``: the owner or a manager accepts or declines."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    accept: bool
-
-
-class OwnershipRequestRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    requirement_id: uuid.UUID
-    requester_id: uuid.UUID
-    status: str
-    note: str | None
-    decided_by: uuid.UUID | None
-    decided_at: datetime | None
-    created_at: datetime

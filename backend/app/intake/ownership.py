@@ -42,14 +42,9 @@ def reassign(
     set_owner: bool = False,
     group: str | None = None,
     set_group: bool = False,
-    commit: bool = True,
-) -> list[str]:
+) -> Requirement:
     """Change the owner and/or the stakeholder group. ``set_*`` say which were sent, so a group
-    can be cleared with ``null`` while an omitted field stays as it is. Returns the delta sentences.
-
-    ``commit=False`` stages the change in the caller's transaction and announces nothing: a PATCH
-    that also moves the lifecycle commits both together, so a refused move leaves the owner as it
-    was, then calls :func:`announce` with the sentences."""
+    can be cleared with ``null`` while an omitted field stays as it is."""
     if not may_reassign(ctx):
         raise ForbiddenError("Only analysts and managers reassign owners and groups")
     requirement = _locked(db, requirement_id)
@@ -88,22 +83,10 @@ def reassign(
                 f"{ctx.user.full_name} moved {deltas.label_of(requirement)} to the "
                 f"{cleaned or 'no'} group."
             )
-    if not commit:
-        db.flush()
-        return sentences
     db.commit()
     if sentences:
         _publish(db, ctx, requirement, sentences)
-    return sentences
-
-
-def announce(
-    db: Session, ctx: AccessContext, requirement_id: uuid.UUID, sentences: list[str]
-) -> None:
-    """Publish a staged reassignment's delta once the transaction that carried it committed."""
-    requirement = db.get(Requirement, requirement_id)
-    if sentences and requirement is not None:
-        _publish(db, ctx, requirement, sentences)
+    return requirement
 
 
 def request_ownership(
@@ -243,7 +226,7 @@ def _publish(
     deltas.publish(
         db,
         requirement.project_id,
-        deltas.Change(requirements={requirement.id}, sentences=sentences),
+        deltas.Change(requirements={requirement.id}, sentences=sentences, kind="owner"),
         actor=ctx.user,
     )
 

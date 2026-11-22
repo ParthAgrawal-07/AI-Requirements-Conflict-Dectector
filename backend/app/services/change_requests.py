@@ -122,6 +122,20 @@ def on_opened(db: Session, change_request: ChangeRequest) -> None:
 def after_review(db: Session, change_request: ChangeRequest, actor: User, decision: str) -> None:
     refresh_status(db, change_request)
     announce(db, change_request, CHANGE_REQUEST_REVIEWED, actor, decision=decision)
+    project = db.get(Project, change_request.project_id)
+    if project is not None:  # Madhav (US-53): watchers of the request hear about each review
+        from app.notifications import hooks, subjects
+
+        hooks.watchers(
+            db,
+            project,
+            "change_request",
+            change_request.id,
+            subjects.change_request(db, change_request, f"{actor.full_name} reviewed {{key}}"),
+            actor_id=actor.id,
+            exclude=[change_request.proposer_id],
+            change_request_id=change_request.id,
+        )
 
 
 def _proposer_only(ctx: AccessContext, change_request: ChangeRequest) -> None:
@@ -381,7 +395,18 @@ def merge(
     deltas.publish(
         db,
         project.id,
-        deltas.Change(requirements={requirement.id}, findings=set(stale), sentences=[sentence]),
+        deltas.Change(
+            requirements={requirement.id},
+            findings=set(stale),
+            sentences=[sentence],
+            kind="merged",
+            counts={
+                "change_requests_merged": 1,
+                "requirements_changed"
+                if change_request.kind == "modify"
+                else "requirements_deprecated": 1,
+            },
+        ),
         actor=ctx.user,
     )
     announce(
@@ -407,8 +432,13 @@ def _notify_merged(
     if project is None:  # pragma: no cover
         return
     try:
+        from app.services.social import watcher_ids
+
         people = {change_request.proposer_id, requirement.owner_id}
         people |= {a.owner_id for a in ImpactAnalyzer(db).analyse(requirement).affected}
+        # Madhav (US-53): whoever watches the change request or the requirement.
+        people |= watcher_ids(db, "change_request", change_request.id)
+        people |= watcher_ids(db, "requirement", requirement.id)
         for issue in resolves(db, change_request.id):
             people |= set(issues.assignee_ids(db, issue.id))
         NotificationService(db).notify(

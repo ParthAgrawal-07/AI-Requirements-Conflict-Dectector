@@ -161,6 +161,14 @@ class AuditAction(StrEnum):
     DECISION_RULE_UPDATED = "decision_rule_updated"
     DECISION_RULE_DELETED = "decision_rule_deleted"
     BASELINE_FROZEN = "baseline_frozen"
+    # Human links between requirements (US-53, DR-19). Link and requirement ids, kind only.
+    LINK_ADDED = "link_added"
+    LINK_REMOVED = "link_removed"
+    # Severity overrides (US-08). Finding id, old and new severity only; the reason is on the row.
+    SEVERITY_CHANGED = "severity_changed"
+    FEEDBACK_THRESHOLD_CHANGED = "feedback_threshold_changed"
+    # Compliance (US-18): the audit trail of protected requirements was exported (filters only).
+    AUDIT_EXPORTED = "audit_exported"
     # Channels (US-28). Channel and user ids only — never names, topics or messages (CR-04).
     CHANNEL_CREATED = "channel_created"
     CHANNEL_UPDATED = "channel_updated"
