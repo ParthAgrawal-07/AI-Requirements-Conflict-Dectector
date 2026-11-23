@@ -1,0 +1,113 @@
+name: Bug report
+description: Something is broken or behaves differently from the spec.
+labels: ["bug", "needs triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. **Do not paste secrets** (API keys, JWTs, `.env` values, passwords) or real
+        requirement text from a confidential SRS. Redact them first.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: One or two sentences.
+      placeholder: Uploading a DOCX with tables ends in `failed` with a `[storage]` message.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Where you think the problem is. The triager sets the matching `area:` label.
+      multiple: true
+      options:
+        - Frontend (UI)
+        - Backend (API, services)
+        - Ingestion (PDF/DOCX parsing, segmentation)
+        - Embeddings / candidate pairs
+        - Classification (LLM, prompts)
+        - Clarification / change impact
+        - Auth, join codes, permissions
+        - Database / migrations
+        - Infra (Docker, CI, deployment)
+        - Eval / benchmark
+        - Not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Where did you see it?
+      options:
+        - Azure VM (production)
+        - Local Docker Compose
+        - Vercel preview
+        - CI
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Sign in as a Project Manager
+        2. Open a project → Upload
+        3. Upload `sample_docs/...`
+        4. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual
+      description: Include the error message or the request id (`X-Request-ID`) if one is shown.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: "Relevant lines only, e.g. `dcp logs --tail 50 backend`. Redact secrets and requirement text."
+      render: shell
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: Drag images here for UI problems.
+
+  - type: input
+    id: version
+    attributes:
+      label: Commit or branch
+      placeholder: "main @ ca88eb6"
+
+  - type: input
+    id: refs
+    attributes:
+      label: Related story / requirement IDs
+      placeholder: "US-24, FR-01, NFR-17"
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched open issues and this is not a duplicate.
+          required: true
+        - label: I removed secrets and confidential requirement text from everything above.
+          required: true

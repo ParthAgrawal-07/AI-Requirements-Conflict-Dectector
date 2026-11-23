@@ -1,0 +1,74 @@
+name: Feature or improvement
+description: Propose new behaviour, or a change to existing behaviour.
+labels: ["enhancement", "needs triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Who is affected, and what can't they do today?
+      placeholder: A Project Manager can't tell which findings were already reviewed after a re-analysis.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What should happen instead. Sketches and screenshots welcome.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: How we'll know it's done. EARS wording is welcome ("When …, the system shall …").
+      placeholder: |
+        - When a document is re-analysed, the system shall keep the review state of unchanged findings.
+        - ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      multiple: true
+      options:
+        - Frontend (UI)
+        - Backend (API, services)
+        - Ingestion (PDF/DOCX parsing, segmentation)
+        - Embeddings / candidate pairs
+        - Classification (LLM, prompts)
+        - Clarification / change impact
+        - Auth, join codes, permissions
+        - Database / migrations
+        - Infra (Docker, CI, deployment)
+        - Eval / benchmark
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: refs
+    attributes:
+      label: Related story / requirement / ADR IDs
+      placeholder: "US-33, FR-12, ADR-30"
+
+  - type: checkboxes
+    id: rules
+    attributes:
+      label: Domain rules (AGENTS.md §7)
+      description: Tick the ones this proposal keeps. Explain below if it can't keep one.
+      options:
+        - label: Nothing changes a requirement without an explicit, audited human action (ADR-06).
+        - label: Protected / compliance-critical requirements are never auto-resolved.
+        - label: Similarity alone never creates a finding (DR-10).
+        - label: AI output stays distinguishable from human-approved content (NFR-17).
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: Alternatives considered, open questions, links.
