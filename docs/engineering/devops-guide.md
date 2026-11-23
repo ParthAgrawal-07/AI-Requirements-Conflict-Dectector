@@ -97,6 +97,32 @@ container disks are private and ephemeral, deploying API and worker as separate 
 shared volume or S3-compatible object storage; `app/services/storage.py` is the single place to swap
 (Sprint 5 deployment task).
 
+### Single-host production (Azure VM)
+
+`docker-compose.prod.yml` layers over `docker-compose.yml` for one host. It builds the backend without dev tools, drops the
+source bind mounts and `--reload`, stops publishing Postgres and Redis, and replaces the Vite dev server with the built
+SPA served by **Caddy** (`frontend/Dockerfile` target `prod`, config in `Caddyfile`). Caddy gets the Let's Encrypt
+certificate and proxies `/api/*`, `/ws` and `/health` to `backend:8000`, so the SPA and the API share one origin and
+the refresh cookie stays `SameSite=lax`. All services share one disk, so the `uploads` volume works unchanged.
+
+1. Create an Ubuntu VM (`Standard_B2ms`, 8 GB, which leaves room for PyTorch, the embedding model and Postgres) with a
+   public DNS label, and open ports 80 and 443. Install Docker (Compose >= 2.24.4).
+2. Clone the repo and write `.env` with `ENVIRONMENT=production`, a fresh `JWT_SECRET` and `JOIN_CODE_PEPPER`, a strong
+   `POSTGRES_PASSWORD` (also in `DATABASE_URL`), `SITE_ADDRESS=<host>`, `VITE_API_BASE_URL=https://<host>`,
+   `CORS_ALLOWED_ORIGINS=https://<host>`, `TRUSTED_PROXY_HOPS=1` (Caddy) and the Gemini/Groq keys.
+3. `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build`. The `migrate` service applies
+   migrations first, as in development.
+4. Create the first administrator:
+   `docker compose -f docker-compose.yml -f docker-compose.prod.yml exec backend python -m app.cli create-admin --email … --name …`.
+
+**Continuous deployment.** `.github/workflows/deploy-azure.yml` deploys every push to `main` (and runs on demand via
+*Run workflow*). It connects to the VM over SSH, resets `~/rcd` (a clone of this repo) to the pushed commit, and runs the
+same `up -d --build`. It then waits for `/health/ready`. It needs the repository secrets `VM_HOST`, `VM_USER`,
+`VM_SSH_KEY` and `VM_KNOWN_HOSTS` (see the workflow header). `.env` and the Docker volumes live only on the VM.
+
+`VITE_API_BASE_URL` is compiled into the bundle, so changing the host means rebuilding `frontend`. Back up with
+`pg_dump` or a disk snapshot. Postgres lives on the VM's disk, so nothing else backs it up.
+
 ## 4. CI/CD Pipeline (GitHub Actions)
 
 - **Implemented (`backend-ci.yml`)**, on every push/PR touching `backend/`: ruff (lint +

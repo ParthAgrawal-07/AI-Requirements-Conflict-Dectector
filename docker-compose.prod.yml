@@ -1,0 +1,68 @@
+# Production override for a single host (e.g. one Azure VM). Layered on top of docker-compose.yml:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# What it changes from the development file: no source bind mounts or --reload, no dev tools in
+# the backend image, Postgres and Redis not published on the host, and the frontend is the built
+# SPA served by Caddy — which also terminates HTTPS and proxies /api, /ws and /health to the
+# backend, so the SPA and the API share one origin (the refresh cookie can stay SameSite=lax).
+#
+# Needs Compose >= 2.24.4 for the !reset / !override tags. Required in .env: SITE_ADDRESS,
+# VITE_API_BASE_URL (both the public https URL), ENVIRONMENT=production, TRUSTED_PROXY_HOPS=1.
+
+services:
+  db:
+    ports: !reset []
+
+  redis:
+    ports: !reset []
+
+  backend:
+    build:
+      args:
+        INSTALL_DEV: "0"
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports: !reset []
+    volumes: !override
+      - uploads:/data/uploads
+    restart: unless-stopped
+
+  # The image's healthcheck calls the API on :8000, which neither the worker nor beat serves.
+  worker:
+    volumes: !override
+      - uploads:/data/uploads
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.core.celery_app inspect ping -d celery@$$HOSTNAME --timeout 10"]
+      interval: 60s
+      timeout: 20s
+      start_period: 60s
+      retries: 3
+    restart: unless-stopped
+
+  beat:
+    healthcheck:
+      disable: true
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      target: prod
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:?set VITE_API_BASE_URL to the public https URL}
+    env_file: !reset []
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS to the public host name}
+    ports: !override
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes: !override
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data      # TLS certificates — keep across restarts or Let's Encrypt rate-limits
+      - caddy_config:/config
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:
