@@ -9,7 +9,10 @@ touched. ``publish``:
 2. reads the touched nodes and edges back **from the database** and sorts them into
    ``added`` / ``changed`` / ``removed`` — an edge whose finding is now stale, dismissed or merged
    is *removed*, so producers never decide visibility themselves;
-3. publishes ``graph.delta`` with the written sentences (``app.graph.narrator``).
+3. stores the written sentences (``app.graph.narrator``) in the change log (``graph_events``,
+   US-55) with the change's kind, the nodes and edges it touched and its counts, and freezes the
+   map when a merge has started a new baseline revision (``app.graph.revisions``, US-50);
+4. publishes ``graph.delta`` with the sentences.
 
 A client applies a delta only when ``from_revision`` is the revision it holds, and re-fetches
 ``GET /projects/{p}/graph`` otherwise — so a lost or reordered event costs one reload, never a
@@ -27,10 +30,10 @@ import logging
 import uuid
 from dataclasses import dataclass, field
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
-from app.graph import narrator, positions
+from app.graph import changelog, narrator, positions, revisions
 from app.graph import service as graph_service
 from app.graph.schemas import GraphChanges, GraphDelta, GraphRemovals
 from app.models import (
@@ -40,6 +43,7 @@ from app.models import (
     Document,
     Embedding,
     Finding,
+    FindingCategory,
     Project,
     Requirement,
     RequirementVersion,
@@ -59,7 +63,16 @@ class Change:
     requirements: set[uuid.UUID] = field(default_factory=set)  # state, owner, group, position
     new_findings: set[uuid.UUID] = field(default_factory=set)
     findings: set[uuid.UUID] = field(default_factory=set)  # reviewed or otherwise changed
+    # Human links (Madhav — US-53): added ones go out as new edges, removed ones by id.
+    new_links: set[uuid.UUID] = field(default_factory=set)
+    removed_links: set[uuid.UUID] = field(default_factory=set)
     sentences: list[str] = field(default_factory=list)
+    # The change log (US-55): what kind of change this is (``app.models.graph.EVENT_KINDS``;
+    # None: "added" when it brings new requirements, else "changed") and the numbers a summary
+    # adds up that only the producer knows (e.g. ``change_requests_merged``). Requirements added
+    # and conflicts opened or resolved are counted here from the delta itself.
+    kind: str | None = None
+    counts: dict[str, int] = field(default_factory=dict)
 
     def __bool__(self) -> bool:
         return bool(
@@ -67,6 +80,8 @@ class Change:
             or self.requirements
             or self.new_findings
             or self.findings
+            or self.new_links
+            or self.removed_links
             or self.sentences
         )
 
@@ -86,12 +101,12 @@ def publish(
         update(Project)
         .where(Project.id == project_id)
         .values(graph_revision=Project.graph_revision + 1)
-        .returning(Project.graph_revision, Project.workspace_id)
+        .returning(Project.graph_revision, Project.workspace_id, Project.baseline_revision)
     ).first()
     db.commit()
     if row is None:
         return None
-    revision, workspace_id = row
+    revision, workspace_id, baseline_revision = row
 
     node_ids = change.new_requirements | change.requirements
     nodes = graph_service.nodes(db, project_id, node_ids) if node_ids else []
@@ -106,6 +121,12 @@ def publish(
             removed.edge_ids.append(edge_id)
         else:
             (added if edge_id in change.new_findings else changed).edges.append(edge)
+    if change.new_links:
+        added.edges.extend(graph_service.link_edges(db, project_id, change.new_links))
+    removed.edge_ids.extend(sorted(change.removed_links))
+    if change.sentences:
+        _log(db, project_id, change, revision, baseline_revision, actor, added, removed)
+    _capture(db, project_id)
 
     delta = GraphDelta(
         project_id=project_id,
@@ -120,6 +141,72 @@ def publish(
     )
     bus.publish(graph_delta(workspace_id=workspace_id, delta=delta))
     return delta
+
+
+def _log(
+    db: Session,
+    project_id: uuid.UUID,
+    change: Change,
+    revision: int,
+    baseline_revision: int,
+    actor: User | None,
+    added: GraphChanges,
+    removed: GraphRemovals,
+) -> None:
+    """Write the change log rows. Best effort: the map delta goes out even if this fails."""
+    try:
+        counts = dict(change.counts)
+        if change.new_requirements and (change.kind or "added") == "added":
+            counts.setdefault("requirements_added", len(change.new_requirements))
+        opened = sum(1 for e in added.edges if e.kind == "conflict")
+        if opened:
+            counts["conflicts_opened"] = counts.get("conflicts_opened", 0) + opened
+        resolved = (
+            db.scalar(
+                select(func.count())
+                .select_from(Finding)
+                .where(
+                    Finding.id.in_(removed.edge_ids),
+                    Finding.category == FindingCategory.CONFLICTING,
+                )
+            )
+            if removed.edge_ids
+            else 0
+        )
+        if resolved:
+            counts["conflicts_resolved"] = counts.get("conflicts_resolved", 0) + int(resolved)
+        kind = change.kind or ("added" if change.new_requirements else "changed")
+        if kind == "analysed" and opened:
+            kind = "conflict_found"
+        edge_ids = change.new_findings | change.findings
+        nodes = set(change.new_requirements | change.requirements)
+        links = change.new_links | change.removed_links
+        for edge in graph_service.edges(db, project_id, edge_ids, include_hidden=True):
+            nodes.update({edge.source, edge.target})
+        changelog.record(
+            db,
+            project_id,
+            revision=revision,
+            baseline_revision=baseline_revision,
+            actor_id=actor.id if actor else None,
+            kind=kind,
+            sentences=change.sentences,
+            node_ids=nodes,
+            edge_ids=edge_ids | links,
+            counts=counts,
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("Change log rows for project %s revision %s failed", project_id, revision)
+
+
+def _capture(db: Session, project_id: uuid.UUID) -> None:
+    try:
+        revisions.capture_revision(db, project_id)
+    except Exception:
+        db.rollback()
+        logger.exception("Map snapshot for project %s failed", project_id)
 
 
 def author_of(db: Session, requirement: Requirement) -> User | None:
@@ -187,6 +274,7 @@ def _requirement_run_finished(
     change = Change(
         requirements={subject.id} | placed,
         new_findings={f.id for f in findings},
+        kind="analysed",
         sentences=[
             narrator.analysed(label_of(subject), related)
             if run.error_message is None
@@ -213,10 +301,26 @@ def _document_run_finished(
     )
     # Extraction published nothing, so the document's requirements arrive as new nodes; a client
     # that already has them (from a snapshot) simply replaces them.
+    first_run = (
+        db.scalar(
+            select(func.count())
+            .select_from(AnalysisRun)
+            .where(
+                AnalysisRun.subject_id == document.id,
+                AnalysisRun.scope == AnalysisScope.DOCUMENT,
+                AnalysisRun.finished_at.is_not(None),
+                AnalysisRun.id != run.id,
+            )
+        )
+        == 0
+    )
     change = Change(
         new_requirements=requirement_ids,
         new_findings={f.id for f in findings},
         sentences=[sentence],
+        kind="analysed",
+        # The document's requirements enter the log as added the first time it is analysed.
+        counts={"requirements_added": len(requirement_ids)} if first_run else {},
     )
     actor = db.get(User, document.uploaded_by) if document.uploaded_by else None
     return publish(db, run.project_id, change, actor=actor)

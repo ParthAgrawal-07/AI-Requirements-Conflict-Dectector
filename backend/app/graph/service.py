@@ -22,7 +22,15 @@ from typing import Literal, cast
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.graph.schemas import EdgeKind, EdgeStatus, GraphEdge, GraphNode, GraphSnapshot, NodeState
+from app.graph.schemas import (
+    EdgeKind,
+    EdgeStatus,
+    GraphEdge,
+    GraphNode,
+    GraphSnapshot,
+    LinkKind,
+    NodeState,
+)
 from app.models import (
     CandidatePair,
     Finding,
@@ -31,6 +39,7 @@ from app.models import (
     NodePosition,
     Project,
     Requirement,
+    RequirementLink,
     RequirementState,
     Severity,
 )
@@ -62,8 +71,35 @@ def snapshot(
         project_id=project_id,
         revision=revision,
         nodes=nodes(db, project_id),
-        edges=edges(db, project_id, include_dismissed=include_dismissed),
+        edges=edges(db, project_id, include_dismissed=include_dismissed)
+        + link_edges(db, project_id),
     )
+
+
+def link_edges(
+    db: Session, project_id: uuid.UUID, link_ids: Collection[uuid.UUID] | None = None
+) -> list[GraphEdge]:
+    """Human links (Madhav — US-53, DR-19) as edges of kind ``link``, found by a person and
+    confirmed by definition. The edge id is the link id."""
+    query = (
+        select(RequirementLink)
+        .where(RequirementLink.project_id == project_id)
+        .order_by(RequirementLink.created_at, RequirementLink.id)
+    )
+    if link_ids is not None:
+        query = query.where(RequirementLink.id.in_(list(link_ids)))
+    return [
+        GraphEdge(
+            id=link.id,
+            source=link.source_id,
+            target=link.target_id,
+            kind="link",
+            status="confirmed",
+            found_by="person",
+            link_kind=cast(LinkKind, link.kind),
+        )
+        for link in db.scalars(query)
+    ]
 
 
 def nodes(

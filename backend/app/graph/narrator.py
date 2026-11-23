@@ -182,6 +182,15 @@ def concern_raised(actor: str | None, kind: EdgeKind, labels: Sequence[str]) -> 
     return f"{_who(actor)} raised a concern: {_KIND_NOUN.get(kind, kind)} on {_join(list(labels))}."
 
 
+def linked(actor: str | None, source: str, words: str, target: str) -> str:
+    """A person asserted a link (US-53): "Riya linked REQ-031 to REQ-014 (depends on)."."""
+    return f"{_who(actor)} linked {source} to {target} ({words})."
+
+
+def unlinked(actor: str | None, source: str, words: str, target: str) -> str:
+    return f"{_who(actor)} removed the link: {source} {words} {target}."
+
+
 def merged(actor: str | None, number: int, label: str, version: int) -> str:
     """RCR-n merged (US-35): the requirement has a new version."""
     return f"{_who(actor)} merged RCR-{number}: {label} is now v{version}."
