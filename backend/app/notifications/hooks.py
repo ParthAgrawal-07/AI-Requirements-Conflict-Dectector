@@ -8,6 +8,8 @@ after the commit. Each is best effort — a failed notification never fails the 
                               ``join_request``
 :func:`results_for_run`       an analysis run found something on your requirements → owners,
                               ``results``
+:func:`watchers`              activity on a requirement, issue or change request you watch
+                              (US-53) → ``watching``
 ============================  ==============================================================
 
 Review requests, decisions and merges are Parth's (``app.services.reviews``,
@@ -32,9 +34,9 @@ from app.models import (
     Project,
     User,
 )
-from app.models.notification import ASSIGNED, JOIN_REQUEST, MENTIONED, RESULTS
+from app.models.notification import ASSIGNED, JOIN_REQUEST, MENTIONED, RESULTS, WATCHING
 from app.notifications import subjects
-from app.notifications.service import NotificationService
+from app.notifications.service import NotificationService, Subject
 from app.services.access import Scope, build_access_context
 from app.services.review_state import involved_requirements
 
@@ -147,3 +149,36 @@ def results_for_run(db: Session, run: AnalysisRun) -> None:
     except Exception:
         db.rollback()
         logger.exception("Result notifications for run %s failed", run.id)
+
+
+def watchers(
+    db: Session,
+    project: Project,
+    subject_type: str,
+    subject_id: uuid.UUID,
+    subject: Subject,
+    *,
+    actor_id: uuid.UUID | None,
+    exclude: Collection[uuid.UUID | None] = (),
+    **ids: object,
+) -> None:
+    """Tell the people watching ``subject_type``/``subject_id`` (US-53) about ``subject``.
+    ``exclude`` are people the producer already told about the same moment."""
+    from app.services.social import watcher_ids
+
+    try:
+        people = watcher_ids(db, subject_type, subject_id) - set(exclude)
+        if not people:
+            return
+        NotificationService(db).notify(
+            people,
+            WATCHING,
+            workspace_id=project.workspace_id,
+            project_id=project.id,
+            actor_id=actor_id,
+            subject=subject,
+            **ids,
+        )
+    except Exception:
+        db.rollback()
+        logger.exception("Watcher notifications for %s %s failed", subject_type, subject_id)
