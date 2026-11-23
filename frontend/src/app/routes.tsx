@@ -44,8 +44,10 @@ export function RequireAuth({ children }: { children?: ReactNode }) {
   return <>{children ?? <Outlet />}</>;
 }
 
-/** "/" opens the last-used project (US-24), else the only workspace, else a hint. */
+/** "/" opens the last-used project (US-24), else the only workspace. With none, a platform
+ *  admin (who may create one) goes straight to creating it; anyone else sees how to join. */
 export function RootRedirect() {
+  const { user } = useAuth();
   const workspaces = useWorkspaces();
   const last = lastProject();
   const projects = useProjects(last?.workspaceId);
@@ -77,6 +79,7 @@ export function RootRedirect() {
     return <Navigate to={target} replace />;
   }
   if (list.length > 0) return <Navigate to={`/w/${list[0].id}`} replace />;
+  if (user?.platform_role === "platform_admin") return <Navigate to="/workspaces/new" replace />;
   return <NoWorkspace />;
 }
 

@@ -98,7 +98,8 @@ export function JoinCodesTab({ workspaceId }: { workspaceId: string }) {
           </p>
         )}
         <form onSubmit={submit}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          {/* One column: the card is at most 360px wide, too narrow for two selects side by side. */}
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 12 }}>
             <div className="field">
               <label htmlFor="code-access">Gives access to</label>
               <select
