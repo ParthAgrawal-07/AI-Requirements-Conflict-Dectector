@@ -1,0 +1,21 @@
+# Used by docker-compose.prod.yml only. SITE_ADDRESS is the public host name; Caddy obtains and
+# renews its Let's Encrypt certificate automatically (ports 80 and 443 must be reachable).
+# With SITE_ADDRESS=localhost it uses a local CA instead, for trying the production stack locally.
+
+{$SITE_ADDRESS:localhost} {
+	encode zstd gzip
+
+	@backend path /api/* /ws /health /health/*
+	handle @backend {
+		reverse_proxy backend:8000
+	}
+
+	handle {
+		root * /srv
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		# The SPA uses createBrowserRouter: unknown paths are client-side routes.
+		try_files {path} /index.html
+		file_server
+	}
+}
