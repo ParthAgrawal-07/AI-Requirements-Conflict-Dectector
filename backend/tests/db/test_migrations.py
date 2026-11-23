@@ -68,6 +68,10 @@ EXPECTED_TABLES = {
     "decision_rules",
     "baselines",
     "baseline_items",
+    # Sprint 6 (0008a_social)
+    "votes",
+    "watches",
+    "requirement_links",
 }
 
 

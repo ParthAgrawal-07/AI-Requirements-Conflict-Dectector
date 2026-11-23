@@ -47,6 +47,7 @@ from app.models.project import Project
 from app.models.requirement import Requirement, RequirementVersion
 from app.models.review import FindingReview, RequirementTransition
 from app.models.role import Role, RolePermission
+from app.models.social import RequirementLink, Vote, Watch
 from app.models.suggestion import Suggestion, SuggestionFeedback
 from app.models.user import User
 from app.models.workspace import Workspace
@@ -104,6 +105,7 @@ __all__ = [
     "Requirement",
     "RequirementAttribute",
     "RequirementDraft",
+    "RequirementLink",
     "RequirementOrigin",
     "RequirementState",
     "RequirementTransition",
@@ -117,5 +119,7 @@ __all__ = [
     "Suggestion",
     "SuggestionFeedback",
     "User",
+    "Vote",
+    "Watch",
     "Workspace",
 ]
