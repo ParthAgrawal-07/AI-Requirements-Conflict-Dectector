@@ -50,6 +50,7 @@ from app.models import (
     OwnershipRequest,
     Project,
     Requirement,
+    RequirementLink,
     Role,
     RolePermission,
     Suggestion,
@@ -105,6 +106,8 @@ class World:
     suggestion: Suggestion  # ready AI options for `finding`
     decision_rule_id: uuid.UUID
     baselines: tuple[Baseline, Baseline]
+    other_requirement: Requirement  # a second requirement of `document` (links)
+    link: RequirementLink  # the finding's requirement depends on `other_requirement`
     db: Session
 
 
@@ -401,6 +404,32 @@ CASES = [
         lambda _: {"text": "A shall B."},
         needs="req.propose",
     ),
+    # Sprint 6 — discussion, votes, watch and links (Madhav)
+    Case("GET", "/api/v1/requirements/{requirement_id}/social"),
+    Case("GET", "/api/v1/requirements/{requirement_id}/comments"),
+    Case("POST", "/api/v1/requirements/{requirement_id}/comments", lambda _: {"body": "Agreed."}),
+    Case("GET", "/api/v1/requirements/{requirement_id}/votes"),
+    Case("PUT", "/api/v1/requirements/{requirement_id}/vote", lambda _: {"stance": "support"}),
+    Case("DELETE", "/api/v1/requirements/{requirement_id}/vote"),
+    Case("GET", "/api/v1/change-requests/{change_request_id}/votes"),
+    Case("PUT", "/api/v1/change-requests/{change_request_id}/vote", lambda _: {"stance": "oppose"}),
+    Case("DELETE", "/api/v1/change-requests/{change_request_id}/vote"),
+    Case("GET", "/api/v1/requirements/{requirement_id}/watch"),
+    Case("PUT", "/api/v1/requirements/{requirement_id}/watch"),
+    Case("DELETE", "/api/v1/requirements/{requirement_id}/watch"),
+    Case("GET", "/api/v1/issues/{issue_id}/watch"),
+    Case("PUT", "/api/v1/issues/{issue_id}/watch"),
+    Case("DELETE", "/api/v1/issues/{issue_id}/watch"),
+    Case("GET", "/api/v1/change-requests/{change_request_id}/watch"),
+    Case("PUT", "/api/v1/change-requests/{change_request_id}/watch"),
+    Case("DELETE", "/api/v1/change-requests/{change_request_id}/watch"),
+    Case("GET", "/api/v1/requirements/{requirement_id}/links"),
+    Case(
+        "POST",
+        "/api/v1/requirements/{requirement_id}/links",
+        lambda w: {"target_id": str(w.other_requirement.id), "kind": "related_to"},
+    ),
+    Case("DELETE", "/api/v1/requirements/{requirement_id}/links/{link_id}"),
 ]
 
 
@@ -544,6 +573,13 @@ def world(
     )
     db_session.add_all((suggestion, rule, *baselines))
     db_session.commit()
+    other = Requirement(document_id=document.id, project_id=project.id, body="It shall log.")
+    db_session.add(other)
+    db_session.flush()
+    link = RequirementLink(project_id=project.id, source_id=vague.id, target_id=other.id,
+                           kind="depends_on")  # fmt: skip
+    db_session.add(link)
+    db_session.commit()
     return World(
         workspace=workspace,
         project=project,
@@ -564,6 +600,8 @@ def world(
         suggestion=suggestion,
         decision_rule_id=rule.id,
         baselines=(baselines[0], baselines[1]),
+        other_requirement=other,
+        link=link,
         db=db_session,
     )
 
@@ -628,6 +666,7 @@ def _call(api: TestClient, case: Case, world: World, user: User) -> int:
         decision_rule_id=world.decision_rule_id,
         baseline_id=world.baselines[0].id,
         other_baseline_id=world.baselines[1].id,
+        link_id=world.link.id,
     )
     headers = {"Authorization": f"Bearer {security.create_access_token(user.id)[0]}"}
     body = case.body(world)

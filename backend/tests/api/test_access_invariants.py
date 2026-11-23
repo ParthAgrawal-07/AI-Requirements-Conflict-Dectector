@@ -162,6 +162,12 @@ def test_only_listed_routes_admit_protected_only_grants() -> None:
 # Writes that only touch the caller's *own* per-person state (a read marker), never shared data,
 # so every member who may read may make them. Keep this list short.
 OWN_STATE_WITH_VIEW = {
+    ("PUT", "/api/v1/requirements/{requirement_id}/watch"),  # watching (US-53)
+    ("DELETE", "/api/v1/requirements/{requirement_id}/watch"),
+    ("PUT", "/api/v1/issues/{issue_id}/watch"),
+    ("DELETE", "/api/v1/issues/{issue_id}/watch"),
+    ("PUT", "/api/v1/change-requests/{change_request_id}/watch"),
+    ("DELETE", "/api/v1/change-requests/{change_request_id}/watch"),
     ("POST", "/api/v1/channels/{channel_id}/read"),  # unread counts (US-28)
 }
 
