@@ -7,6 +7,7 @@ import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
 import { Drawer } from "../../components/Drawer";
 import { useToast } from "../../components/Toast";
+import { DiscussionPanel } from "../discussion/DiscussionPanel";
 import { CATEGORY_ICONS, useFindings } from "../findings/api";
 import { OwnerChip } from "../requirements/OwnerChip";
 import { OwnershipRequestDialog } from "../requirements/OwnershipRequestDialog";
@@ -172,6 +173,8 @@ function Detail({ detail, projectId, names }: { detail: RequirementDetail; proje
           </article>
         ))}
       </section>
+
+      <DiscussionPanel projectId={projectId} requirementId={detail.requirement_id} label={detail.source_req_id} />
 
       {ownership && (
         <OwnershipRequestDialog

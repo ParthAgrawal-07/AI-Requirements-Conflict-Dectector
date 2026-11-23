@@ -257,6 +257,12 @@ export function applyEvent(queryClient: QueryClient, event: RealtimeEvent): void
     }
   } else if (event.type.startsWith("baseline.") && event.project_id) {
     void queryClient.invalidateQueries({ queryKey: ["baselines", event.project_id] });
+  } else if (event.type === "requirement.activity" && event.entity_id) {
+    // US-53: a comment, vote or link on a requirement — the drawer re-reads its discussion.
+    void queryClient.invalidateQueries({ queryKey: ["social", event.entity_id] });
+    if (event.data.what === "comment") {
+      void queryClient.invalidateQueries({ queryKey: ["comments", event.entity_id] });
+    }
   } else if (event.type === "membership.revoked") {
     void queryClient.invalidateQueries({ queryKey: ["members", event.workspace_id] });
   }

@@ -541,3 +541,13 @@
 .suggestion-actions { display: grid; gap: var(--space-2); margin-top: var(--space-3); }
 .preference-marks { color: var(--approved); font-weight: 600; }
 mark.tbd { background: var(--proposed-soft); color: var(--proposed); font-weight: 600; }
+
+/* Discussion in the requirement drawer (US-53) */
+.discussion .votes p { margin-block: var(--space-1); }
+.discussion .vote-reasons,
+.discussion .link-list,
+.discussion .comment-list { list-style: none; margin: 0; padding: 0; }
+.discussion .link-list li,
+.discussion .comment-list li { padding-block: var(--space-1); border-bottom: 1px solid var(--border, #e5e1d8); }
+.discussion h4 { margin-block: var(--space-2) var(--space-1); font-size: 0.9rem; }
+.vote-tally { margin-block: var(--space-2); }
