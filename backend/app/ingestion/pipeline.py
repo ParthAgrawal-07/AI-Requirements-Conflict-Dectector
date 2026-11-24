@@ -11,6 +11,7 @@ Usage:
 """
 
 import logging
+import time
 from pathlib import Path
 
 from app.ingestion.models import SegmentationResult
@@ -30,9 +31,11 @@ _PARSERS: dict[str, type[Parser]] = {
 # Common unsupported formats with helpful messages
 _UNSUPPORTED_HINTS: dict[str, str] = {
     ".doc": "Legacy .doc format is not supported. Please convert to .docx.",
-    ".txt": "Plain text files are not supported.",
+    ".txt": "Plain text files are not supported yet. See FR-02 roadmap.",
     ".odt": "OpenDocument format is not supported. Please convert to .docx or .pdf.",
     ".rtf": "RTF format is not supported. Please convert to .docx or .pdf.",
+    ".reqif": "ReqIF import is planned but not yet implemented.",
+    ".reqifz": "ReqIF import is planned but not yet implemented.",
 }
 
 
@@ -77,10 +80,17 @@ def ingest_document(file_path: str) -> SegmentationResult:
 
     logger.info("Ingesting %s with %s", path.name, parser_cls.__name__)
 
+    t0 = time.monotonic()
     parser = parser_cls()
     raw_segments = parser.parse(file_path)
+    parse_ms = (time.monotonic() - t0) * 1000
 
-    logger.info("Extracted %d raw segments from %s", len(raw_segments), path.name)
+    logger.info(
+        "Extracted %d raw segments from %s in %.0f ms",
+        len(raw_segments),
+        path.name,
+        parse_ms,
+    )
 
     if not raw_segments:
         # An empty result is the "nothing found" signal callers act on
@@ -88,8 +98,17 @@ def ingest_document(file_path: str) -> SegmentationResult:
         logger.warning("No extractable text in %s (scanned/image-only PDF?)", path.name)
         return SegmentationResult(requirements=[])
 
+    t1 = time.monotonic()
     result = Segmenter().run(raw_segments)
+    segment_ms = (time.monotonic() - t1) * 1000
 
-    logger.info("Produced %d requirements from %s", len(result.requirements), path.name)
+    logger.info(
+        "Produced %d requirements from %s in %.0f ms (parse %.0f ms + segment %.0f ms)",
+        len(result.requirements),
+        path.name,
+        parse_ms + segment_ms,
+        parse_ms,
+        segment_ms,
+    )
 
     return result

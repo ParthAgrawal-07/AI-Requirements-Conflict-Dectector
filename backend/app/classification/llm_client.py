@@ -204,6 +204,7 @@ class AnthropicTransport:
         )
         self._model = model
         self._effort = effort
+        self.label = f"anthropic/{model}"
 
     def send(self, system: str, user: str) -> str:
         errors = self._anthropic
@@ -293,7 +294,12 @@ class LLMClient:
         """A plain-text reply (the brief drafter validates its own JSON)."""
         self._budget.reserve(project_id)
         self.calls += 1
-        return self._transport.send(system, user)
+        try:
+            return self._transport.send(system, user)
+        except LLMError:
+            raise
+        except Exception as exc:
+            raise LLMUnavailableError(f"Unexpected transport error: {exc}") from exc
 
     def complete_json(
         self,
