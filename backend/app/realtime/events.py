@@ -52,6 +52,10 @@ CHANGE_REQUEST_CLOSED = "change_request.closed"  # closed without merge, or with
 NOTIFICATION_CREATED = "notification.created"
 # AI suggestions (US-45, Madhav): a finding's options are ready (or failed); read over REST.
 SUGGESTION_READY = "suggestion.ready"
+# The updated SRS (US-61, Bansil): a section was written, the draft is ready, a version published.
+SRS_SECTION_READY = "srs.section_ready"
+SRS_DRAFT_READY = "srs.draft_ready"
+SRS_PUBLISHED = "srs.published"
 
 EVENT_TYPES = frozenset(
     {
@@ -78,6 +82,9 @@ EVENT_TYPES = frozenset(
         CHANGE_REQUEST_CLOSED,
         NOTIFICATION_CREATED,
         SUGGESTION_READY,
+        SRS_SECTION_READY,
+        SRS_DRAFT_READY,
+        SRS_PUBLISHED,
     }
 )
 
@@ -320,4 +327,22 @@ def suggestion_ready(
         project_id=project_id,
         entity_id=suggestion_id,
         data={"suggestion_id": str(suggestion_id), "finding_id": str(finding_id), "status": status},
+    )
+
+
+def srs_event(
+    event_type: str,
+    *,
+    workspace_id: uuid.UUID,
+    project_id: uuid.UUID,
+    srs_id: uuid.UUID,
+    **data: Any,
+) -> Event:
+    """An updated SRS changed (``srs.*``). Ids, section keys and labels — never its text."""
+    return Event(
+        type=event_type,
+        workspace_id=workspace_id,
+        project_id=project_id,
+        entity_id=srs_id,
+        data={"srs_id": str(srs_id), **data},
     )

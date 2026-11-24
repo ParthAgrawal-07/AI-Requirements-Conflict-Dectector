@@ -67,6 +67,7 @@ celery_app.autodiscover_tasks(
         "app.clarification",
         "app.consequences",
         "app.suggestions",
+        "app.srs",  # US-61: suggestions.srs_* tasks, on the suggestions queue
     ]
 )
 
