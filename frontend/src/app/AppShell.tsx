@@ -34,7 +34,8 @@ export function AppShell() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { can } = usePermissions(projectId ? { projectId } : null);
-  const projectBase = workspaceId && projectId ? `/w/${workspaceId}/p/${projectId}` : null;
+  const projectBase =
+    workspaceId && projectId ? `/w/${workspaceId}/p/${projectId}` : null;
 
   useEffect(() => {
     if (workspaceId) {
@@ -45,7 +46,11 @@ export function AppShell() {
   return (
     <div className="shell">
       <header className="topbar">
-        <NavLink to="/" className="logo" aria-label="Requirements Conflict Detector home">
+        <NavLink
+          to="/"
+          className="logo"
+          aria-label="Requirements Conflict Detector home"
+        >
           RCD
         </NavLink>
         <ProjectSwitcher workspaceId={workspaceId} projectId={projectId} />
@@ -70,13 +75,18 @@ export function AppShell() {
 
       <nav className="sidebar" aria-label="Main">
         {projectBase && can("req.propose") && (
-          <Button variant="accent" onClick={() => navigate(`${projectBase}/requirements/new`)}>
+          <Button
+            variant="accent"
+            onClick={() => navigate(`${projectBase}/requirements/new`)}
+          >
             + New requirement
           </Button>
         )}
+
         {projectBase && (
           <div className="nav-group">
             <div className="eyebrow">Project</div>
+
             {PROJECT_NAV.map((item) => (
               <NavLink
                 key={item.label}
@@ -87,9 +97,24 @@ export function AppShell() {
                 {item.label}
               </NavLink>
             ))}
+
+            {(can("protected.signoff") ||
+              can("req.protect") ||
+              can("audit.export")) && (
+              <NavLink
+                to={`${projectBase}/compliance`}
+                className="nav-link"
+              >
+                Compliance
+              </NavLink>
+            )}
           </div>
         )}
-        {workspaceId && projectId && <ChannelList workspaceId={workspaceId} projectId={projectId} />}
+
+        {workspaceId && projectId && (
+          <ChannelList workspaceId={workspaceId} projectId={projectId} />
+        )}
+
         {workspaceId && (
           <div className="nav-group">
             <div className="eyebrow">Workspace</div>
