@@ -52,6 +52,8 @@ CHANGE_REQUEST_CLOSED = "change_request.closed"  # closed without merge, or with
 NOTIFICATION_CREATED = "notification.created"
 # AI suggestions (US-45, Madhav): a finding's options are ready (or failed); read over REST.
 SUGGESTION_READY = "suggestion.ready"
+# Discussion, votes and links on a requirement (US-53, Madhav): the drawer re-reads them.
+REQUIREMENT_ACTIVITY = "requirement.activity"
 
 EVENT_TYPES = frozenset(
     {
@@ -78,6 +80,7 @@ EVENT_TYPES = frozenset(
         CHANGE_REQUEST_CLOSED,
         NOTIFICATION_CREATED,
         SUGGESTION_READY,
+        REQUIREMENT_ACTIVITY,
     }
 )
 
@@ -320,4 +323,23 @@ def suggestion_ready(
         project_id=project_id,
         entity_id=suggestion_id,
         data={"suggestion_id": str(suggestion_id), "finding_id": str(finding_id), "status": status},
+    )
+
+
+def requirement_activity(
+    *,
+    workspace_id: uuid.UUID,
+    project_id: uuid.UUID,
+    requirement_id: uuid.UUID,
+    what: str,
+    actor_id: uuid.UUID,
+) -> Event:
+    """Someone commented on, voted on or linked a requirement (``what``: comment, vote, link).
+    Ids only — the comment itself is read over REST (CR-04)."""
+    return Event(
+        type=REQUIREMENT_ACTIVITY,
+        workspace_id=workspace_id,
+        project_id=project_id,
+        entity_id=requirement_id,
+        data={"requirement_id": str(requirement_id), "what": what, "actor_id": str(actor_id)},
     )

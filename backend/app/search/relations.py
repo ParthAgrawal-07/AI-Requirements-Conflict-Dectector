@@ -7,8 +7,9 @@ requirements it must re-check. Three sources, strongest first:
 * **findings** — a live (not stale, not dismissed or merged) Conflicting, Duplicate or Dependent
   finding links the two requirements of its pair. Dependent keeps its direction
   (``depends_on``: this requirement needs the other; ``required_by``: the other needs this one);
-* **human links** — ``requirement_links`` arrive with US-53 (Sprint 5, migration 0008); until
-  then there are none, and :func:`related` is the only place that will need to read them;
+* **human links** — ``requirement_links`` (US-53, migration 0008a): a person asserted *depends
+  on*, *refines* or *related to*. They count as confirmed and are walked like findings
+  (:func:`link_edges`); nothing here or anywhere automatic removes one (DR-19);
 * **shared embeddings** — the nearest neighbours of the requirement's vector above the project's
   similarity threshold that no finding links yet (``similar``): a pointer, never a verdict
   (DR-10), so the impact report marks them *potential*.
@@ -38,6 +39,7 @@ from app.models import (
     FindingStatus,
     Project,
     Requirement,
+    RequirementLink,
 )
 
 # A finding still says something about its requirements in these states (US-10).
@@ -51,6 +53,9 @@ class RelationKind(StrEnum):
     DEPENDS_ON = "depends_on"  # the source needs the related requirement
     REQUIRED_BY = "required_by"  # the related requirement needs the source
     DEPENDENCY = "dependency"  # Dependent without a direction
+    REFINES = "refines"  # a person said the source refines the related requirement (US-53)
+    REFINED_BY = "refined_by"  # … or the related requirement refines the source
+    RELATED = "related"  # a person said the two are related (US-53)
     SIMILAR = "similar"  # shared embedding only
 
 
@@ -61,7 +66,16 @@ STRENGTH = {
     RelationKind.DEPENDS_ON: 2,
     RelationKind.REQUIRED_BY: 2,
     RelationKind.DEPENDENCY: 2,
-    RelationKind.SIMILAR: 3,
+    RelationKind.REFINES: 2,
+    RelationKind.REFINED_BY: 2,
+    RelationKind.RELATED: 3,
+    RelationKind.SIMILAR: 4,
+}
+# A human link seen from each end: (from the link's source, from its target).
+_LINK_KINDS = {
+    "depends_on": (RelationKind.DEPENDS_ON, RelationKind.REQUIRED_BY),
+    "refines": (RelationKind.REFINES, RelationKind.REFINED_BY),
+    "related_to": (RelationKind.RELATED, RelationKind.RELATED),
 }
 _PAIR_KINDS = {
     FindingCategory.CONFLICTING: RelationKind.CONFLICT,
@@ -72,13 +86,14 @@ _PAIR_KINDS = {
 
 @dataclass(frozen=True)
 class Edge:
-    """One finding between two requirements, seen from ``source``."""
+    """One finding (or human link) between two requirements, seen from ``source``."""
 
     source: uuid.UUID
     target: uuid.UUID
     kind: RelationKind
-    finding_id: uuid.UUID
+    finding_id: uuid.UUID | None
     severity: str | None
+    link_id: uuid.UUID | None = None
 
 
 @dataclass
@@ -94,6 +109,7 @@ class Related:
     owner_id: uuid.UUID | None = None
     is_protected: bool = False
     via: list[RelationKind] = field(default_factory=list)  # the kind of every hop on the path
+    link_id: uuid.UUID | None = None  # the human link of the last hop (US-53): confirmed
 
 
 def _directed(kind: RelationKind, source_is_a: bool, direction: object) -> RelationKind:
@@ -129,6 +145,27 @@ def finding_edges(db: Session, requirement_ids: Collection[uuid.UUID]) -> list[E
             edges.append(Edge(a, b, _directed(kind, True, direction), finding.id, severity))
         if b in wanted:
             edges.append(Edge(b, a, _directed(kind, False, direction), finding.id, severity))
+    return edges
+
+
+def link_edges(db: Session, requirement_ids: Collection[uuid.UUID]) -> list[Edge]:
+    """Every human link touching ``requirement_ids``, once per end in the set (US-53)."""
+    if not requirement_ids:
+        return []
+    ids = list(requirement_ids)
+    wanted = set(ids)
+    rows = db.scalars(
+        select(RequirementLink).where(
+            RequirementLink.source_id.in_(ids) | RequirementLink.target_id.in_(ids)
+        )
+    )
+    edges: list[Edge] = []
+    for link in rows:
+        forward, backward = _LINK_KINDS[link.kind]
+        if link.source_id in wanted:
+            edges.append(Edge(link.source_id, link.target_id, forward, None, None, link.id))
+        if link.target_id in wanted:
+            edges.append(Edge(link.target_id, link.source_id, backward, None, None, link.id))
     return edges
 
 
@@ -174,7 +211,7 @@ def related(
         ):
             found[candidate.requirement_id] = candidate
 
-    for edge in finding_edges(db, [source.id]):
+    for edge in [*finding_edges(db, [source.id]), *link_edges(db, [source.id])]:
         offer(
             Related(
                 edge.target,
@@ -185,6 +222,7 @@ def related(
                 edge.finding_id,
                 severity=edge.severity,
                 via=[edge.kind],
+                link_id=edge.link_id,
             )
         )
     linked = set(found)
@@ -205,7 +243,7 @@ def related(
     found = {key: value for key, value in found.items() if key in rows}
     if hops >= 2:
         first = {r.requirement_id: r for r in found.values() if r.depth == 1}
-        for edge in finding_edges(db, list(first)):
+        for edge in [*finding_edges(db, list(first)), *link_edges(db, list(first))]:
             if edge.target == source.id:
                 continue
             parent = first[edge.source]
@@ -219,6 +257,7 @@ def related(
                     edge.finding_id,
                     severity=edge.severity,
                     via=[*parent.via, edge.kind],
+                    link_id=edge.link_id,
                 )
             )
 

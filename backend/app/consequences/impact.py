@@ -30,6 +30,9 @@ _REASONS: dict[RelationKind, str] = {
     RelationKind.DEPENDS_ON: "{source} depends on {other}",
     RelationKind.REQUIRED_BY: "{other} depends on {source}: it relies on what changes",
     RelationKind.DEPENDENCY: "{other} and {source} depend on each other",
+    RelationKind.REFINES: "{source} refines {other} (a link a person made)",
+    RelationKind.REFINED_BY: "{other} refines {source} (a link a person made)",
+    RelationKind.RELATED: "{other} is related to {source} (a link a person made)",
     RelationKind.SIMILAR: "{other} is worded much like {source} ({similarity:.0%} similar) and may say the same thing",
 }
 
@@ -41,6 +44,9 @@ _VERBS: dict[RelationKind, str] = {
     RelationKind.DEPENDS_ON: "depends on",
     RelationKind.REQUIRED_BY: "is needed by",
     RelationKind.DEPENDENCY: "has a dependency with",
+    RelationKind.REFINES: "refines",
+    RelationKind.REFINED_BY: "is refined by",
+    RelationKind.RELATED: "is related to",
     RelationKind.SIMILAR: "is similar to",
 }
 
@@ -163,7 +169,8 @@ class ImpactAnalyzer:
             depth=rel.depth,
             relation=rel.kind,
             reason=reason,
-            status="confirmed" if rel.finding_id in confirmed else "potential",
+            # A person's link is a fact someone asserted (US-53); a finding only once confirmed.
+            status="confirmed" if rel.link_id or rel.finding_id in confirmed else "potential",
             owner_id=target.owner_id,
             stakeholder_group=target.stakeholder_group,
             is_protected=target.is_protected,

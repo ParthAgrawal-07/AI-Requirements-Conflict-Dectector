@@ -38,6 +38,7 @@ from app.api import (
     requirements,
     requirements_compose,
     roles,
+    social,
     suggestions,
     workspaces,
 )
@@ -86,6 +87,7 @@ for _router in (
     lint_api.router,
     baselines.router,
     analytics.router,
+    social.router,
 ):
     api_router.include_router(_router, dependencies=_authenticated, responses=_unauthorized)
 

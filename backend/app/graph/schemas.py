@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 NodeState = Literal["Proposed", "Under_Review", "Approved", "Rejected", "Implemented", "Deprecated"]
 EdgeKind = Literal["conflict", "duplicate", "depends_on", "ambiguous", "incomplete", "link"]
 EdgeStatus = Literal["flagged", "confirmed", "dismissed", "merged", "reclassified"]
+LinkKind = Literal["depends_on", "refines", "related_to"]
 
 
 class GraphNode(BaseModel):
@@ -29,7 +30,7 @@ class GraphNode(BaseModel):
     req_type: str | None = None  # functional / non_functional / constraint: the node's shape
     origin: Literal["document", "post", "change_request"] = "document"
     is_protected: bool = False
-    open_issues: int = 0  # issues arrive with US-52 (Sprint 4)
+    open_issues: int = 0  # open issues about it (US-52): the map's badge
     # The shared, persisted layout (``node_positions``); None until someone places the node.
     x: float | None = None
     y: float | None = None
@@ -45,6 +46,8 @@ class GraphEdge(BaseModel):
     confidence: float | None = Field(default=None, ge=0, le=1)
     # Who found it (ADR-25): the map's AI / Rule / Person badge (US-56).
     found_by: Literal["ai", "rule", "person"] = "ai"
+    # A human link (US-53, kind "link"): what the person asserted. Drawn apart from AI edges.
+    link_kind: LinkKind | None = None
 
 
 class GraphSnapshot(BaseModel):

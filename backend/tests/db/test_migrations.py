@@ -73,6 +73,10 @@ EXPECTED_TABLES = {
     "graph_events",
     "graph_snapshots",
     "change_log_visits",
+    # Sprint 6 (0008a_social)
+    "votes",
+    "watches",
+    "requirement_links",
 }
 
 

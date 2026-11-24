@@ -63,6 +63,9 @@ class Change:
     requirements: set[uuid.UUID] = field(default_factory=set)  # state, owner, group, position
     new_findings: set[uuid.UUID] = field(default_factory=set)
     findings: set[uuid.UUID] = field(default_factory=set)  # reviewed or otherwise changed
+    # Human links (Madhav — US-53): added ones go out as new edges, removed ones by id.
+    new_links: set[uuid.UUID] = field(default_factory=set)
+    removed_links: set[uuid.UUID] = field(default_factory=set)
     sentences: list[str] = field(default_factory=list)
     # The change log (US-55): what kind of change this is (``app.models.graph.EVENT_KINDS``;
     # None: "added" when it brings new requirements, else "changed") and the numbers a summary
@@ -77,6 +80,8 @@ class Change:
             or self.requirements
             or self.new_findings
             or self.findings
+            or self.new_links
+            or self.removed_links
             or self.sentences
         )
 
@@ -116,6 +121,9 @@ def publish(
             removed.edge_ids.append(edge_id)
         else:
             (added if edge_id in change.new_findings else changed).edges.append(edge)
+    if change.new_links:
+        added.edges.extend(graph_service.link_edges(db, project_id, change.new_links))
+    removed.edge_ids.extend(sorted(change.removed_links))
     if change.sentences:
         _log(db, project_id, change, revision, baseline_revision, actor, added, removed)
     _capture(db, project_id)
@@ -172,6 +180,7 @@ def _log(
             kind = "conflict_found"
         edge_ids = change.new_findings | change.findings
         nodes = set(change.new_requirements | change.requirements)
+        links = change.new_links | change.removed_links
         for edge in graph_service.edges(db, project_id, edge_ids, include_hidden=True):
             nodes.update({edge.source, edge.target})
         changelog.record(
@@ -183,7 +192,7 @@ def _log(
             kind=kind,
             sentences=change.sentences,
             node_ids=nodes,
-            edge_ids=edge_ids,
+            edge_ids=edge_ids | links,
             counts=counts,
         )
         db.commit()

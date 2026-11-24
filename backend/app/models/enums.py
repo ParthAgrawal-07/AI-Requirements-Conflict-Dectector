@@ -161,6 +161,9 @@ class AuditAction(StrEnum):
     DECISION_RULE_UPDATED = "decision_rule_updated"
     DECISION_RULE_DELETED = "decision_rule_deleted"
     BASELINE_FROZEN = "baseline_frozen"
+    # Human links between requirements (US-53, DR-19). Link and requirement ids, kind only.
+    LINK_ADDED = "link_added"
+    LINK_REMOVED = "link_removed"
     # Channels (US-28). Channel and user ids only — never names, topics or messages (CR-04).
     CHANNEL_CREATED = "channel_created"
     CHANNEL_UPDATED = "channel_updated"
