@@ -17,3 +17,9 @@ BT-15,Reports shall be generated nightly.,Managers shall see report figures that
 BT-16,Passwords shall be at least 12 characters long.,Passwords shall be at most 64 characters long.,None,none,A range: compatible limits. A rule firing here is a false positive.,dev
 BT-17,Support agents shall approve refunds.,Administrators shall approve refunds.,None,none,Two actors with no exclusivity. A rule firing here is a false positive.,dev
 BT-18,The system shall log failed logins.,The system shall email the security team.,None,none,Unrelated actions. A rule firing here is a false positive.,heldout
+BT-19,User sessions shall expire after 15 minutes of inactivity.,Sessions shall stay active until the user logs out.,Conflicting,unbounded,A finite session timeout vs no timeout at all (Sprint 6 tuning).,dev
+BT-20,Each user shall have at most 2 concurrent sessions.,Users shall be able to stay signed in on any number of devices at the same time.,Conflicting,unbounded,A concurrency limit vs unlimited simultaneous sign-ins (Sprint 6 tuning).,dev
+BT-21,Audit records shall be kept indefinitely.,Audit records shall be deleted after 3 years.,Conflicting,unbounded,Indefinite retention vs deletion after 3 years (Sprint 6 tuning).,dev
+BT-22,Exchange rates shall be refreshed hourly.,Exchange rates shall be refreshed every 6 hours.,Conflicting,numeric_limit,Two refresh periods; one written as a frequency word (Sprint 6 tuning).,dev
+BT-23,Admin sessions shall expire after 10 minutes of inactivity.,Users shall be able to sign in on any number of devices.,None,none,A timeout and a device count are different measures. A rule firing here is a false positive.,dev
+BT-24,Uploads shall be at most 25 MB.,Users shall be able to upload any number of files.,None,none,A size limit and a file count are different measures. A rule firing here is a false positive.,dev

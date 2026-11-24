@@ -58,4 +58,5 @@ def test_every_rule_labelled_conflict_is_caught_and_look_alikes_are_quiet(
         elif row["category"] == "None":
             assert hits[row["id"]] == set(), (row["id"], hits[row["id"]])
     caught = sum(1 for r in rows if r["expected_rule"] != "none" and hits[r["id"]])
-    assert caught == 12
+    # 12 at CP2; Sprint 6 (Heet) added four dev pairs for the unbounded rule and frequency words.
+    assert caught == 16

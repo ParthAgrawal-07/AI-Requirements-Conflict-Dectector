@@ -41,13 +41,12 @@ sys.path.insert(0, str(ROOT / "eval"))
 
 from run_benchmark import BENCHMARK, candidates, cosine, key, load_labels, make_llm  # noqa: E402
 
-from app.classification.attributes import AttributeExtractor  # noqa: E402
 from app.classification.classifier import Classifier  # noqa: E402
 from app.classification.llm_client import LLMClient, LLMError  # noqa: E402
 from app.classification.schemas import RequirementInput  # noqa: E402
 from app.ingestion import ingest_document  # noqa: E402
 from app.models import Requirement, RequirementAttribute  # noqa: E402
-from app.search.rule_checker import compare  # noqa: E402
+from app.search.rule_checker import compare, read_attributes  # noqa: E402
 
 
 @dataclass(frozen=True)
@@ -62,7 +61,7 @@ class Pair:
 
 def _row(label: str, text: str) -> tuple[Requirement, RequirementAttribute]:
     """A transient requirement and its attributes, as the checker reads them from the database."""
-    attributes = AttributeExtractor().extract(text)
+    attributes = read_attributes(text)  # exactly as the checker indexes it
     requirement = Requirement(id=uuid.uuid4(), source_req_id=label, body=text)
     row = RequirementAttribute(**attributes.as_json(), requirement_id=requirement.id, version_no=1)
     return requirement, row
