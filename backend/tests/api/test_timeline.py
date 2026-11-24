@@ -112,3 +112,31 @@ def test_every_member_who_sees_the_requirement_sees_its_timeline_and_no_one_else
     assert client.get(url(post.id), headers=viewer).status_code == 200
     outsider = headers_for(make_user(role=DefaultRole.OWNER, workspace=make_workspace()))
     assert client.get(url(post.id), headers=outsider).status_code == 404
+
+
+def test_the_timeline_shows_requirement_votes_and_links(
+    client: TestClient, db_session: Session, project: Project, user: User
+) -> None:
+    source = make_post(db_session, project, user, "a", label="REQ-1")
+    target = make_post(db_session, project, user, "b", label="REQ-2")
+    headers = headers_for(user)
+    vote = client.put(
+        f"/api/v1/requirements/{source.id}/vote", json={"stance": "support"}, headers=headers
+    )
+    assert vote.status_code == 200, vote.text
+    link = client.post(
+        f"/api/v1/requirements/{source.id}/links",
+        json={"target_id": str(target.id), "kind": "related_to"},
+        headers=headers,
+    )
+    assert link.status_code == 201, link.text
+
+    response = client.get(
+        url(source.id), params=[("kind", "vote"), ("kind", "link")], headers=headers
+    )
+
+    assert response.status_code == 200, response.text
+    assert {(entry["kind"], entry["title"]) for entry in response.json()["entries"]} == {
+        ("vote", "Supports it"),
+        ("link", "Linked: REQ-1 is related to REQ-2"),
+    }
