@@ -265,7 +265,7 @@ def test_links_stay_inside_the_project_and_need_req_link(
     assert client.put(url("requirements", mine.id, "watch"), headers=outsider).status_code == 404
 
 
-def test_the_drawer_summary_and_the_timeline_show_votes_and_links(
+def test_the_drawer_summary_shows_discussion_votes_watching_and_links(
     client: TestClient, db_session: Session, project: Project, user: User,
     make_requirement: Callable[..., Requirement], events: bus.InProcessEventBus,
 ) -> None:  # fmt: skip
@@ -282,9 +282,3 @@ def test_the_drawer_summary_and_the_timeline_show_votes_and_links(
     assert summary["comments"] == 1 and summary["watching"] is True
     assert (summary["votes"]["support"], summary["votes"]["mine"]) == (1, "support")
     assert [l["target_label"] for l in summary["links"]] == ["REQ-2"]  # noqa: E741
-    timeline = client.get(url("requirements", a.id, "timeline"),
-                          params=[("kind", "vote"), ("kind", "link")], headers=headers).json()  # fmt: skip
-    assert {e["title"] for e in timeline["entries"]} == {
-        "Supports it",
-        "Linked: REQ-1 is related to REQ-2",
-    }

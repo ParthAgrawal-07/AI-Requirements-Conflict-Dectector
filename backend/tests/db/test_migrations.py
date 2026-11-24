@@ -68,6 +68,11 @@ EXPECTED_TABLES = {
     "decision_rules",
     "baselines",
     "baseline_items",
+    # Sprint 6 (graph history and revisions)
+    "analysis_runs",
+    "graph_events",
+    "graph_snapshots",
+    "change_log_visits",
     # Sprint 6 (0008a_social)
     "votes",
     "watches",

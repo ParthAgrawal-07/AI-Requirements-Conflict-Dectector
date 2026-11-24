@@ -325,6 +325,7 @@ def suggestion_ready(
         data={"suggestion_id": str(suggestion_id), "finding_id": str(finding_id), "status": status},
     )
 
+
 def requirement_activity(
     *,
     workspace_id: uuid.UUID,

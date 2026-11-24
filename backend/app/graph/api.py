@@ -12,13 +12,14 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, Response
 
-from app.api.deps import DbSession, requires
-from app.graph import deltas, positions
+from app.api.deps import Authenticated, DbSession, requires
+from app.core.errors import NotFoundError
+from app.graph import changelog, deltas, positions
 from app.graph import service as graph_service
 from app.graph.schemas import GraphSnapshot, PositionsUpdate
 from app.models import Project
 from app.schemas.common import ErrorResponse
-from app.services.access import AccessContext
+from app.services.access import AccessContext, active_membership
 
 router = APIRouter(tags=["map"])
 
@@ -65,4 +66,27 @@ def put_positions(
 ) -> Response:
     saved = positions.save(db, project_id, body.positions, ctx.user.id)
     deltas.publish(db, project_id, deltas.Change(requirements=set(saved)), actor=ctx.user)
+    return Response(status_code=204)
+
+
+@router.put(
+    "/projects/{project_id}/changes/seen",
+    status_code=204,
+    summary="Mark the project's change log as seen",
+    responses={404: {"model": ErrorResponse}},
+)
+def put_changes_seen(
+    project_id: uuid.UUID,
+    user: Authenticated,
+    db: DbSession,
+) -> Response:
+    project = db.get(Project, project_id)
+    if project is None:
+        raise NotFoundError("Project not found")
+
+    membership = active_membership(db, user.id, project.workspace_id)
+    if membership is None:
+        raise NotFoundError("Project not found")
+
+    changelog.mark_seen(db, user.id, project_id)
     return Response(status_code=204)
