@@ -19,7 +19,15 @@ deleted after 5 years") may never be compared. These checks close that gap deter
    ``actor``              the same action given to different actors, where one says it is
                           *only* theirs
    ``condition_overlap``  the same condition and the same object, with different responses
+   ``unbounded``          a finite limit in one ("expire after 5 minutes", "at most 3 concurrent
+                          sessions", "deleted after 3 years") and *no* limit for the same
+                          measure in the other ("until the user logs out", "any number of
+                          devices at the same time", "kept indefinitely") — Sprint 6
    =====================  ==============================================================
+
+   Sprint 6 recall tuning (CP2 misses, dev split only): frequency words ("hourly", "nightly",
+   "every day") are read as a period before extraction, and the unbounded side of a pair is
+   indexed under the measure it leaves open, so the two are compared at all.
 
 3. **Findings.** Each hit is a Conflicting finding with ``source = rule``, the ``rule_id`` and a
    rationale built from the attributes (IDs and values, never invented text). It enters the same
@@ -35,10 +43,10 @@ import math
 import re
 import uuid
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
-from sqlalchemy import Select, or_, select, true
+from sqlalchemy import Select, func, or_, select, true
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, aliased
@@ -46,6 +54,7 @@ from sqlalchemy.orm import Session, aliased
 from app.classification.attributes import (
     GENERIC_ACTORS,
     AttributeExtractor,
+    Attributes,
     extract_with_llm,
 )
 from app.classification.budget import BudgetExceededError
@@ -70,16 +79,69 @@ RULES: dict[str, str] = {
     "negation": '"Shall" and "shall not" for the same action',
     "actor": "The same action given to different actors",
     "condition_overlap": "The same condition with different responses",
+    "unbounded": "A limit in one requirement, no limit in the other",
 }
-CONFIDENCE = {"numeric_limit": 0.8, "negation": 0.75, "actor": 0.65, "condition_overlap": 0.55}
+CONFIDENCE = {
+    "numeric_limit": 0.8,
+    "negation": 0.75,
+    "actor": 0.65,
+    "condition_overlap": 0.55,
+    "unbounded": 0.7,
+}
 SEVERITY = {
     "numeric_limit": Severity.MEDIUM,
     "negation": Severity.MEDIUM,
     "actor": Severity.MEDIUM,
     "condition_overlap": Severity.LOW,
+    "unbounded": Severity.MEDIUM,
 }
 NOT_CHECKED = (RequirementState.REJECTED, RequirementState.DEPRECATED)
 _EXCLUSIVE = re.compile(r"\b(only|solely|exclusively)\b", re.IGNORECASE)
+# "No limit" for a measure, as people write it (Sprint 6, from the CP2 misses).
+_UNBOUNDED: tuple[tuple[str, re.Pattern[str]], ...] = (
+    (
+        "timeout",
+        re.compile(
+            r"\buntil (?:the |a )?(?:user|they|he|she|someone)?\s*(?:explicitly |manually )?"
+            r"(?:logs?|signs?) (?:out|off)\b|\bnever (?:expires?|times? out)\b|"
+            r"\bno (?:session )?time ?out\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "retention",
+        re.compile(
+            r"\b(?:kept|retained|stored|keep|retain|store) (?:indefinitely|forever|permanently)\b|"
+            r"\bnever (?:be )?(?:deleted|purged|removed)\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "concurrency",
+        re.compile(
+            r"\b(?:any number of|an unlimited number of|unlimited)\b[^.]*?"
+            r"\b(?:at the same time|at once|simultaneous(?:ly)?|concurrent(?:ly)?)\b|"
+            r"\b(?:any number of|unlimited) (?:concurrent|simultaneous)\b",
+            re.IGNORECASE,
+        ),
+    ),
+)
+# Nouns that make two differently worded subjects one ("each user" / "sessions per user").
+_SUBJECT_NOUNS = frozenset(
+    {"session", "user", "account", "record", "report", "file", "upload", "password", "log",
+     "backup", "message", "order", "payment", "token", "device"}
+)  # fmt: skip
+_FREQUENCY: tuple[tuple[re.Pattern[str], str], ...] = tuple(
+    (re.compile(pattern, re.IGNORECASE), replacement)
+    for pattern, replacement in (
+        (r"\bhourly\b", "every 1 hour"),
+        (r"\b(?:nightly|daily|every night|once a day)\b", "every 1 day"),
+        (r"\bweekly\b", "every 1 week"),
+        (r"\bmonthly\b", "every 1 month"),
+        (r"\b(?:yearly|annually)\b", "every 1 year"),
+        (r"\bevery (minute|hour|day|week|month|year)\b", r"every 1 \1"),
+    )
+)
 _TIME_UNITS = (
     (31_536_000, "year"),
     (2_592_000, "month"),
@@ -135,6 +197,31 @@ def incompatible(a: RequirementAttribute, b: RequirementAttribute) -> bool:
     if pair == ("<=", ">="):
         return b.value > a.value
     return not math.isclose(a.value, b.value)
+
+
+def unbounded(text: str) -> tuple[str, str] | None:
+    """The measure a requirement leaves without a limit, and the words that say so."""
+    for metric, pattern in _UNBOUNDED:
+        found = pattern.search(text)
+        if found:
+            return metric, found.group(0)
+    return None
+
+
+def with_frequencies(text: str) -> str:
+    """ "refreshed hourly" → "refreshed every 1 hour", so the period can be compared."""
+    for pattern, replacement in _FREQUENCY:
+        text = pattern.sub(replacement, text)
+    return text
+
+
+def _nouns(text: str) -> set[str]:
+    words = {w.rstrip("s") for w in re.findall(r"[a-z]+", text.lower())}
+    return words & _SUBJECT_NOUNS
+
+
+def base_metric(metric: str | None) -> str | None:
+    return metric.split(":")[0] if metric else None
 
 
 def same_subject(a: RequirementAttribute, b: RequirementAttribute) -> bool:
@@ -227,7 +314,47 @@ def compare(
                 "that both responses are meant.",
             )
         )
+    hits.extend(_unbounded_hits(a, b, a_req=a_req, b_req=b_req))
     return hits
+
+
+def _unbounded_hits(
+    a: RequirementAttribute, b: RequirementAttribute, *, a_req: Requirement, b_req: Requirement
+) -> list[Hit]:
+    """A finite limit on one side, "no limit" for the same measure on the other."""
+    for finite, open_, finite_req, open_req in ((a, b, a_req, b_req), (b, a, b_req, a_req)):
+        if finite.value is None or (finite.comparison or "=") not in ("<=", "="):
+            continue
+        if open_.value is not None:
+            continue
+        found = unbounded(open_req.body)
+        if found is None or found[0] != base_metric(finite.metric):
+            continue
+        if not (same_subject(finite, open_) or _nouns(finite_req.body) & _nouns(open_req.body)):
+            continue
+        measure = found[0].replace("_", " ")
+        about = f" for {finite.entity}" if finite.entity else ""
+        return [
+            Hit(
+                "unbounded",
+                f"{label(finite_req)} sets the {measure}{about} to "
+                f"{human(finite.value, finite.unit, finite.comparison)}; {label(open_req)} sets "
+                f'no limit ("{found[1]}"). Both cannot hold.',
+            )
+        ]
+    return []
+
+
+def read_attributes(text: str) -> Attributes:
+    """The patterns' reading of a requirement, as the checker indexes it: frequency words as
+    periods, and a requirement that leaves a measure open indexed under that measure (Sprint 6).
+    Pure — the evaluation (``eval/recall_by_layer.py``) uses it too, so the two never drift."""
+    attributes = AttributeExtractor().extract(with_frequencies(text))
+    if attributes.metric is None:  # "until the user logs out": index it under what it leaves open
+        found = unbounded(text)
+        if found is not None:
+            attributes = replace(attributes, metric=found[0])
+    return attributes
 
 
 def index_requirement(
@@ -243,7 +370,7 @@ def index_requirement(
     row = db.scalar(query)
     if row is not None:
         return row
-    attributes = AttributeExtractor().extract(requirement.body)
+    attributes = read_attributes(requirement.body)
     if not attributes.parsed and llm is not None:
         try:
             attributes = (
@@ -330,6 +457,10 @@ class RuleChecker:
             )
             if value is not None
         ]
+        if mine.metric is not None:  # "concurrency" meets "concurrency:session"
+            shared.append(
+                func.split_part(RequirementAttribute.metric, ":", 1) == base_metric(mine.metric)
+            )
         if not shared:
             return []
         rows = self.db.execute(
@@ -346,8 +477,8 @@ class RuleChecker:
                 or_(*shared),
             )
             .order_by(Requirement.order_index, Requirement.id)
-        ).tuples()
-        return list(rows)
+        )
+        return [(requirement_row, attributes) for requirement_row, attributes in rows]
 
     def check(self, requirement: Requirement, *, run_id: uuid.UUID | None = None) -> list[Finding]:
         """Compare one requirement with the rest of its project; returns the new findings."""
