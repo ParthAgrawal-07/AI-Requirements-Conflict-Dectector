@@ -28,6 +28,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.classification import severity
 from app.classification.budget import BudgetExceededError
 from app.classification.classifier import Classifier, as_input
 from app.classification.context_pack import ContextPackBuilder
@@ -156,6 +157,7 @@ def classify_candidate_pair(
             prompt_version=PROMPT_VERSION,
             llm_model=llm.model,
         )
+        severity.apply_proposal(finding, [a, b])  # US-08: how bad, beside how sure
         try:
             with db.begin_nested():
                 db.add(finding)
@@ -212,6 +214,7 @@ def classify_requirement(
             prompt_version=PROMPT_VERSION,
             llm_model=llm.model,
         )
+        severity.apply_proposal(finding, [requirement])
         db.add(finding)
     db.commit()
     return finding

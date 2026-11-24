@@ -10,7 +10,7 @@ Reviewing findings (confirm, dismiss, merge, reclassify) is US-10, Sprint 3.
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session, aliased, selectinload
 
 from app.core.errors import NotFoundError
@@ -86,6 +86,19 @@ def _involved(db: Session, findings: list[Finding]) -> dict[uuid.UUID, list[Requ
     return involved
 
 
+# Severity is stored as text: rank it explicitly so High sorts before Medium and Low.
+_SEVERITY_RANK = case(
+    (Finding.severity == Severity.HIGH, 0),
+    (Finding.severity == Severity.MEDIUM, 1),
+    (Finding.severity == Severity.LOW, 2),
+    else_=3,
+)
+_ORDER = {
+    "confidence": (Finding.confidence.desc(), Finding.created_at, Finding.id),
+    "severity": (_SEVERITY_RANK, Finding.confidence.desc(), Finding.created_at, Finding.id),
+}
+
+
 def list_findings(
     db: Session,
     project: Project,
@@ -96,15 +109,21 @@ def list_findings(
     low_confidence: bool | None = None,
     sources: list[str] | None = None,
     severity: Severity | None = None,
+    include_dismissed: bool = False,
+    sort: str = "confidence",
     limit: int = 50,
     offset: int = 0,
 ) -> tuple[list[FindingView], int]:
-    """A page of the project's live findings, most confident first, and the total."""
+    """A page of the project's live findings and the total: most confident first, or (Keval,
+    US-08) most severe first. Dismissed findings are hidden unless asked for (US-15) — by
+    ``include_dismissed`` or by filtering on the dismissed status — and stay restorable."""
     conditions = [Finding.project_id == project.id, ~Finding.is_stale]
     if category is not None:
         conditions.append(Finding.category == category)
     if status is not None:
         conditions.append(Finding.status == status)
+    elif not include_dismissed:
+        conditions.append(Finding.status != FindingStatus.DISMISSED)
     if severity is not None:  # US-13 drill-down
         conditions.append(Finding.severity == severity)
     if low_confidence is True:
@@ -134,7 +153,7 @@ def list_findings(
             select(Finding)
             .options(selectinload(Finding.clarification))
             .where(*conditions)
-            .order_by(Finding.confidence.desc(), Finding.created_at, Finding.id)
+            .order_by(*_ORDER.get(sort, _ORDER["confidence"]))
             .limit(limit)
             .offset(offset)
         )
