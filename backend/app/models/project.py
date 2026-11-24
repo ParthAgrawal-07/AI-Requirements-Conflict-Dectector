@@ -46,6 +46,9 @@ class Project(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         CheckConstraint("context_version >= 0", name="context_version_non_negative"),
         CheckConstraint("graph_revision >= 0", name="graph_revision_non_negative"),
         CheckConstraint("baseline_revision >= 0", name="baseline_revision_non_negative"),
+        CheckConstraint(
+            "feedback_alert_threshold BETWEEN 1 AND 100", name="feedback_alert_threshold_range"
+        ),
         Index("ix_projects_workspace_id_status", "workspace_id", "status"),
     )
 
@@ -85,6 +88,9 @@ class Project(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # US-45, SX-30: re-use this project's accepted suggestions as prompt examples — an
     # experiment, off unless the CP2 evaluation shows it helps (migration 0008).
     use_feedback_examples: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
+    # US-15 (migration 0009a): false-positive dismissals of one pattern that surface it for tuning
+    # in the AI feedback report. A signal for people; nothing retrains itself.
+    feedback_alert_threshold: Mapped[int] = mapped_column(default=5, server_default=text("5"))
 
     # Users are deactivated, never deleted, so SET NULL only matters for odd cleanup scripts.
     created_by: Mapped[uuid.UUID | None] = mapped_column(

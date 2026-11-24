@@ -527,6 +527,9 @@ class RuleChecker:
             category=FindingCategory.CONFLICTING,
             confidence=CONFIDENCE[hit.rule_id],
             severity=SEVERITY[hit.rule_id],
+            severity_source="system",  # US-08: the rule's own severity, overridable
+            severity_proposed=SEVERITY[hit.rule_id].value,
+            severity_reason=f"Rule {hit.rule_id}",
             rationale=hit.rationale,
             explanation=f"Rule check — {RULES[hit.rule_id]}. {hit.rationale}",
             # What the rule compared (the column keeps the producer's raw output, FR-20).

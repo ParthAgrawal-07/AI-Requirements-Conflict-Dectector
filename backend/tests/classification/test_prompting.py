@@ -40,6 +40,10 @@ def test_every_prompt_file_has_a_system_and_user_part() -> None:
         f"{kind}_v1_{part}"  # US-51, US-45, US-58 (Sprint 5)
         for kind in ("wording", "suggest", "attributes")
         for part in ("system", "user")
+    } | {
+        f"{kind}_v1_{part}"  # US-55, US-61 (Sprint 6)
+        for kind in ("change_summary", "srs_section")
+        for part in ("system", "user")
     }
 
 

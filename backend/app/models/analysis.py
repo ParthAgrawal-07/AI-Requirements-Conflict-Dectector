@@ -100,6 +100,14 @@ class Finding(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ),
         CheckConstraint("source IN ('ai', 'rule', 'person')", name="source_values"),
         CheckConstraint("(source = 'rule') = (rule_id IS NOT NULL)", name="rule_has_rule_id"),
+        CheckConstraint(
+            "severity_source IS NULL OR severity_source IN ('system', 'person', 'reviewer')",
+            name="severity_source_values",
+        ),
+        CheckConstraint(
+            "severity_proposed IS NULL OR severity_proposed IN ('low', 'medium', 'high')",
+            name="severity_proposed_values",
+        ),
         Index("ix_findings_document_id_status", "document_id", "status"),
         Index("ix_findings_document_id_category", "document_id", "category"),
         Index("ix_findings_project_id_status", "project_id", "status"),
@@ -165,6 +173,16 @@ class Finding(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         server_default=FindingStatus.FLAGGED.value,
     )
     severity: Mapped[Severity | None] = mapped_column(enum_column(Severity, "finding_severity"))
+    # Who set the severity now in force (US-08, migration 0009a): ``system``, ``person`` (whoever
+    # raised a concern) or ``reviewer`` (an override). ``severity_proposed`` keeps what the system
+    # proposed so an override never hides it; the other columns record the override.
+    severity_source: Mapped[str | None] = mapped_column(String(16))
+    severity_proposed: Mapped[str | None] = mapped_column(String(8))
+    severity_reason: Mapped[str | None] = mapped_column(Text)
+    severity_set_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    severity_set_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Verbatim classifier output — kept even after a human corrects the finding (FR-20).
     original_ai_output: Mapped[dict[str, Any]] = mapped_column(JSONB)
     reviewed_by: Mapped[uuid.UUID | None] = mapped_column(

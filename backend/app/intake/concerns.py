@@ -167,6 +167,7 @@ def raise_concern(
         explanation=explanation.strip(),
         original_ai_output={},  # nothing came from a model
         source="person",
+        severity_source="person",  # US-08: the author's choice, overridable by a reviewer
         raised_by=ctx.user.id,
         external_ref=(external_ref or "").strip() or None,
         ai_miss=not _analysis_saw_it(db, pair, requirements[0]),
