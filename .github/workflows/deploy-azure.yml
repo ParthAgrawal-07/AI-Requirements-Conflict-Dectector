@@ -1,0 +1,71 @@
+# Continuous deployment to the single Azure VM (docs/engineering/devops-guide.md, "Single-host
+# production"). Every push to main is pulled onto the VM and rebuilt with docker-compose.prod.yml;
+# migrations run through the `migrate` service as usual. .env and all data stay on the VM.
+#
+# Repository secrets:
+#   VM_HOST         public host name of the VM (also the site's address)
+#   VM_USER         SSH user (azureuser)
+#   VM_SSH_KEY      private key whose public half is in the VM's ~/.ssh/authorized_keys
+#   VM_KNOWN_HOSTS  output of `ssh-keyscan -t ed25519 <VM_HOST>` — pins the VM's host key
+
+name: Deploy (Azure VM)
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+  workflow_dispatch:
+
+# Never run two deploys at once; a newer push waits for the running one instead of cutting it off
+# mid-migration.
+concurrency:
+  group: deploy-azure
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Configure SSH
+        env:
+          VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+          VM_KNOWN_HOSTS: ${{ secrets.VM_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Pull and rebuild on the VM
+        env:
+          VM_HOST: ${{ secrets.VM_HOST }}
+          VM_USER: ${{ secrets.VM_USER }}
+          SHA: ${{ github.sha }}
+        run: |
+          ssh -o StrictHostKeyChecking=yes "$VM_USER@$VM_HOST" "SHA=$SHA bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd ~/rcd
+          git fetch --quiet origin main
+          git reset --hard "$SHA"
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build --remove-orphans
+          docker image prune -f >/dev/null
+          REMOTE
+
+      - name: Wait until the site is ready
+        env:
+          VM_HOST: ${{ secrets.VM_HOST }}
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS "https://$VM_HOST/health/ready" >/dev/null; then
+              echo "ready"; exit 0
+            fi
+            sleep 10
+          done
+          echo "https://$VM_HOST/health/ready did not answer within 5 minutes" >&2
+          exit 1

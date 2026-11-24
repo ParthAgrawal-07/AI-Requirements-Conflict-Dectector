@@ -1,10 +1,36 @@
 # syntax=docker/dockerfile:1
 #
-# Dev-server image only (Vite's dev server, hot-reload via the docker-compose bind mount).
-# Sprint 5 (Dhavni didi) adds a production build stage — `npm run build` output served by
-# nginx or shipped to Vercel — once there is real UI to ship.
+# Three stages. `dev` is last, so a plain build (docker-compose.yml, the E2E workflow) still gets
+# the Vite dev server with hot-reload via the bind mount. `prod` is the built SPA served by Caddy,
+# which also proxies the API; docker-compose.prod.yml selects it with `target: prod`.
 
-FROM node:20-slim
+FROM node:20-slim AS build
+
+WORKDIR /app
+
+COPY package.json ./
+
+# Same Windows lockfile problem as the dev stage below (npm/cli#4828).
+RUN rm -f package-lock.json && npm install
+
+COPY . .
+
+# Vite bakes this into the bundle; the HTTP client and the /ws socket both derive from it, so it
+# must be the full public origin (an empty value would break the WebSocket URL).
+ARG VITE_API_BASE_URL
+RUN test -n "$VITE_API_BASE_URL" || { echo "VITE_API_BASE_URL is required" >&2; exit 1; }
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+
+RUN npm run build
+
+
+FROM caddy:2.8-alpine AS prod
+
+COPY --from=build /app/dist /srv
+# The Caddyfile is mounted by docker-compose.prod.yml.
+
+
+FROM node:20-slim AS dev
 
 WORKDIR /app
 
