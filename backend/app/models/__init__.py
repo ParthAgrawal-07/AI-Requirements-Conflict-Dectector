@@ -52,6 +52,9 @@ from app.models.user import User
 from app.models.workspace import Workspace
 
 __all__ = [
+    "ChangeLogVisit",
+    "GraphEvent",
+    "GraphState",
     "EMBEDDING_DIM",
     "AnalysisRun",
     "AnalysisRunStatus",

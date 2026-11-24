@@ -31,6 +31,8 @@ export interface GraphEdge {
   status: EdgeStatus;
   severity: "low" | "medium" | "high" | null;
   confidence: number | null;
+  found_by?: "ai" | "rule" | "person";
+  link_kind?: "depends_on" | "refines" | "related_to" | null;
 }
 
 export interface GraphSnapshot {

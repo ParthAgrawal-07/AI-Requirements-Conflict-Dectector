@@ -103,6 +103,10 @@ export function useGraphDeltas(projectId: string) {
     if (spoken.some((delta) => delta.added.edges.length || delta.changed.edges.length || delta.removed.edge_ids.length)) {
       void queryClient.invalidateQueries({ queryKey: ["findings", projectId] });
     }
+    // US-55: every spoken delta is now a row of the written change log;
+    // a merge may add a point to the time slider (US-50).
+    void queryClient.invalidateQueries({ queryKey: ["changes", projectId] });
+    void queryClient.invalidateQueries({ queryKey: ["graph-revisions", projectId] });
   }, [queryClient, projectId, notify, user?.id]);
 
   useRealtimeEvents((event) => {
