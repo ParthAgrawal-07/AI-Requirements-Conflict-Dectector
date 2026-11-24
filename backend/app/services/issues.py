@@ -293,7 +293,9 @@ def _announce(
         deltas.publish(
             db,
             project.id,
-            deltas.Change(requirements=set(requirement_ids(db, issue.id)), sentences=[sentence]),
+            deltas.Change(
+                requirements=set(requirement_ids(db, issue.id)), sentences=[sentence], kind="issue"
+            ),
             actor=actor,
         )
 
@@ -468,6 +470,20 @@ def add_comment(db: Session, issue: Issue, author: User | None, body: str) -> Co
     issue.updated_at = datetime.now(UTC)
     db.commit()
     _announce(db, issue, ISSUE_COMMENTED, actor=author, comment_id=str(comment.id))
+    project = db.get(Project, issue.project_id)
+    if project is not None:  # Madhav (US-53): watchers of the issue
+        from app.notifications import hooks, subjects
+
+        who = author.full_name if author else "Someone"
+        hooks.watchers(
+            db,
+            project,
+            "issue",
+            issue.id,
+            subjects.issue(db, issue, f"{who} commented on {{key}}"),
+            actor_id=author.id if author else None,
+            issue_id=issue.id,
+        )
     return comment
 
 

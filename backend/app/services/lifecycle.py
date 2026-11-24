@@ -257,6 +257,8 @@ def transition(
             sentences=[
                 narrator.moved(ctx.user.full_name, deltas.label_of(requirement), target.value)
             ],
+            kind="state",
+            counts={"requirements_deprecated": 1} if target is RequirementState.DEPRECATED else {},
         ),
         actor=ctx.user,
     )

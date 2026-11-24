@@ -55,6 +55,11 @@ class Requirement(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             "document_id IS NOT NULL OR origin <> 'document'", name="document_origin_has_document"
         ),
         Index(
+            "ix_requirements_project_id_protected",
+            "project_id",
+            postgresql_where=text("is_protected"),
+        ),
+        Index(
             "uq_requirements_origin_message_id",
             "origin_message_id",
             unique=True,
@@ -101,6 +106,12 @@ class Requirement(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     # Compliance-critical: never auto-resolved, all access audited (FR-21, DR-05, NFR-13).
     is_protected: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
+    # The current protection decision (US-18, migration 0010d); the audit log keeps the history.
+    protected_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    protected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    protection_reason: Mapped[str | None] = mapped_column(Text)
     current_version: Mapped[int] = mapped_column(default=1, server_default=text("1"))
     # The version last checked for Ambiguous/Incomplete (US-05, 0006c): never paid for twice.
     single_checked_version: Mapped[int | None]

@@ -31,6 +31,8 @@ export interface GraphEdge {
   status: EdgeStatus;
   severity: "low" | "medium" | "high" | null;
   confidence: number | null;
+  found_by?: "ai" | "rule" | "person";
+  link_kind?: "depends_on" | "refines" | "related_to" | null; // a human link (US-53)
 }
 
 export interface GraphSnapshot {
@@ -113,6 +115,10 @@ export interface RequirementDetail extends RequirementRead {
   tags: string[];
   origin_message_id: UUID | null;
   signed_off_version: number | null;
+  /** US-18: who protected it, when and why. */
+  protected_by?: UUID | null;
+  protected_at?: string | null;
+  protection_reason?: string | null;
   allowed_transitions: RequirementState[];
   readiness: { analysis_current: boolean; open_high_findings: UUID[]; needs_signoff: boolean };
   transitions: Transition[];

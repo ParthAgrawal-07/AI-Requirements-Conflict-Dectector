@@ -19,8 +19,10 @@ from app.api import (
     auth,
     baselines,
     change_requests,
+    change_summary,
     channels,
     clarifications,
+    compliance,
     concerns,
     consequences,
     context,
@@ -38,11 +40,13 @@ from app.api import (
     requirements,
     requirements_compose,
     roles,
+    social,
     suggestions,
     workspaces,
 )
 from app.core.auth import get_current_user
 from app.graph import api as graph_api
+from app.graph import changes_api
 from app.lint import api as lint_api
 from app.notifications import api as notifications_api
 from app.schemas.common import ErrorResponse
@@ -72,20 +76,24 @@ for _router in (
     messages.router,
     graph_api.router,
     findings.router,
-    clarifications.router,
-    issues.router,
     analysis_runs.router,
+    clarifications.router,
     search_similar.router,
+    issues.router,
     change_requests.router,
     concerns.router,
     consequences.router,
-    decision_rules.router,
+    lint_api.router,
     search_thresholds.router,
     suggestions.router,
     notifications_api.router,
-    lint_api.router,
+    decision_rules.router,
     baselines.router,
     analytics.router,
+    changes_api.router,
+    social.router,
+    change_summary.router,
+    compliance.router,
 ):
     api_router.include_router(_router, dependencies=_authenticated, responses=_unauthorized)
 

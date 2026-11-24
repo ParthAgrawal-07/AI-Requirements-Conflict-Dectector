@@ -1,25 +1,27 @@
 import type { ReactNode } from "react";
 import { Link, Navigate, Outlet, useLocation } from "react-router-dom";
 import type { RouteObject } from "react-router-dom";
-import { Button } from "../components/Button";
 import { LoginPage } from "../features/auth/LoginPage";
 import { SignupWithCodePage } from "../features/auth/SignupWithCodePage";
+import { BaselineList } from "../features/baselines/BaselineList";
 import { ChangeEditor } from "../features/changes/ChangeEditor";
 import { ChangeRequestList } from "../features/changes/ChangeRequestList";
 import { ChangeRequestPage } from "../features/changes/ChangeRequestPage";
 import { ChannelView } from "../features/channels/ChannelView";
 import { ComposerPage } from "../features/composer/ComposerPage";
 import { DashboardPage } from "../features/dashboard/DashboardPage";
+import { AiFeedbackPage } from "../features/feedback/AiFeedbackPage";
 import { FindingsPage } from "../features/findings/FindingsPage";
 import { IssueList } from "../features/issues/IssueList";
 import { IssuePage } from "../features/issues/IssuePage";
 import { KitPage } from "../features/kit/KitPage";
+import { ProjectSettings } from "../features/members/ProjectSettings";
 import { JoinPage } from "../features/members/JoinPage";
 import { MembersPage } from "../features/members/MembersPage";
 import { WorkspaceCreate } from "../features/members/WorkspaceCreate";
 import { MapPage } from "../features/map/MapPage";
 import { Inbox } from "../features/notifications/Inbox";
-import { lastProject, useProjects, useWorkspaces } from "../features/projects/api";
+import { lastProject, useWorkspaces } from "../features/projects/api";
 import { ProjectHomePage } from "../features/projects/ProjectHomePage";
 import { WorkspaceHomePage } from "../features/projects/WorkspaceHomePage";
 import { prototypeRoutes } from "../features/prototypes/routes";
@@ -30,13 +32,11 @@ import { SetupWizard } from "../features/setup/SetupWizard";
 import { WorkspaceActions } from "../features/setup/WorkspaceActions";
 import { AppShell } from "./AppShell";
 import { useAuth } from "./auth";
-import { ComingSoon } from "./ComingSoon";
 
 /** Routes behind sign-in; a signed-out visitor goes to /login and comes back afterwards. */
 export function RequireAuth({ children }: { children?: ReactNode }) {
-  const { token, loading, restoring } = useAuth();
+  const { token, loading } = useAuth();
   const location = useLocation();
-  if (restoring) return <p className="page">Loading…</p>;
   if (!token) {
     return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
   }
@@ -49,31 +49,11 @@ export function RequireAuth({ children }: { children?: ReactNode }) {
 export function RootRedirect() {
   const { user } = useAuth();
   const workspaces = useWorkspaces();
-  const last = lastProject();
-  const projects = useProjects(last?.workspaceId);
-
-  if (workspaces.isLoading || (Boolean(last?.projectId) && projects.isLoading)) {
-    return <p className="page">Loading…</p>;
-  }
-
-  if (workspaces.isError) {
-    return (
-      <div className="page" role="alert">
-        <h1>Could not load workspaces</h1>
-        <p className="field-error">
-          {workspaces.error instanceof Error ? workspaces.error.message : "Failed to load workspaces."}
-        </p>
-        <Button onClick={() => void workspaces.refetch()}>Try again</Button>
-      </div>
-    );
-  }
-
+  if (workspaces.isLoading) return <p className="page">Loading…</p>;
   const list = workspaces.data ?? [];
+  const last = lastProject();
   if (last && list.some((workspace) => workspace.id === last.workspaceId)) {
-    const projectExists =
-      Boolean(last.projectId) &&
-      Boolean(projects.data?.items.some((p) => p.id === last.projectId));
-    const target = projectExists
+    const target = last.projectId
       ? `/w/${last.workspaceId}/p/${last.projectId}`
       : `/w/${last.workspaceId}`;
     return <Navigate to={target} replace />;
@@ -97,10 +77,6 @@ export function NoWorkspace() {
     </div>
   );
 }
-
-const LATER: { path: string; title: string; sprint: string }[] = [
-  { path: "baselines", title: "Baselines", sprint: "Sprint 5 (US-40)" },
-];
 
 export const routes: RouteObject[] = [
   { path: "/login", element: <LoginPage /> },
@@ -138,10 +114,10 @@ export const routes: RouteObject[] = [
               { path: "changes/new", element: <ChangeEditor /> },
               { path: "changes/:changeRequestId", element: <ChangeRequestPage /> },
               { path: "insights", element: <DashboardPage /> },
-              ...LATER.map((item) => ({
-                path: item.path,
-                element: <ComingSoon title={item.title} sprint={item.sprint} />,
-              })),
+              { path: "insights/ai-feedback", element: <AiFeedbackPage /> },
+              { path: "baselines", element: <BaselineList /> },
+              { path: "settings", element: <ProjectSettings /> },
+              { path: "settings/decision-rules", element: <ProjectSettings tab="decision-rules" /> },
             ],
           },
         ],

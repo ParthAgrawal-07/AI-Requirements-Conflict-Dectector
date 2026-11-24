@@ -30,7 +30,6 @@ from dataclasses import dataclass
 from sqlalchemy import BigInteger, cast, func, select
 from sqlalchemy.orm import Session
 
-from app.context.service import ensure_analysis_allowed
 from app.core.errors import BadRequestError, ConflictError, NotFoundError
 from app.graph import deltas, narrator
 from app.intake import drafts as draft_service
@@ -80,7 +79,6 @@ def post_requirement(
     project = db.scalar(select(Project).where(Project.id == channel.project_id).with_for_update())
     if project is None:  # impossible through the FK; defensive
         raise NotFoundError("Channel not found")
-    ensure_analysis_allowed(db, project)  # 409 project_in_setup until the brief is confirmed
     author_membership = active_membership(db, author.id, project.workspace_id)
     owner_id = fields.owner_id or author.id
     if active_membership(db, owner_id, project.workspace_id) is None:
@@ -89,13 +87,10 @@ def post_requirement(
         author_membership.stakeholder_group if author_membership else None
     )
     draft = draft_service.get_draft(db, author, draft_id) if draft_id else None
-    if draft is not None and draft.project_id != project.id:
-        # Never delete a draft of another project as a side effect of this post.
-        raise NotFoundError("Draft not found")
     from_suggestion.refuse_placeholders(fields.statement)
-    old = (
-        from_suggestion.check_supersede(db, author, project.id, supersedes) if supersedes else None
-    )
+    old = from_suggestion.check_supersede(db, author, supersedes) if supersedes else None
+    if old is not None and old.project_id != project.id:
+        raise NotFoundError("The requirement to supersede was not found")
     if source_suggestion_id is not None:
         if old is None:
             raise BadRequestError(
@@ -164,6 +159,7 @@ def post_requirement(
         deltas.Change(
             new_requirements={requirement.id},
             sentences=[narrator.added(author.full_name, label)],
+            kind="added",
         ),
         actor=author,
     )

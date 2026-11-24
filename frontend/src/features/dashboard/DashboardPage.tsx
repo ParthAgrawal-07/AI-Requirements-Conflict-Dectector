@@ -85,6 +85,7 @@ export function DashboardPage() {
             Counts of what analysis, rules and people found — analysis can miss issues.
           </p>
         </div>
+        <Link to="ai-feedback">AI feedback →</Link>
       </header>
 
       <div className="filters" role="group" aria-label="Filter the dashboard">
