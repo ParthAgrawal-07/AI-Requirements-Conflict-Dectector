@@ -11,6 +11,9 @@ Turns parser output (RawSegments) into individual Requirement objects in two pas
      a page break mid-sentence.
    - Bullet / numbered items following a lead-in ("...the following formats:")
      are kept with it as sub-items; otherwise each item is its own unit.
+   - Table rows ("cell | cell") under an ID line that is only a title
+     ("FR-7: Export reports") are that requirement's specification and stay with it.
+   - A table's header row, and every repeat of it, is excluded.
    - Headings are not units; they become the section_heading of what follows.
    - Table-of-contents lines are excluded.
 
@@ -71,6 +74,8 @@ _MIN_STATEMENT_WORDS = 4  # shorter modal-less text without punctuation is a fra
 _LONG_REQUIREMENT_CHARS = 1000
 _PARAGRAPH_BREAK = re.compile(r"\n\s*\n")
 _TRAILING_PAGE_NUMBER = re.compile(r"\s\d+$")
+_MAX_HEADER_CELL_WORDS = 4
+_HEADER_CELL_PUNCTUATION = re.compile(r"[.,;:()]")
 _WORD = re.compile(r"\w+")
 _CAPTION = re.compile(r"^(?:figure|fig\.|table)\s*\d", re.IGNORECASE)
 # Small words allowed in lower case inside a Title Case heading.
@@ -107,6 +112,34 @@ def _has_modal(text: str) -> bool:
     return bool(STRONG_MODAL_PATTERN.search(text) or WEAK_MODAL_PATTERN.search(text))
 
 
+def _is_table_row(line: str) -> bool:
+    return " | " in line
+
+
+def _is_label_row(line: str) -> bool:
+    """A table row of short labels, like a header ("ID | Name | Priority")."""
+    cells = [cell.strip() for cell in line.split("|")]
+    return (
+        len(cells) > 1
+        and not _has_modal(line)
+        and all(
+            cell
+            and len(cell.split()) <= _MAX_HEADER_CELL_WORDS
+            and not _HEADER_CELL_PUNCTUATION.search(cell)
+            and not REQUIREMENT_ID_PATTERN.match(cell)
+            for cell in cells
+        )
+    )
+
+
+def _is_table_header(line: str, next_line: str | None) -> bool:
+    """The first row of a table is its header when it is a row of labels and the row
+    under it is not; "Priority | High" above "Owner | Parth" is data, not a header."""
+    return _is_label_row(line) and not (
+        next_line is not None and _is_table_row(next_line) and _is_label_row(next_line)
+    )
+
+
 def _is_heading(line: str) -> bool:
     """Heuristic heading test for a line that forms a paragraph on its own."""
     if (
@@ -137,6 +170,7 @@ class _Unit:
     source_req_id: str | None
     lines: list[str] = field(default_factory=list)
     in_list: bool = False
+    own_paragraph: bool = False  # the unit's first line was a paragraph on its own
 
     @property
     def text(self) -> str:
@@ -145,6 +179,23 @@ class _Unit:
     @property
     def location(self) -> str:
         return f"{self.segment.location_type} {self.segment.page_or_paragraph}"
+
+    @property
+    def takes_rows(self) -> bool:
+        """True for an ID line that is only a title ("NU-FR-01: Registration and Login"):
+        the table rows after it (Description, Input, ...) specify that requirement."""
+        if not self.source_req_id or not self.own_paragraph:
+            return False
+        title = self.lines[0].split(self.source_req_id, 1)[-1].strip(" 	:.-–|)]")
+        return (
+            len(title.split()) <= _MAX_HEADING_WORDS
+            and not _has_modal(title)
+            and not TERMINAL_PUNCTUATION_PATTERN.search(title)
+        )
+
+    @property
+    def has_rows(self) -> bool:
+        return any(_is_table_row(line) for line in self.lines[1:])
 
     @property
     def is_bare_id(self) -> bool:
@@ -170,6 +221,8 @@ class _Unit:
     def accepts_next_paragraph(self, line: str, *, page_break: bool) -> bool:
         if self.is_bare_id or self.text.endswith(":"):
             return True
+        if _is_table_row(line):  # a row stands alone, even at the top of a page
+            return False
         # A sentence cut off by a page break continues on the next page. Lists end
         # without punctuation too, so they never continue this way.
         if not page_break or self.in_list:
@@ -238,6 +291,16 @@ class Segmenter:
         heading: str | None = None
         parser_heading: str | None = None
         in_toc = False
+        after_row = False  # the previous line was a table row
+        table_headers: set[str] = set()
+        all_lines = [
+            line.strip()
+            for seg in raw_segments
+            for para in _PARAGRAPH_BREAK.split(seg.text)
+            for line in para.split("\n")
+            if line.strip()
+        ]
+        position = -1  # index of the current line in all_lines
 
         def close() -> None:
             nonlocal current
@@ -260,6 +323,7 @@ class Segmenter:
             for para_idx, para in enumerate(_PARAGRAPH_BREAK.split(seg.text)):
                 lines = [line.strip() for line in para.split("\n") if line.strip()]
                 for line_idx, line in enumerate(lines):
+                    position += 1
                     if TOC_TITLE_PATTERN.match(line):
                         in_toc = True
                         close()
@@ -275,11 +339,25 @@ class Segmenter:
                         continue
                     in_toc = False
 
+                    is_row = _is_table_row(line)
+                    starts_table, after_row = not after_row, is_row
+                    next_line = all_lines[position + 1] if position + 1 < len(all_lines) else None
+                    if is_row and (
+                        line in table_headers
+                        or (starts_table and _is_table_header(line, next_line))
+                    ):
+                        table_headers.add(line)  # repeated on every page of the table
+                        excluded.append(
+                            ExcludedText(text=line, location=location, reason="table_header")
+                        )
+                        continue
+
                     id_match = REQUIREMENT_ID_PATTERN.match(line)
                     if id_match:
                         sections[-1].add(line, new_paragraph=line_idx == 0)
                         close()
                         current = _Unit(seg, heading, id_match.group("id"))
+                        current.own_paragraph = len(lines) == 1
                         current.add(line)
                         continue
 
@@ -307,6 +385,10 @@ class Segmenter:
                     # The section keeps the text verbatim, requirements and prose alike.
                     # A DOCX segment is one paragraph; in a PDF a blank line separates them.
                     sections[-1].add(line, new_paragraph=line_idx == 0)
+
+                    if is_row and current is not None and current.takes_rows:
+                        current.add(line, list_item=True)
+                        continue
 
                     is_list = seg.is_list_item or _is_list_item(line)
                     if current is not None:
@@ -383,7 +465,8 @@ class Segmenter:
         sentences = [s.text for s in _sentencizer()(unit.text).sents]
         if sum(bool(STRONG_MODAL_PATTERN.search(s)) for s in sentences) > 1:
             reasons.append("May contain more than one requirement (several 'shall/must' sentences)")
-        if len(unit.text) > _LONG_REQUIREMENT_CHARS:
+        # A specification table under the ID is long by design, not a merge.
+        if len(unit.text) > _LONG_REQUIREMENT_CHARS and not unit.has_rows:
             reasons.append("Unusually long; check that it was not merged with following text")
         return reasons
 

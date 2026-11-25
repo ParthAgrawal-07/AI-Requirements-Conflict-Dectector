@@ -83,8 +83,12 @@ We define a generic `Parser` abstract base class with a `parse(file_path: str) -
 Implemented in `segmentation/segmenter.py`; patterns in `segmentation/rules.py`.
 
 ### 9.1 Layout clean-up (PDF parser)
-- Text is read per PyMuPDF block, with blocks separated by a blank line, so a paragraph break can be told apart from a wrapped line.
-- **Headers/footers:** a block in the top/bottom 10% of the page is dropped if it is a bare page number (`3`, `Page 3 of 10`, `- 3 -`) or if the same text (digits ignored) is in the margin of at least half the pages. Blocks containing a requirement ID or `shall`/`must` are never dropped.
+Reading order is rebuilt from line positions (`parsers/pdf_layout.py`), not taken from PyMuPDF's blocks. Blocks follow the PDF's drawing order, so a borderless table came out column by column, with one requirement's fields as dozens of separate "requirements" and wrapped IDs (`NU-` / `NFR-` / `01`) never recognised.
+- **Bands and table rows:** lines whose vertical extents touch form a band. A band whose lines fall into two or more side-by-side columns, each a gap-free stack of lines, is a table row and is emitted as one line, `cell | cell | cell`, with wrapped cell text re-joined (`NU-` + `NFR-` + `01` → `NU-NFR-01`). A band whose columns have gaps (a two-column page) is read column by column.
+- **Loosely spaced tables:** cell text that wrapped below its row without touching it is put back in its cell when it fills fewer cells than the row, each starting on one of the row's cell edges, and no cell starts with a requirement ID.
+- **Fused cells:** some writers put a short label and its value on one line (`Input Dispatch, note`). Between two table rows of the same font size, a line is cut where a word starts on the rows' cell edges, as long as every piece stays inside its own column.
+- **Paragraphs:** PyMuPDF's block boundaries still separate paragraphs, with a blank line between them. A line that fills the text width without ending a sentence runs on into the next block, because some writers put every wrapped line in a block of its own. A paragraph set at least 1.5 pt larger than the document's body font, up to three lines, is a wrapped heading and is joined onto one line.
+- **Headers/footers:** a paragraph or row in the top/bottom 10% of the page is dropped if it is a bare page number (`3`, `Page 3 of 10`, `- 3 -`) or if the same text (digits ignored) is in the margin of at least half the pages. Text containing a requirement ID or `shall`/`must` is never dropped.
 
 ### 9.2 Grouping lines into units
 - A line starting with a requirement ID starts a new unit. An ID is an upper-case prefix, optionally in several parts, then `-` or `_`, then a number with optional sub-numbers and an optional one-letter suffix: `REQ-001`, `FR-1.2.3`, `NFR-01`, `UC-07`, `SEC-3`, `PERF_01`, `FR-AUTH-01`, `REQ-SEC-001`, `REQ-001-A`, `UC-1a`. Standard and encoding names that look the same (`ISO-27001`, `UTF-8`, `TLS-1.2`, `IEEE-830`, …) are not IDs, and neither is a number with a longer word glued to it (`SEC-1st`). IDs mid-sentence are cross-references, not the line's own ID.
@@ -94,6 +98,8 @@ Implemented in `segmentation/segmenter.py`; patterns in `segmentation/rules.py`.
   - it is a bare ID (ID and text in separate blocks or cells);
   - it was cut off by a page break mid-sentence.
 - **Lists:** items after a lead-in (`…the following channels:`) stay with it as sub-items; an item that is itself a `shall`/`must` statement stands alone.
+- **Specification tables:** an ID line that is a paragraph of its own and only a title (`NU-FR-01: Registration and Login`: at most 10 words, no modal, no end punctuation) keeps the table rows under it (`Description | …`, `Input | …`), each on its own line, until the next ID or heading. Such a unit is not flagged as over-long. A table row never continues the previous unit across a page break.
+- **Table headers:** the first row of a table is excluded (`table_header`) when every cell is a short label (at most 4 words, no punctuation, no ID, no modal) and the row below it is not also all labels. The same row repeated later (a header repeated on each page) is excluded too.
 - **Headings** (numbered like `3.2 Functional Requirements`, or short Title Case / UPPER CASE lines; DOCX heading styles) are not requirements; they become `section_heading` of what follows. Figure/table captions are not headings.
 - **Table of contents:** lines with dot leaders, DOCX `TOC n` paragraphs, and entries following a `Contents` title are excluded.
 
@@ -106,7 +112,7 @@ Implemented in `segmentation/segmenter.py`; patterns in `segmentation/rules.py`.
 - Text without an ID:
   - `shall`/`must`: requirement. Flagged if it sits in an intro/glossary-type section.
   - `should`/`will`/`can`/`may`: requirement, flagged ("weaker modal verb").
-  - no modal: excluded if it is a fragment (under 4 words, no punctuation, e.g. a table header) or sits under a non-requirement heading (Introduction, Purpose, Scope, Glossary, References, …). Otherwise it is kept and flagged.
+  - no modal: excluded if it is a fragment (under 4 words, no punctuation, e.g. a label) or sits under a non-requirement heading (Introduction, Purpose, Scope, Glossary, References, …). Otherwise it is kept and flagged.
 - Duplicate source IDs in one document are all flagged (duplicate IDs are themselves a finding).
 - Requirements without a source ID get `UNKNOWN-<page/para>-<n>` as `id`, and `source_req_id` stays `None`: an item with no printed ID is stored without one, and the fallback is never shown as if it were a source ID (FR-04).
 
@@ -126,9 +132,9 @@ Handled by the pipeline, which `process_document` relies on:
 Since migration `0011_project_context` (PR #27), `process_document` also stores `requirements.section_heading`, `needs_review` and `review_reasons`, and the document's sections in `document_sections`.
 
 ## 11. Known Limitations
-- Multi-column PDFs: blocks are read top-to-bottom, so two columns can interleave.
-- Tables in PDFs are read as text blocks; DOCX tables are read row by row (`cell | cell | cell`), including non-ID columns such as priority.
-- Heading detection in PDFs is text-based (numbering, case), not font-based.
+- Multi-column PDFs: columns are read one after another only where they sit side by side in one band of touching lines; elsewhere they can still interleave.
+- PDF tables are rebuilt from positions (§9.1). Dense tables with many narrow columns and small fonts can still split or merge cells. A cell fused into its neighbour by the PDF writer stays fused when it is the first or last row of a table. A header-less table whose first row is all short labels, followed by a row with longer text, loses that first row as a `table_header` (it stays in the excluded text and its section).
+- Heading detection in PDFs is text-based (numbering, case); font size is used only to join a wrapped large heading onto one line.
 - No OCR: scanned PDFs fail with a clear message.
 - Purely numeric numbering (`3.2.1 The system shall…`) is treated as list or heading numbering, not as a printed ID.
 - `.txt` and ReqIF (listed in US-01) are not supported yet.
@@ -147,7 +153,8 @@ This is the **G3 plan**, Bansil's Sprint 0 deliverable for gap G3 (`docs/enginee
 | TOC | `Contents` title, dot leaders, DOCX `TOC n` styles, trailing page numbers after a TOC title | excluded (`toc`) |
 | Headers, footers, page numbers | PDF margin blocks repeated on half the pages, or bare page numbers | dropped by the PDF parser |
 | Headings | DOCX heading styles; numbered or short Title/UPPER case lines without a modal verb or end punctuation | become `section_heading` and open a section |
-| Fragments | under 4 words, no punctuation, no modal (table headers, labels) | excluded (`fragment`) |
+| Fragments | under 4 words, no punctuation, no modal (labels) | excluded (`fragment`) |
+| Table header rows | first row of short labels above a data row, and its repeats | excluded (`table_header`) |
 | Prose under intro-type headings | no modal and heading matches Introduction, Purpose, Scope, Glossary, References, … | excluded (`non_requirement_section`) |
 | Other modal-less prose | anywhere else | **kept and flagged** for review |
 
