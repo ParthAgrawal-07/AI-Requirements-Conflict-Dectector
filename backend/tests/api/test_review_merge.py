@@ -204,7 +204,10 @@ def test_request_changes_needs_a_reason_and_blocks(w: World) -> None:
     reviews = w.client.get(
         f"/api/v1/change-requests/{cr['id']}/reviews", headers=headers_for(w.dev)
     ).json()["reviews"]
-    assert reviews[-1]["comments"] == [
+    # Not reviews[-1]: inside the test's one transaction now() is the same for both reviews, so
+    # their order falls to the random id.
+    blocking = next(r for r in reviews if r["decision"] == "request_changes")
+    assert blocking["comments"] == [
         {"field": "statement", "start_offset": 29, "end_offset": 39, "body": "this number"}
     ]
 
