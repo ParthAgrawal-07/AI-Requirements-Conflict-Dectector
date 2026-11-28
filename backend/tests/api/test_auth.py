@@ -306,3 +306,47 @@ class TestErrorsAndMiddleware:
             headers={"Origin": "https://evil.example", "Access-Control-Request-Method": "POST"},
         )
         assert "access-control-allow-origin" not in response.headers
+
+
+class TestLoginRateLimit:
+    """NFR-35: password guessing is limited per e-mail and per client address."""
+
+    def test_a_correct_password_past_the_e_mail_limit_is_refused(
+        self, client: TestClient, user: User, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(get_settings(), "login_attempts_per_minute", 3)
+        statuses = [login(client, user.email, "wrong-guess-number-x").status_code for _ in range(3)]
+        assert statuses == [401, 401, 401]
+
+        blocked = login(client, user.email)  # the right password, one attempt too many
+        assert blocked.status_code == 429
+        assert blocked.json()["error"]["code"] == "too_many_requests"
+        assert 1 <= int(blocked.headers["Retry-After"]) <= 60
+        assert "access_token" not in blocked.text
+
+    def test_the_e_mail_limit_ignores_case_and_spacing(
+        self, client: TestClient, user: User, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(get_settings(), "login_attempts_per_minute", 2)
+        login(client, user.email.upper(), "wrong-guess-number-x")
+        login(client, f"  {user.email}  ", "wrong-guess-number-x")
+        assert login(client, user.email).status_code == 429
+
+    def test_other_accounts_are_unaffected_by_one_accounts_limit(
+        self, client: TestClient, make_user: Callable[..., User], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(get_settings(), "login_attempts_per_minute", 1)
+        victim, other = make_user(), make_user()
+        login(client, victim.email, "wrong-guess-number-x")
+        assert login(client, victim.email).status_code == 429
+        assert login(client, other.email).status_code == 200
+
+    def test_one_address_spraying_many_accounts_is_limited(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(get_settings(), "login_ip_attempts_per_minute", 3)
+        statuses = [
+            login(client, f"spray-{n}@example.com", "wrong-guess-number-x").status_code
+            for n in range(4)
+        ]
+        assert statuses == [401, 401, 401, 429]

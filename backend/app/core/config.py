@@ -69,6 +69,10 @@ class Settings(BaseSettings):
     allow_user_workspace_creation: bool = False
     # NFR-35: join-code attempts are limited per IP and per e-mail address on sign-up.
     signup_attempts_per_minute: int = Field(default=5, ge=1, le=1000)
+    # NFR-35: password guesses. Per e-mail stops a distributed guess at one account; per address
+    # is looser because a campus or office shares one NAT address.
+    login_attempts_per_minute: int = Field(default=10, ge=1, le=1000)
+    login_ip_attempts_per_minute: int = Field(default=30, ge=1, le=1000)
     # How many reverse proxies sit in front of the API (Render, nginx...). Needed so rate limits
     # key on the real client address: with 0 the socket peer is used and X-Forwarded-For is
     # ignored (it can be forged); with N, the N-th entry from the right is trusted.

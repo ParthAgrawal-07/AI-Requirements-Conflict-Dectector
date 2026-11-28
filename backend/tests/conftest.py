@@ -220,16 +220,31 @@ def plain_client() -> Iterator[TestClient]:
 
 @pytest.fixture
 def client(db_session: Session) -> Iterator[TestClient]:
-    """App client whose every request uses the rolled-back test session."""
+    """App client whose every request uses the rolled-back test session.
+
+    Rate limits count in a fresh in-memory limiter per test (unless the test installed its own):
+    with the shared Redis one, every login of the run would count against the same client
+    address, and tests would start failing with 429 depending on what ran before them.
+    """
     from app.core.database import get_db
+    from app.core.rate_limit import InMemoryRateLimiter, get_rate_limiter
     from app.main import app
 
     app.dependency_overrides[get_db] = lambda: db_session
+    limiter = InMemoryRateLimiter()
+
+    def fresh_limiter() -> InMemoryRateLimiter:
+        return limiter
+
+    if get_rate_limiter not in app.dependency_overrides:
+        app.dependency_overrides[get_rate_limiter] = fresh_limiter
     try:
         with TestClient(app) as test_client:
             yield test_client
     finally:
         app.dependency_overrides.pop(get_db, None)
+        if app.dependency_overrides.get(get_rate_limiter) is fresh_limiter:
+            app.dependency_overrides.pop(get_rate_limiter)
 
 
 # ── Factories ────────────────────────────────────────────────────────────────
