@@ -34,7 +34,7 @@ Requirements documents (SRS) are typically written by multiple stakeholders over
 
 Finding these manually doesn't scale past a few dozen requirements. This project automates the process: upload an SRS document, and the system extracts individual requirements, filters candidate pairs using vector similarity, classifies issues with an LLM, generates clarification questions, and surfaces everything on a dashboard with full traceability back to the source document.
 
-This isn't just an LLM wrapper — the system encodes real requirements-engineering discipline (see [`docs/domain-requirements.md`](docs/domain-requirements.md)): human review always takes precedence over AI suggestions, compliance-critical requirements are protected from auto-resolution, and semantic similarity is treated as a retrieval signal, never as proof of conflict on its own.
+This isn't just an LLM wrapper — the system encodes real requirements-engineering discipline (see the domain requirements DR-01–DR-25 in [`docs/engineering/requirements-spec.md`](docs/engineering/requirements-spec.md)): human review always takes precedence over AI suggestions, compliance-critical requirements are protected from auto-resolution, and semantic similarity is treated as a retrieval signal, never as proof of conflict on its own.
 
 ---
 
@@ -49,7 +49,7 @@ This isn't just an LLM wrapper — the system encodes real requirements-engineer
 - 🔐 **Compliance-critical protection** — tagged requirements are never auto-merged or removed without manual sign-off
 - 🧾 **Full audit trail** — every finding, override, and sign-off is logged and traceable
 
-Full feature list: [`docs/requirements-baseline.md`](docs/requirements-baseline.md) (FR-01–FR-34) and [`docs/product-backlog.md`](docs/product-backlog.md) (user stories US-01–US-23).
+Full feature list: [`docs/planning/v5/IT314_RCD_Requirements_Spec_v5.md`](docs/planning/v5/IT314_RCD_Requirements_Spec_v5.md) (FR-01–FR-107) and [`docs/planning/v5/IT314_RCD_Product_Backlog_v5.md`](docs/planning/v5/IT314_RCD_Product_Backlog_v5.md) (user stories US-01–US-61).
 
 ---
 
@@ -81,7 +81,7 @@ Full feature list: [`docs/requirements-baseline.md`](docs/requirements-baseline.
 - PostgreSQL (+ pgvector)
 - Redis
 - Docker Compose (local dev)
-- Railway / Render (backend + DB deployment) · Vercel (frontend deployment)
+- One Azure VM: Docker Compose production stack with Caddy (TLS), deployed by GitHub Actions on every push to `main`
 - GitHub Actions (CI/CD)
 
 **Testing**
@@ -178,15 +178,14 @@ ai-requirements-conflict-detector/
 │   ├── package.json
 │   └── Dockerfile
 ├── docs/
-│   ├── project-plan.md            # 14-week execution plan
-│   ├── stakeholder-elicitation.md
-│   ├── requirements-baseline.md   # Consolidated FR / NFR / Domain Requirements
-│   ├── product-backlog.md         # Consolidated user stories
-│   ├── domain-requirements.md
-│   └── architecture-diagrams/
-│       └── activity-diagram.png
-├── sample-data/
-│   └── test-srs-with-planted-conflicts.pdf
+│   ├── planning/v5/               # Requirements spec, backlog, epics, sprint plan, design (revision 5)
+│   ├── engineering/               # Status, design, API, data model, tests, ADRs (start at INDEX.md)
+│   ├── contracts/                 # Interface contracts between owners
+│   ├── wireframes/ usability/ spikes/ qa/
+├── e2e/                           # Playwright end-to-end tests
+├── load/                          # Load tests and reports
+├── eval/                          # Accuracy benchmark and reports
+├── sample_docs/
 ├── docker-compose.yml
 ├── .env.example
 ├── .gitignore
@@ -292,34 +291,36 @@ See [`.env.example`](.env.example) for the full, commented list. Key variables:
 | Frontend — Core UI | Upload flow, requirements list, findings UI |
 | Frontend — Visualization + DevOps | Dependency graph (React Flow), Docker, CI/CD, deployment |
 
-Full role breakdown and 14-week execution plan: [`docs/project-plan.md`](docs/project-plan.md).
+These were the seven Week 0 roles. From Sprint 3 the 10 members own features end to end (backend, UI and tests): see
+[Team and Areas of Ownership](docs/engineering/project-status.md#4-team-and-areas-of-ownership) and the
+[Sprint Plan](docs/planning/v5/IT314_RCD_Sprint_Plan_v5.md).
 
 ---
 
 ## Project Status
 
-🚧 **In development** — semester project, IT314 Autumn 2026–27.
+**Sprint 7 (release week)** — IT314 Autumn 2026–27. Checked against `main` on 28 Nov 2026; detail in
+[`docs/engineering/project-status.md`](docs/engineering/project-status.md).
 
-- [x] Stakeholder identification & elicitation
-- [x] Functional / Non-Functional / Domain requirements baseline
-- [x] User story backlog
-- [ ] Ingestion pipeline (Week 3)
-- [ ] Embedding pipeline (Week 4)
-- [ ] LLM classification pipeline (Week 6)
-- [ ] Integration Checkpoint 1 (Week 7)
-- [ ] Frontend v1 (Week 8)
-- [ ] Integration Checkpoint 2 (Week 11)
-- [ ] Deployment (Week 13)
-- [ ] Demo (Week 14)
+- [x] Requirements (FR-01–FR-107, NFR-01–NFR-39, DR-01–DR-25), 61-story backlog, sprint plan (revision 5)
+- [x] Sprint 0–1: tenancy, roles and permissions, join codes, project context, upload, extraction
+- [x] Sprint 2: issue detection (embeddings, candidates, LLM classification), channels and real-time messaging, custom roles
+- [x] Sprint 3 (Checkpoint 1): composer with EARS templates, live analysis, live requirements map, finding review
+- [x] Sprint 4: issues, raise a concern, PR-style change requests with consequence checks, review and merge, version history
+- [x] Sprint 5 (Checkpoint 2): AI suggestions with feedback, decision rules, rule-based cross-checks, notifications, dashboard, baselines
+- [ ] Sprint 6: discussion and votes merged; change log and map preview in part; updated SRS, export, compliance, severity, timeline and open-items report built but PRs still open
+- [x] Deployment: Azure VM, deploy on push to `main`
+- [ ] Final demo (Week 14)
 
 ---
 
 ## Documentation
 
-- [Stakeholder Identification & Elicitation Plan](docs/stakeholder-elicitation.md)
-- [Consolidated Requirements Baseline (FR / NFR / Domain)](docs/requirements-baseline.md)
-- [Consolidated Product Backlog (User Stories)](docs/product-backlog.md)
-- [Project Plan & Timeline](docs/project-plan.md)
+- [Documentation index](docs/engineering/INDEX.md) — every engineering document and what it covers
+- [Planning documents, revision 5](docs/planning/v5/) — requirements spec, product backlog, epics, sprint plan, design
+- [Project status](docs/engineering/project-status.md) · [Feature catalog](docs/engineering/feature-catalog.md) · [History of merged PRs](docs/engineering/history.md)
+- [System design](docs/engineering/system-design.md) · [Object design](docs/engineering/object-design.md) · [Diagrams](docs/engineering/diagrams.md) · [API reference](docs/engineering/api-reference.md)
+- [Test plan](docs/engineering/test-plan.md) · [DevOps guide](docs/engineering/devops-guide.md) · [Decision log](docs/engineering/decision-log.md)
 
 ---
 

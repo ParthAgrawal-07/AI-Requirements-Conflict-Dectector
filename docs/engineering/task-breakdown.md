@@ -6,7 +6,7 @@
 |---|---|
 | **Source** | [`IT314_RCD_Sprint_Plan_v5.md`](../planning/v5/IT314_RCD_Sprint_Plan_v5.md) §3–§4; story detail in [`IT314_RCD_Product_Backlog_v5.md`](../planning/v5/IT314_RCD_Product_Backlog_v5.md) |
 | **Replaces** | The earlier 60-task list (T01–T60) for the old 6-sprint, 94-point plan |
-| **Status legend** | ✅ on `main` · 🟡 part delivered · ⬜ not started |
+| **Status legend** | ✅ on `main` (merged PRs) · 🟡 part merged · ⏳ built, PR open · ⬜ not started. Checked against `main` at `eea5be7` on 28 Nov 2026 |
 
 ---
 
@@ -14,16 +14,16 @@
 
 | Member | Tasks | Status |
 |---|---|---|
-| Parth | Migrations `0003` (severity, `escalated`) and `0004` (projects, memberships, roles and permissions with the 9 defaults seeded); `require_permission()` skeleton; existing RBAC and isolation tests passing on it | ✅ |
-| Dhavni didi | WebSocket + Redis pub/sub spike; map library spike with Abhijeet (Cytoscape.js vs React Flow, 500 nodes / 2,000 edges, NFR-33); `graph.delta` event schema; Compose and CI for new packages | ⬜ |
-| Bansil | Composer field schema and draft model with Pranshu; EARS template definitions with Keval; project brief schema (required and optional fields); G3 plan | ✅ Composer schema, EARS templates and brief schema (PR #27, `docs/contracts/composer-and-context.md`); G3 plan (`docs/ingestion-design.md` §12) |
-| Pranshu | App shell, routing, component kit (buttons, badges with icon + text, drawer, tabs); start login and sign-up-with-code screens | ⬜ |
-| Heet | Confirm embedding model; measure similar-requirement hint latency (target < 500 ms server time); draft `analyse_text()` contract | ⬜ |
-| Keval | `LLMClient` adapter; prompt v1 with delimited inputs and a context-pack slot; lint pattern catalogue v1 (shared with DR-07); `BudgetGuard` design | 🟡 (classification prompts in open PR #21) |
-| Madhav | Join code design (format, hashing, limits, approval); `ImpactReport` and checks schema | 🟡 (clarification and impact design merged, PR #9) |
-| Abhijeet | Wireframes from [`IT314_RCD_Interface_Design_v5.md`](../planning/v5/IT314_RCD_Interface_Design_v5.md) turned into clickable prototypes for US-22; map spike with Dhavni didi | 🟡 Wireframes merged (PRs #11, #14, #22); clickable prototypes ⬜ |
-| Abhyudit | Benchmark v2 plan: planted-conflict SRS, 40 post-style requirements, 10 scripted change requests with known affected sets and owners | 🟡 (planted-conflict benchmark merged, PR #16; v2 plan in open PR #24) |
-| Affan | Playwright skeleton in CI; permission test matrix (permission × role) generated from the catalogue | ⬜ |
+| Parth | Migrations `0003` (severity, `escalated`) and `0004` (projects, memberships, roles and permissions with the 9 defaults seeded); `require_permission()` skeleton; existing RBAC and isolation tests passing on it | ✅ (#26) |
+| Dhavni didi | WebSocket + Redis pub/sub spike; map library spike with Abhijeet (Cytoscape.js vs React Flow, 500 nodes / 2,000 edges, NFR-33); `graph.delta` event schema; Compose and CI for new packages | ✅ Realtime graph foundation (#36); map spike [`docs/spikes/map.md`](../spikes/map.md) |
+| Bansil | Composer field schema and draft model with Pranshu; EARS template definitions with Keval; project brief schema (required and optional fields); G3 plan | ✅ (#27, G3 plan #48) |
+| Pranshu | App shell, routing, component kit (buttons, badges with icon + text, drawer, tabs); start login and sign-up-with-code screens | ✅ (#37, #39) |
+| Heet | Confirm embedding model; measure similar-requirement hint latency (target < 500 ms server time); draft `analyse_text()` contract | ✅ (#32; [`docs/spikes/hints-latency.md`](../spikes/hints-latency.md)) |
+| Keval | `LLMClient` adapter; prompt v1 with delimited inputs and a context-pack slot; lint pattern catalogue v1 (shared with DR-07); `BudgetGuard` design | ✅ (#21, #35) |
+| Madhav | Join code design (format, hashing, limits, approval); `ImpactReport` and checks schema | ✅ (#9, #40) |
+| Abhijeet | Wireframes from [`IT314_RCD_Interface_Design_v5.md`](../planning/v5/IT314_RCD_Interface_Design_v5.md) turned into clickable prototypes for US-22; map spike with Dhavni didi | ✅ Wireframes (#11, #14, #22); prototypes in `frontend/src/features/prototypes/` |
+| Abhyudit | Benchmark v2 plan: planted-conflict SRS, 40 post-style requirements, 10 scripted change requests with known affected sets and owners | ✅ (#16, #30) |
+| Affan | Playwright skeleton in CI; permission test matrix (permission × role) generated from the catalogue | ✅ Playwright (#55), permission matrix (#38) |
 
 **Exit criteria:** the contracts in [`IT314_RCD_Design_Update_v5.md` §6](../planning/v5/IT314_RCD_Design_Update_v5.md#6-interface-contracts-to-agree-in-sprint-0) agreed in writing; `docker compose up` works with the new schema; an event reaches sockets on two API processes; the map library is chosen; Step 7 decisions sent to stakeholders.
 
@@ -33,31 +33,31 @@ Owners are listed primary first. Enablers are 0-point tasks inside the sprint. D
 
 ### Sprint 1 · Weeks 2–3 · Joining, roles, ingestion (37 points)
 
-| Story | Pts | Owners |
-|---|---|---|
-| US-19 Authenticate via JWT (sign-up only with a code) | 5 | Parth, Pranshu |
-| US-27 Enforce roles and permissions | 5 | Parth, Affan |
-| US-24 Create a workspace and projects | 3 | Parth, Abhijeet |
-| US-60 Project context required before analysis | 3 | Bansil, Abhijeet, Keval |
-| US-25 Join a workspace with a code or invite link | 5 | Madhav, Abhijeet |
-| US-01 Upload SRS into a project | 5 | Parth, Pranshu |
-| US-02 Automatic requirement extraction | 5 | Bansil |
-| US-03 Track analysis progress | 3 | Dhavni didi, Pranshu |
-| US-04 View extracted requirements | 3 | Parth, Pranshu |
+| Story | Pts | Owners | Status |
+|---|---|---|---|
+| US-19 Authenticate via JWT (sign-up only with a code) | 5 | Parth, Pranshu | ✅ (#26, #37, #45) |
+| US-27 Enforce roles and permissions | 5 | Parth, Affan | ✅ (#26, #38) |
+| US-24 Create a workspace and projects | 3 | Parth, Abhijeet | ✅ (#26, #39) |
+| US-60 Project context required before analysis | 3 | Bansil, Abhijeet, Keval | ✅ (#27, #39) |
+| US-25 Join a workspace with a code or invite link | 5 | Madhav, Abhijeet | ✅ (#40, #39) |
+| US-01 Upload SRS into a project | 5 | Parth, Pranshu | ✅ (#7, #26, #37) |
+| US-02 Automatic requirement extraction | 5 | Bansil | ✅ (#8) |
+| US-03 Track analysis progress | 3 | Dhavni didi, Pranshu | ✅ (#43) |
+| US-04 View extracted requirements | 3 | Parth, Pranshu | ✅ (#26, #37) |
 
 **Enablers:** Heet — embedding stage; Keval — classifier skeleton and retries; Dhavni didi — event bus; Abhyudit — label the benchmark; Affan — E2E *create code → join → upload*, join-code brute-force test.
 
 ### Sprint 2 · Weeks 4–5 · Detection engine, channels, custom roles (38 points)
 
-| Story | Pts | Owners |
-|---|---|---|
-| US-05 Detect requirement issues (5a conflicts · 5b duplicates and ambiguous · 5c incomplete and dependent) | 13 | Keval, Heet, Abhyudit |
-| US-07 Explain findings with confidence and context | 5 | Keval, Abhijeet |
-| US-26 Remove members, change roles, leave | 3 | Parth, Abhijeet |
-| US-49 Custom roles and permission sets | 3 | Parth, Abhijeet |
-| US-28 Create and manage channels | 3 | Madhav, Pranshu |
-| US-29 Real-time messaging with threads and mentions | 8 | Dhavni didi, Pranshu |
-| US-22 Low-fidelity validation sessions | 3 | Abhyudit, Affan, Abhijeet |
+| Story | Pts | Owners | Status |
+|---|---|---|---|
+| US-05 Detect requirement issues (5a conflicts · 5b duplicates and ambiguous · 5c incomplete and dependent) | 13 | Keval, Heet, Abhyudit | ✅ (#42, #46, #52, #58) |
+| US-07 Explain findings with confidence and context | 5 | Keval, Abhijeet | ✅ (#42, #59) |
+| US-26 Remove members, change roles, leave | 3 | Parth, Abhijeet | ✅ (#47, #59) |
+| US-49 Custom roles and permission sets | 3 | Parth, Abhijeet | ✅ (#47, #59) |
+| US-28 Create and manage channels | 3 | Madhav, Pranshu | ✅ (#50, #57) |
+| US-29 Real-time messaging with threads and mentions | 8 | Dhavni didi, Pranshu | ✅ (#51, #57) |
+| US-22 Low-fidelity validation sessions | 3 | Abhyudit, Affan, Abhijeet | ✅ (#56 (sessions: docs/usability/s2-sessions.md)) |
 
 **Milestones:** 5a by day 4 · 5b by day 7 · 5c by day 9. **Midpoint rule:** if 5a is not done by day 5, move US-07, US-49 and US-22 to Sprint 3.
 **AI providers (ADR-31, [`ai-providers.md`](ai-providers.md) §6):** Keval — Gemini and Groq transports with failover, config, tests; Heet — switch to `BAAI/bge-small-en-v1.5`, re-embed, re-tune the similarity threshold with Abhyudit.
@@ -66,59 +66,59 @@ Owners are listed primary first. Enablers are 0-point tasks inside the sprint. D
 
 ### Sprint 3 · Weeks 6–7 · Composer, live analysis, live map (37 points) → CP1
 
-| Story | Pts | Owners |
-|---|---|---|
-| US-30 Requirement composer with EARS templates | 5 | Pranshu (backend and composer UI) |
-| US-31 Live analysis of a posted requirement | 8 | Heet (incremental retrieval, similar hints), Keval (classification, budget, result card), Abhyudit (requirement runs) |
-| US-14 Live requirements map | 8 | Dhavni didi (graph revisions, deltas, narrator, positions), Abhijeet (map UI, changes feed, applying live deltas on the map) |
-| US-37 Requirement lifecycle states | 3 | Parth |
-| US-36 Owners, stakeholder groups, ownership requests | 3 | Bansil (backend and UI) |
-| US-09 Generate clarification questions | 5 | Madhav |
-| US-10 Human review of findings (with protected guard) | 5 | Affan (review state, protected guard, review UI), Parth (review and lifecycle tables) |
+| Story | Pts | Owners | Status |
+|---|---|---|---|
+| US-30 Requirement composer with EARS templates | 5 | Pranshu (backend and composer UI) | ✅ (#68) |
+| US-31 Live analysis of a posted requirement | 8 | Heet (incremental retrieval, similar hints), Keval (classification, budget, result card), Abhyudit (requirement runs) | ✅ (#62, #64, #65, #70) |
+| US-14 Live requirements map | 8 | Dhavni didi (graph revisions, deltas, narrator, positions), Abhijeet (map UI, changes feed, applying live deltas on the map) | ✅ (#36, #61, #63, #71) |
+| US-37 Requirement lifecycle states | 3 | Parth | ✅ (#66) |
+| US-36 Owners, stakeholder groups, ownership requests | 3 | Bansil (backend and UI) | ✅ (#67) |
+| US-09 Generate clarification questions | 5 | Madhav | ✅ (#60) |
+| US-10 Human review of findings (with protected guard) | 5 | Affan (review state, protected guard, review UI), Parth (review and lifecycle tables) | ✅ (#63, #69) |
 
 ### Sprint 4 · Weeks 8–9 · Issues and PR-style change requests (37 points)
 
-| Story | Pts | Owners |
-|---|---|---|
-| US-11 Change-impact analysis engine | 8 | Heet (impact analysis, relationship queries) |
-| US-33 Open a change request (change editor) | 5 | Bansil (intake, change editor, diff view), Heet (change-request API client), Pranshu (change-request list and page) |
-| US-34 Consequence checks | 8 | Madhav (checks, findings delta, risk, Checks tab), Keval (narrative) |
-| US-35 Review and merge | 5 | Heet (reviews, review requests, Reviews tab), Parth (merge, needs-update, agreement guard), Affan (merge box) |
-| US-52 Requirement issues and auto conflict issues | 5 | Dhavni didi (auto conflict issues, issues client), Abhijeet (issue API, list, page, comments) |
-| US-12 Version history | 3 | Affan (backend and UI) |
-| US-56 Raise a concern (human-raised findings) | 3 | Abhyudit (backend and UI) |
+| Story | Pts | Owners | Status |
+|---|---|---|---|
+| US-11 Change-impact analysis engine | 8 | Heet (impact analysis, relationship queries) | ✅ (#80, #82) |
+| US-33 Open a change request (change editor) | 5 | Bansil (intake, change editor, diff view), Heet (change-request API client), Pranshu (change-request list and page) | ✅ (#76, #79, #80) |
+| US-34 Consequence checks | 8 | Madhav (checks, findings delta, risk, Checks tab), Keval (narrative) | ✅ (#73, #77) |
+| US-35 Review and merge | 5 | Heet (reviews, review requests, Reviews tab), Parth (merge, needs-update, agreement guard), Affan (merge box) | ✅ (#72, #74, #81, #83, #88) |
+| US-52 Requirement issues and auto conflict issues | 5 | Dhavni didi (auto conflict issues, issues client), Abhijeet (issue API, list, page, comments) | ✅ (#71, #78, #86) |
+| US-12 Version history | 3 | Affan (backend and UI) | ✅ (#74) |
+| US-56 Raise a concern (human-raised findings) | 3 | Abhyudit (backend and UI) | ✅ (#84) |
 
 **Order inside the sprint:** week 1 — US-11, US-33, US-52, US-56; week 2 — US-34, US-35 on top of them. Pranshu starts the change-request page against a fixed sample JSON on day 1.
 
 ### Sprint 5 · Weeks 10–11 · Suggestions, awareness and preview (38 points) → CP2
 
-| Story | Pts | Owners |
-|---|---|---|
-| US-45 AI resolution suggestions with human feedback | 5 | Madhav (suggestion service and feedback), Keval (prompts), Abhyudit (suggestion panel), Bansil (change request from a suggestion) |
-| US-38 Inbox and notifications | 5 | Abhijeet (notifications backend), Dhavni didi (bell and inbox UI) |
-| US-13 Quality dashboard | 5 | Abhyudit (aggregation and dashboard) |
-| US-40 Baseline snapshots and comparison | 5 | Pranshu (backend and UI) |
-| US-57 Decision rules and decision owners | 3 | Parth (rules engine), Affan (decision owners, rules tab, project settings) |
-| US-58 Rule-based cross-checks (extends the S2 extractor; strongest signals become `source = rule` findings — ADR-30) | 5 | Heet (attribute index, rule checks), Keval (attribute extraction), Abhyudit (recall measurement) |
-| US-51 Live lint, similar hints, pre-flight, AI wording | 5 | Keval (lint engine, pre-flight, AI wording), Pranshu (authoring-aids API, lint tests), Bansil (authoring panel, composer wiring) |
-| US-06 Tune thresholds per project | 5 | Heet (threshold preview, re-analysis), Keval, Affan (settings page) |
+| Story | Pts | Owners | Status |
+|---|---|---|---|
+| US-45 AI resolution suggestions with human feedback | 5 | Madhav (suggestion service and feedback), Keval (prompts), Abhyudit (suggestion panel), Bansil (change request from a suggestion) | ✅ (#90, #95, #96, #97) |
+| US-38 Inbox and notifications | 5 | Abhijeet (notifications backend), Dhavni didi (bell and inbox UI) | ✅ (#87, #100) |
+| US-13 Quality dashboard | 5 | Abhyudit (aggregation and dashboard) | ✅ (#90) |
+| US-40 Baseline snapshots and comparison | 5 | Pranshu (backend and UI) | ✅ (#89) |
+| US-57 Decision rules and decision owners | 3 | Parth (rules engine), Affan (decision owners, rules tab, project settings) | ✅ (#91, #98) |
+| US-58 Rule-based cross-checks (extends the S2 extractor; strongest signals become `source = rule` findings — ADR-30) | 5 | Heet (attribute index, rule checks), Keval (attribute extraction), Abhyudit (recall measurement) | ✅ (#97, #101, #103, #110) |
+| US-51 Live lint, similar hints, pre-flight, AI wording | 5 | Keval (lint engine, pre-flight, AI wording), Pranshu (authoring-aids API, lint tests), Bansil (authoring panel, composer wiring) | ✅ (#89, #96, #97) |
+| US-06 Tune thresholds per project | 5 | Heet (threshold preview, re-analysis), Keval, Affan (settings page) | ✅ (#101, #103) |
 
 **Load test (Affan, Dhavni didi):** NFR-24, NFR-25, NFR-26, NFR-32, NFR-33.
 
 ### Sprint 6 · Weeks 12–13 · Written changes, trustworthy exports, governance (37 points)
 
-| Story | Pts | Owners |
-|---|---|---|
-| US-18 Protect compliance-critical requirements (conditional) | 5 | Abhijeet (backend), Dhavni didi (compliance UI) |
-| US-61 Generate the updated SRS with the LLM and review it | 5 | Bansil (generator, readiness, fidelity check, publishing), Pranshu (SRS API), Keval (section prompts, section review, SRS screen) |
-| US-41 Export the updated SRS (DOCX, PDF, Markdown) | 5 | Bansil (DOCX, PDF, Markdown exporters), Pranshu (export API) |
-| US-59 Open-items report beside the approved baseline | 2 | Abhyudit |
-| US-50 Map preview layer and time slider | 5 | Dhavni didi (preview layer, revisions, history), Heet (time slider) |
-| US-08 Assign severity | 3 | Abhyudit (backend and UI) |
-| US-53 Discussion, votes, watch and links | 3 | Affan (backend and UI) |
-| US-55 Written change log and summaries for the map | 3 | Heet (change-log backend, Changes panel), Abhijeet (changes API, change-summary route, change kinds), Keval (summary paragraph) |
-| US-15 Feedback loop | 3 | Keval (feedback loop and view), Pranshu (AI feedback API) |
-| US-42 Requirement activity timeline | 3 | Abhyudit (backend and UI) |
+| Story | Pts | Owners | Status |
+|---|---|---|---|
+| US-18 Protect compliance-critical requirements (conditional) | 5 | Abhijeet (backend), Dhavni didi (compliance UI) | ⏳ open PR #116, #118 |
+| US-61 Generate the updated SRS with the LLM and review it | 5 | Bansil (generator, readiness, fidelity check, publishing), Pranshu (SRS API), Keval (section prompts, section review, SRS screen) | ⏳ open PR #108, #107 |
+| US-41 Export the updated SRS (DOCX, PDF, Markdown) | 5 | Bansil (DOCX, PDF, Markdown exporters), Pranshu (export API) | ⏳ open PR #108, #107 |
+| US-59 Open-items report beside the approved baseline | 2 | Abhyudit | ⏳ open PR #106 |
+| US-50 Map preview layer and time slider | 5 | Dhavni didi (preview layer, revisions, history), Heet (time slider) | 🟡 part merged; #114, #111 |
+| US-08 Assign severity | 3 | Abhyudit (backend and UI) | ⏳ open PR #106 |
+| US-53 Discussion, votes, watch and links | 3 | Affan (backend and UI) | ✅ (#122) |
+| US-55 Written change log and summaries for the map | 3 | Heet (change-log backend, Changes panel), Abhijeet (changes API, change-summary route, change kinds), Keval (summary paragraph) | 🟡 part merged; #110, #113, #116, #111, #123 |
+| US-15 Feedback loop | 3 | Keval (feedback loop and view), Pranshu (AI feedback API) | ⏳ open PR #107 |
+| US-42 Requirement activity timeline | 3 | Abhyudit (backend and UI) | ⏳ open PR #106 |
 
 No stretch item. **Feature freeze at the end of Week 13**; anything unfinished returns to the backlog.
 

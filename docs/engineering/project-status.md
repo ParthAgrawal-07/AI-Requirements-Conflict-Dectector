@@ -7,8 +7,8 @@
 | **Course** | IT314 — Software Engineering, Autumn 2026–27 |
 | **Team size** | 10 members |
 | **Plan** | Revision 5 — [`IT314_RCD_Sprint_Plan_v5.md`](../planning/v5/IT314_RCD_Sprint_Plan_v5.md) |
-| **Current phase** | Sprint 1 (Weeks 2–3): joining, roles, workspaces and projects with compulsory context, upload and extraction |
-| **Last updated** | 22 Oct 2026 |
+| **Current phase** | Sprint 7 (Week 14): release — merge the remaining Sprint 6 PRs, bug bash, demo data, rehearsal, final report. Submission deadline 3 Dec 2026 |
+| **Last updated** | 28 Nov 2026 (against `main` at `eea5be7`, 24 Nov 2026) |
 
 ---
 
@@ -16,7 +16,10 @@
 
 | Metric | Value | Note |
 |---|---|---|
-| Overall phase | Sprint 1 in progress | Sprint 0 enablers and the Sprint 1 backend for US-19, US-24, US-27, US-01, US-02, US-04, US-60 are on `main` |
+| Overall phase | Sprint 7 (release) | Sprints 0–5 merged; Sprint 6 partly merged (US-50 part, US-53, US-55 part); 7 Sprint 6 stories wait on open PRs (§3) |
+| Delivered on `main` | 41 of 48 scheduled stories | 39 fully, 2 in part; see [`feature-catalog.md`](feature-catalog.md) for each story's PRs |
+| CI on `main` | Green | Backend CI, Frontend CI, E2E and Deploy (Azure VM) all passed on the last push (#122, 24 Nov) |
+| Deployment | Live on one Azure VM | Deployed by `.github/workflows/deploy-azure.yml` on every push to `main` ([`devops-guide.md`](devops-guide.md)) |
 | Sprints | S0 (1 week) + S1–S6 (2 weeks each) + S7 release week | 14 weeks |
 | Backlog stories | 61 (US-01–US-61) in 15 epics | US-23 is outcome-only, no development task |
 | Story points | 284 total · **224 scheduled** · 60 deferred | 37 · 38 · 37 · 37 · 38 · 37 across S1–S6 |
@@ -31,30 +34,46 @@
 
 | Sprint | Weeks | Goal | Points | Status |
 |---|---|---|---|---|
-| S0 | 1 | Re-baseline: tenancy and permission migration, spikes (WebSocket, map library), contracts, wireframes, benchmark plan | 0 (enablers) | 🟡 Migrations `0003`, `0004`, contracts (`docs/contracts/`), wireframes and benchmark merged; WebSocket and map-library spikes not on `main` yet |
-| S1 | 2–3 | Join by code, roles, workspaces and projects **with compulsory context**, upload and extract an SRS | 37 | 🟡 In progress — see §3 |
-| S2 | 4–5 | Detection engine, real-time channels, custom roles | 38 | ⬜ |
-| S3 | 6–7 | Composer, live analysis, **live map**, review → **CP1** | 37 | ⬜ |
-| S4 | 8–9 | Issues (AI and human-raised), PR-style change requests, findings delta, agreement rules, versions | 37 | ⬜ |
-| S5 | 10–11 | AI suggestions with feedback, decision rules, rule-based cross-checks, notifications, dashboard, baselines, lint and pre-flight → **CP2** | 38 | ⬜ |
-| S6 | 12–13 | Written change log, map preview and time slider, **LLM-generated updated SRS**, export + open-items report, compliance, severity, votes | 37 | ⬜ |
-| S7 | 14 | Release: bug bash, deployment freeze, demo data, rehearsal, final report | 0 | ⬜ |
+| S0 | 1 | Re-baseline: tenancy and permission migration, spikes (WebSocket, map library), contracts, wireframes, benchmark plan | 0 (enablers) | ✅ Migrations, contracts, wireframes, benchmark plan, WebSocket and map spikes ([`docs/spikes/`](../spikes/)), Playwright skeleton |
+| S1 | 2–3 | Join by code, roles, workspaces and projects **with compulsory context**, upload and extract an SRS | 37 | ✅ All 9 stories merged (#7, #8, #26, #27, #37–#40, #43, #45) |
+| S2 | 4–5 | Detection engine, real-time channels, custom roles | 38 | ✅ All 7 stories merged (#42, #46, #47, #50–#52, #56–#59); usability sessions in [`docs/usability/`](../usability/) |
+| S3 | 6–7 | Composer, live analysis, **live map**, review → **CP1** | 37 | ✅ All 7 stories merged (#60–#70, CP1 benchmark #93) |
+| S4 | 8–9 | Issues (AI and human-raised), PR-style change requests, findings delta, agreement rules, versions | 37 | ✅ All 7 stories merged (#71–#88) |
+| S5 | 10–11 | AI suggestions with feedback, decision rules, rule-based cross-checks, notifications, dashboard, baselines, lint and pre-flight → **CP2** | 38 | ✅ All 8 stories merged (#87–#103); CP2 report `eval/reports/cp2.md`, load test `load/reports/cp2.md` |
+| S6 | 12–13 | Written change log, map preview and time slider, **LLM-generated updated SRS**, export + open-items report, compliance, severity, votes | 37 | 🟡 US-53 merged; US-50, US-55 in part; US-08, US-15, US-18, US-41, US-42, US-59, US-61 built, PRs open (§3) |
+| S7 | 14 | Release: bug bash, deployment freeze, demo data, rehearsal, final report | 0 | 🟡 In progress |
 
-## 3. Sprint 1 Progress
+## 3. What Is Not Complete
 
-| Story | Pts | Owners | Status on `main` |
+**Built in Sprint 6 but not merged to `main`** (code exists in the Sprint 6 zips and open PRs; merge order in the
+Sprint 6 `MERGE_ORDER.md`):
+
+| Story | Pts | What is missing on `main` | Where it is |
 |---|---|---|---|
-| US-19 Authenticate via JWT (sign-up only with a code) | 5 | Parth, Pranshu | 🟡 Backend ✅; login UI ⬜ |
-| US-27 Enforce roles and permissions | 5 | Parth, Affan | 🟡 Backend ✅ (catalogue, 9 default roles, `require_permission`); UI ⬜ |
-| US-24 Create a workspace and projects | 3 | Parth, Abhijeet | 🟡 Backend ✅; UI ⬜ |
-| US-60 Project context required before analysis | 3 | Bansil, Abhijeet, Keval | 🟡 Context service, AI-drafted brief and activation ✅; setup wizard UI and context pack ⬜ |
-| US-25 Join a workspace with a code or invite link | 5 | Madhav, Abhijeet | 🟡 Sign-up redeems a code ✅; join-code management ⬜ (branch `feat/madhav-sprint1-join-codes`, not merged) |
-| US-01 Upload SRS into a project | 5 | Parth, Pranshu | 🟡 Backend ✅; UI ⬜ |
-| US-02 Automatic requirement extraction | 5 | Bansil | ✅ |
-| US-03 Track analysis progress | 3 | Dhavni didi, Pranshu | 🟡 Status endpoint ✅; stage progress and UI ⬜ |
-| US-04 View extracted requirements | 3 | Parth, Pranshu | 🟡 Backend ✅; UI ⬜ |
+| US-61 Generate the updated SRS with the LLM (Must, protected demo path) | 5 | Generator, readiness, fidelity check, publishing, SRS API, SRS screen, section prompts | PRs #108, #107 open; SRS screen and section prompts have no open PR (#123 closed) |
+| US-41 Export the updated SRS (DOCX, PDF, Markdown) | 5 | Exporters and export API | PRs #108, #107 open |
+| US-18 Protect compliance-critical requirements | 5 | Protection, compliance queue, audit export, protected badge | PRs #116 (backend), #118 (UI) open. The protected guard on review actions (US-10) is already on `main` |
+| US-08 Assign severity to flagged issues | 3 | Severity override and sort | PR #106 open. Severity proposed by the system is stored already |
+| US-42 Requirement activity timeline | 3 | Timeline API and UI | PR #106 open |
+| US-59 Open-items report beside the baseline | 2 | Report | PR #106 open |
+| US-15 Dismiss / resolve feedback loop | 3 | AI feedback report and view | API in PR #107 open; feedback view PR #123 closed |
+| US-50 Map preview and time slider (part) | — | Time slider and map page UI | PR #111 open |
+| US-55 Written change log (part) | — | Changes API, Changes panel, AI change-summary paragraph | PRs #116, #111 open; #123 closed |
 
-**Sprint 1 exit criteria** (from the plan): a project cannot be analysed until its PM uploads an initial SRS or confirms a brief; AI-drafted brief fields are labelled until confirmed; a PM creates a code; a developer signs up with it, gets the Developer role, uploads the planted SRS and sees its requirements with printed IDs; the permission matrix test passes.
+Sprint 6 test PRs also open: #105 (final accuracy report, SRS fidelity tests), #109 (injection and rate-limit
+tests). Infrastructure PRs open: #94 / #104 (Docker runtime fixes).
+
+**Deferred by plan** (not built, 60 points): US-16, US-17, US-20, US-21, US-32, US-39, US-43, US-44, US-46, US-47,
+US-48, US-54, and outcome story US-23. Reasons in [`feature-catalog.md` §3](feature-catalog.md#3-deferred--post-mvp-backlog).
+
+**Measured gaps:**
+
+* Classification precision/recall per category with a live model is not in a report on `main`: the CP2 report
+  (`eval/reports/cp2.md`) leaves the AI layer and the 30-suggestion rating study empty until a live run, and the
+  final accuracy report is in open PR #105. What is measured on `main`: rule checks catch 12 of 15 reworded
+  conflicts (6 of the 9 below the similarity threshold) with 0 false positives on look-alikes (NFR-37).
+* Advanced ML depth (a fine-tuned embedding model, gap D6) was not done.
+* Notification email digests (US-39) need SMTP, which the MVP does not have.
 
 ## 4. Team and Areas of Ownership
 

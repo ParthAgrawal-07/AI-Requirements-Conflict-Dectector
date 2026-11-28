@@ -6,7 +6,7 @@
 |---|---|
 | **Base path** | `/api/v1` |
 | **Auth** | Bearer JWT (FR-37) on every endpoint except `/auth/login`, `/auth/signup`, `/auth/refresh` and `/auth/logout`. Every route also declares the **permission** it needs (`roles-and-access.md`) |
-| **Status** | Implemented (Sprint 0–1, rev. 5 plan): section 0 below. Everything else is planned. |
+| **Status** | 154 HTTP operations and the `/ws` WebSocket are implemented on `main` (`eea5be7`); the full list is generated in [Appendix A](#appendix-a--every-implemented-operation). Section 0 details the Sprint 0–1 endpoints; sections 1+ are the original design and may differ from the code, which wins. The live schema is at `/docs` on a running backend |
 
 ---
 
@@ -350,3 +350,168 @@ US-20 calls for a documented, versioned, public REST API for third-party consume
 - All endpoints return a consistent `{ "error": { "code", "message", "request_id" } }` body on failure (`details` is added on 422). `request_id` matches the `X-Request-ID` response header — quote it when reporting a problem.
 - LLM classification failures retry up to 3x with exponential backoff (NFR-07) before the finding is marked failed rather than silently dropped.
 - Validation errors (Pydantic) return 422 with per-field detail.
+
+## Appendix A — Every Implemented Operation
+
+Generated on 28 Nov 2026 from the FastAPI OpenAPI schema of `main` at `eea5be7` (`app.openapi()`), so it lists
+exactly what the code serves. Grouped by tag. Permissions per route are in each route module's docstring and
+in [`docs/contracts/permissions.md`](../contracts/permissions.md). The WebSocket gateway is `/ws`
+(`app/realtime/gateway.py`, authenticates in its first frame); it is not in the OpenAPI schema. Updated-SRS,
+export, compliance, severity, timeline and AI-feedback routes are in open Sprint 6 PRs and are not listed.
+
+| Tag | Method | Path | Summary |
+|---|---|---|---|
+| analysis | `GET` | `/api/v1/analysis-runs/{analysis_run_id}` | One analysis run with its findings (the result card's data) |
+| analytics | `GET` | `/api/v1/projects/{project_id}/analytics` | The project's quality dashboard counts |
+| analytics | `GET` | `/api/v1/workspaces/{workspace_id}/analytics` | Every project's headline numbers |
+| auth | `POST` | `/api/v1/auth/login` | Authenticate and receive a JWT |
+| auth | `POST` | `/api/v1/auth/logout` | End this browser's session (revokes the refresh cookie) |
+| auth | `GET` | `/api/v1/auth/me` | Return the authenticated user and their workspaces |
+| auth | `POST` | `/api/v1/auth/refresh` | Trade the refresh cookie for a new access token (silent re-login) |
+| auth | `POST` | `/api/v1/auth/signup` | Create an account with a join code |
+| baselines | `GET` | `/api/v1/baselines/{baseline_id}` | One baseline and the requirements it froze |
+| baselines | `GET` | `/api/v1/baselines/{baseline_id}/compare/{other_baseline_id}` | What changed from one baseline to another |
+| baselines | `GET` | `/api/v1/projects/{project_id}/baselines` | The project's baselines |
+| baselines | `POST` | `/api/v1/projects/{project_id}/baselines` | Freeze a labelled snapshot of the agreed baseline |
+| change requests | `GET` | `/api/v1/change-requests/{change_request_id}` | One change request |
+| change requests | `PATCH` | `/api/v1/change-requests/{change_request_id}` | Edit the proposal (proposer): a new revision, earlier reviews dismissed |
+| change requests | `GET` | `/api/v1/change-requests/{change_request_id}/agreement` | Whether it can be merged now, and every unmet condition (FR-98) |
+| change requests | `GET` | `/api/v1/change-requests/{change_request_id}/checks` | The change request's consequence report: checks, findings delta, risk |
+| change requests | `POST` | `/api/v1/change-requests/{change_request_id}/checks/rerun` | Run the change request's checks again (queued) |
+| change requests | `POST` | `/api/v1/change-requests/{change_request_id}/close` | Close without merging (rejected), with a reason |
+| change requests | `POST` | `/api/v1/change-requests/{change_request_id}/merge` | Merge: version n+1 in one transaction, or 409 with the unmet conditions |
+| change requests | `POST` | `/api/v1/change-requests/{change_request_id}/reviewers` | Ask one more person to review (the proposer, or a member who may merge) |
+| change requests | `GET` | `/api/v1/change-requests/{change_request_id}/reviews` | Who was asked to review, and every review (dismissed ones marked) |
+| change requests | `POST` | `/api/v1/change-requests/{change_request_id}/reviews` | Approve, request changes or comment (with inline comments) |
+| change requests | `POST` | `/api/v1/change-requests/{change_request_id}/withdraw` | Withdraw your own change request |
+| change requests | `GET` | `/api/v1/projects/{project_id}/change-requests` | The project's change requests, newest first |
+| change requests | `POST` | `/api/v1/requirements/{requirement_id}/change-requests` | Propose a change to a requirement (RCR-n) |
+| change requests | `GET` | `/api/v1/requirements/{requirement_id}/impact` | What a change to this requirement would touch (no LLM) |
+| channels | `GET` | `/api/v1/channels/{channel_id}` | Get a channel |
+| channels | `PATCH` | `/api/v1/channels/{channel_id}` | Rename a channel or change its topic |
+| channels | `POST` | `/api/v1/channels/{channel_id}/archive` | Archive a channel: read-only and hidden by default |
+| channels | `GET` | `/api/v1/channels/{channel_id}/members` | The people listed on a private channel |
+| channels | `POST` | `/api/v1/channels/{channel_id}/members` | List a workspace member on a private channel |
+| channels | `DELETE` | `/api/v1/channels/{channel_id}/members/{user_id}` | Take someone off a private channel |
+| channels | `POST` | `/api/v1/channels/{channel_id}/read` | Mark the channel as read by the caller (clears its unread count) |
+| channels | `GET` | `/api/v1/projects/{project_id}/channels` | The project's channels the caller can see, with unread counts |
+| channels | `POST` | `/api/v1/projects/{project_id}/channels` | Create a channel (public, or private with a member list) |
+| clarifications | `POST` | `/api/v1/clarifications/{clarification_id}/answer` | Mark a clarification question answered with the resolution (FR-23) |
+| clarifications | `GET` | `/api/v1/findings/{finding_id}/clarification` | The finding's clarification question and its answer |
+| clarifications | `POST` | `/api/v1/findings/{finding_id}/clarification` | Generate the finding's clarification question now (queued) |
+| composer | `POST` | `/api/v1/channels/{channel_id}/requirement-posts` | Post a requirement in a channel: a card plus a Proposed requirement |
+| composer | `GET` | `/api/v1/composer/templates` | The EARS sentence templates, their slots and examples |
+| composer | `GET` | `/api/v1/lint/catalogue` | The lint catalogue the composer runs in the browser |
+| composer | `GET` | `/api/v1/me/drafts` | Your drafts, newest first |
+| composer | `POST` | `/api/v1/me/drafts` | Start a draft |
+| composer | `DELETE` | `/api/v1/me/drafts/{draft_id}` | Delete Draft |
+| composer | `GET` | `/api/v1/me/drafts/{draft_id}` | Get Draft |
+| composer | `PATCH` | `/api/v1/me/drafts/{draft_id}` | Autosave: replace the draft's fields |
+| composer | `POST` | `/api/v1/projects/{project_id}/improve-wording` | Suggest an EARS rewrite (AI, shown as a diff, never applied here) |
+| composer | `POST` | `/api/v1/projects/{project_id}/lint` | Lint a draft on the server (no AI, nothing stored) |
+| composer | `POST` | `/api/v1/projects/{project_id}/preflight` | Dry-run analysis of a draft: likely findings, nothing stored |
+| composer | `POST` | `/api/v1/projects/{project_id}/requirements` | Propose a requirement from the composer (posted as a card, analysed live) |
+| composer | `POST` | `/api/v1/projects/{project_id}/similar` | Requirements similar to a draft (embedding only, nothing stored) |
+| decision rules | `GET` | `/api/v1/change-requests/{change_request_id}/decision` | Who decides this change request |
+| decision rules | `DELETE` | `/api/v1/decision-rules/{decision_rule_id}` | Remove a decision rule (not the default) |
+| decision rules | `PATCH` | `/api/v1/decision-rules/{decision_rule_id}` | Edit a decision rule (open items pick it up at their next update) |
+| decision rules | `GET` | `/api/v1/findings/{finding_id}/decision` | Who decides this finding |
+| decision rules | `GET` | `/api/v1/issues/{issue_id}/decision` | Who decides this issue |
+| decision rules | `GET` | `/api/v1/projects/{project_id}/decision-rules` | The project's decision rules |
+| decision rules | `POST` | `/api/v1/projects/{project_id}/decision-rules` | Add a decision rule |
+| discussion | `DELETE` | `/api/v1/change-requests/{change_request_id}/vote` | Withdraw my vote on a change request |
+| discussion | `PUT` | `/api/v1/change-requests/{change_request_id}/vote` | Support or oppose a change request (display only) |
+| discussion | `GET` | `/api/v1/change-requests/{change_request_id}/votes` | Support and opposition on a change request |
+| discussion | `DELETE` | `/api/v1/change-requests/{change_request_id}/watch` | Stop watching a change request |
+| discussion | `GET` | `/api/v1/change-requests/{change_request_id}/watch` | Am I watching this change request? |
+| discussion | `PUT` | `/api/v1/change-requests/{change_request_id}/watch` | Watch a change request |
+| discussion | `DELETE` | `/api/v1/issues/{issue_id}/watch` | Stop watching an issue |
+| discussion | `GET` | `/api/v1/issues/{issue_id}/watch` | Am I watching this issue? |
+| discussion | `PUT` | `/api/v1/issues/{issue_id}/watch` | Watch an issue |
+| discussion | `GET` | `/api/v1/requirements/{requirement_id}/comments` | The requirement's discussion, oldest first |
+| discussion | `POST` | `/api/v1/requirements/{requirement_id}/comments` | Comment on a requirement |
+| discussion | `GET` | `/api/v1/requirements/{requirement_id}/links` | Links a person made from or to this requirement |
+| discussion | `POST` | `/api/v1/requirements/{requirement_id}/links` | Assert depends on / refines / related to |
+| discussion | `DELETE` | `/api/v1/requirements/{requirement_id}/links/{link_id}` | Remove a link (people only; nothing automatic ever does, DR-19) |
+| discussion | `GET` | `/api/v1/requirements/{requirement_id}/social` | Discussion summary for the requirement drawer |
+| discussion | `DELETE` | `/api/v1/requirements/{requirement_id}/vote` | Withdraw my vote on a requirement |
+| discussion | `PUT` | `/api/v1/requirements/{requirement_id}/vote` | Support or oppose a requirement (display only) |
+| discussion | `GET` | `/api/v1/requirements/{requirement_id}/votes` | Support and opposition on a requirement |
+| discussion | `DELETE` | `/api/v1/requirements/{requirement_id}/watch` | Stop watching a requirement |
+| discussion | `GET` | `/api/v1/requirements/{requirement_id}/watch` | Am I watching this requirement? |
+| discussion | `PUT` | `/api/v1/requirements/{requirement_id}/watch` | Watch a requirement |
+| documents | `GET` | `/api/v1/documents/{document_id}` | Get a document's processing status and progress |
+| documents | `GET` | `/api/v1/projects/{project_id}/documents` | List the project's documents |
+| documents | `POST` | `/api/v1/projects/{project_id}/documents` | Upload an SRS document into a project and queue it for extraction |
+| findings | `GET` | `/api/v1/findings/{finding_id}` | One finding |
+| findings | `POST` | `/api/v1/findings/{finding_id}/review` | Confirm, dismiss, merge, reclassify, reopen or escalate a finding (US-10) |
+| findings | `GET` | `/api/v1/findings/{finding_id}/reviews` | Every human decision on a finding, oldest first |
+| findings | `POST` | `/api/v1/projects/{project_id}/concerns` | Raise a concern: a finding by a person, with an issue to discuss it |
+| findings | `GET` | `/api/v1/projects/{project_id}/findings` | The project's findings with confidence, explanation and the requirements involved |
+| health | `GET` | `/health` | Liveness |
+| health | `GET` | `/health/ready` | Readiness |
+| issues | `GET` | `/api/v1/issues/{issue_id}` | One issue |
+| issues | `PATCH` | `/api/v1/issues/{issue_id}` | Edit, label, assign, close or reopen an issue |
+| issues | `GET` | `/api/v1/issues/{issue_id}/comments` | An issue's comments, oldest first |
+| issues | `POST` | `/api/v1/issues/{issue_id}/comments` | Comment on an issue |
+| issues | `GET` | `/api/v1/projects/{project_id}/issues` | The project's issues, newest first |
+| issues | `POST` | `/api/v1/projects/{project_id}/issues` | Open an issue about requirements of the project |
+| join codes | `POST` | `/api/v1/join` | Join a workspace (or project) with a code, as a signed-in user |
+| join codes | `DELETE` | `/api/v1/join-codes/{join_code_id}` | Revoke a join code |
+| join codes | `GET` | `/api/v1/workspaces/{workspace_id}/join-codes` | List the workspace's join codes with uses and expiry |
+| join codes | `POST` | `/api/v1/workspaces/{workspace_id}/join-codes` | Create a join code (the full code is returned only now) |
+| join codes | `GET` | `/api/v1/workspaces/{workspace_id}/join-requests` | Join requests waiting for a decision (or all, with ?status=) |
+| join codes | `GET` | `/api/v1/workspaces/{workspace_id}/join-requests/{join_request_id}/decision` | A join request and its decision so far |
+| join codes | `POST` | `/api/v1/workspaces/{workspace_id}/join-requests/{join_request_id}/decision` | Approve (choosing the role) or deny a join request |
+| map | `PUT` | `/api/v1/projects/{project_id}/changes/seen` | Mark the project's change log as seen |
+| map | `GET` | `/api/v1/projects/{project_id}/graph` | The requirements map: requirements as nodes, findings as edges |
+| map | `PUT` | `/api/v1/projects/{project_id}/graph/positions` | Save node positions (the shared layout) |
+| me | `GET` | `/api/v1/me/permissions` | The caller's effective permissions in a project or workspace |
+| messages | `GET` | `/api/v1/channels/{channel_id}/messages` | Channel history, newest page first (cursor pagination) |
+| messages | `POST` | `/api/v1/channels/{channel_id}/messages` | Post a message, or reply in a thread with parent_id |
+| messages | `DELETE` | `/api/v1/messages/{message_id}` | Delete your own chat message (its replies stay) |
+| messages | `GET` | `/api/v1/messages/{message_id}` | One message (clients re-read it after a message.* event) |
+| messages | `PATCH` | `/api/v1/messages/{message_id}` | Edit your own chat message (shown as edited) |
+| messages | `GET` | `/api/v1/messages/{message_id}/thread` | A thread: its first message, then the replies, oldest first |
+| notifications | `GET` | `/api/v1/notifications` | My inbox |
+| notifications | `GET` | `/api/v1/notifications/counts` | Unread counts per group |
+| notifications | `POST` | `/api/v1/notifications/read` | Mark notifications as read |
+| project context | `GET` | `/api/v1/projects/{project_id}/context` | The project brief, its field states and what Setup still needs |
+| project context | `PUT` | `/api/v1/projects/{project_id}/context` | Edit or confirm brief fields (activates the project when all required are confirmed) |
+| project context | `POST` | `/api/v1/projects/{project_id}/context/draft` | Draft the brief fields nobody has confirmed from one of the project's documents |
+| project context | `GET` | `/api/v1/projects/{project_id}/context/versions` | Version history of the project brief, newest first |
+| projects | `GET` | `/api/v1/projects/{project_id}` | Get a project |
+| projects | `PATCH` | `/api/v1/projects/{project_id}` | Edit a project's name, description or settings |
+| projects | `GET` | `/api/v1/projects/{project_id}/members` | The project team, with any project-level roles |
+| projects | `PUT` | `/api/v1/projects/{project_id}/members/{user_id}` | Add a workspace member to the team, optionally with a project-level role |
+| projects | `GET` | `/api/v1/workspaces/{workspace_id}/projects` | List the workspace's projects |
+| projects | `POST` | `/api/v1/workspaces/{workspace_id}/projects` | Create a project (starts in Setup) |
+| requirements | `POST` | `/api/v1/ownership-requests/{ownership_request_id}/decision` | Accept or decline an ownership request (US-36) |
+| requirements | `GET` | `/api/v1/projects/{project_id}/requirements` | List a project's requirements |
+| requirements | `GET` | `/api/v1/requirements/{requirement_id}` | One requirement with its allowed moves and approval readiness |
+| requirements | `PATCH` | `/api/v1/requirements/{requirement_id}` | Move a requirement through its lifecycle (US-37) |
+| requirements | `GET` | `/api/v1/requirements/{requirement_id}/ownership-requests` | A requirement's ownership requests, oldest first (US-36) |
+| requirements | `POST` | `/api/v1/requirements/{requirement_id}/ownership-requests` | Ask to own a requirement (US-36) |
+| requirements | `POST` | `/api/v1/requirements/{requirement_id}/signoff` | Sign off the current text of a protected requirement (FR-21) |
+| requirements | `GET` | `/api/v1/requirements/{requirement_id}/versions` | Every version of the requirement, newest first (US-12) |
+| roles | `GET` | `/api/v1/permissions` | The permission catalogue, grouped for the role editor |
+| roles | `DELETE` | `/api/v1/roles/{role_id}` | Delete a custom role nobody holds any more |
+| roles | `PATCH` | `/api/v1/roles/{role_id}` | Rename a custom role or change its permissions |
+| roles | `GET` | `/api/v1/workspaces/{workspace_id}/roles` | The roles this workspace can assign: the nine defaults and its custom roles |
+| roles | `POST` | `/api/v1/workspaces/{workspace_id}/roles` | Create a custom role from catalogue permissions |
+| settings | `POST` | `/api/v1/projects/{project_id}/reanalyse` | Analyse the project again with its current thresholds (no re-upload) |
+| settings | `GET` | `/api/v1/projects/{project_id}/thresholds/preview` | What candidate thresholds would select, before saving them |
+| suggestions | `GET` | `/api/v1/findings/{finding_id}/suggestions` | The AI's suggested resolutions for a finding |
+| suggestions | `POST` | `/api/v1/findings/{finding_id}/suggestions/regenerate` | Ask for new options that respect an instruction |
+| suggestions | `GET` | `/api/v1/projects/{project_id}/suggestions/stats` | How people responded to the AI's suggestions (NFR-36) |
+| suggestions | `POST` | `/api/v1/suggestions/{suggestion_id}/feedback` | Record a response to a suggestion (append-only) |
+| suggestions | `POST` | `/api/v1/suggestions/{suggestion_id}/rating` | Rate an option's correctness (analysts, the CP2 study) |
+| workspaces | `GET` | `/api/v1/workspaces` | The workspaces the caller belongs to, with their role in each |
+| workspaces | `POST` | `/api/v1/workspaces` | Create a workspace (you become its Owner) |
+| workspaces | `GET` | `/api/v1/workspaces/{workspace_id}` | Get a workspace |
+| workspaces | `PATCH` | `/api/v1/workspaces/{workspace_id}` | Rename a workspace |
+| workspaces | `POST` | `/api/v1/workspaces/{workspace_id}/leave` | Leave the workspace (the last Owner must transfer ownership first) |
+| workspaces | `GET` | `/api/v1/workspaces/{workspace_id}/members` | The workspace's active members and their roles |
+| workspaces | `DELETE` | `/api/v1/workspaces/{workspace_id}/members/{user_id}` | Remove a member: access ends at once and their sockets close |
+| workspaces | `PATCH` | `/api/v1/workspaces/{workspace_id}/members/{user_id}` | Change a member's workspace role (applies on their next request) |
+| workspaces | `GET` | `/api/v1/workspaces/{workspace_id}/needs-reassignment` | Items still owned by former members (SX-11) |

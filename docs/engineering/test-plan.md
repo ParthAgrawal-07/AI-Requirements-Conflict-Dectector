@@ -8,7 +8,7 @@
 | **Frontend** | Vitest + React Testing Library |
 | **E2E, load, security** | Playwright, load tests, permission and join-code abuse tests |
 | **Testers** | Abhyudit (accuracy, backend) · Affan (E2E, performance, security). Every developer owns the unit tests for their code (D8) |
-| **Status** | Backend suite in CI for Sprint 0–1 code; benchmark v1 merged; Playwright, load and accuracy harness not started |
+| **Status** | Backend, frontend and E2E suites run in CI on every push (all green on `main`, 24 Nov 2026). Measured results in §8. Accuracy harness and CP2 load test merged; mutation testing started 28 Nov |
 
 ---
 
@@ -107,3 +107,35 @@ Accuracy is measured as precision, recall and F1 **per category** on a labelled 
 - Budget exhausted: the run shows "waiting for budget" and resumes later (NFR-28).
 - WebSocket disconnect: the client re-syncs by REST from its `since` cursor or `graph_revision`.
 - Backups cover requirement data, messages and audit logs; the restore procedure is documented.
+
+## 8. Measured Results (28 Nov 2026, `main` at `eea5be7`)
+
+| Suite | Tool | Result | Coverage |
+|---|---|---|---|
+| Backend unit + integration | pytest against Postgres+pgvector and Redis | 3,246 passed, 0 failed, 32 skipped (clean test environment) | **92%** statements and branches combined (13,707 statements, 2,694 branches) |
+| Frontend unit + component | Vitest + React Testing Library | 185 passed in 25 files | **76.4%** statements, **78.5%** branches, 71.4% functions |
+| End-to-end | Playwright (`e2e/`: smoke, join → upload, CP2 full loop) | Green in the E2E workflow on `main` | — |
+| Load | k6 scripts in `load/` | CP2 report: [`load/reports/cp2.md`](../../load/reports/cp2.md) | — |
+| Accuracy | `eval/` harness on benchmark v2 | CP2 report: [`eval/reports/cp2.md`](../../eval/reports/cp2.md); rule checks catch 12 of 15 reworded conflicts, 0 false positives | — |
+
+**Coverage work in progress.** Branch `test/parth-coverage` (not merged) brings `app/core/tasks.py`,
+`app/graph/preview.py`, the `app/embeddings` package and `app/classification/llm_client.py` to 100%
+statement and branch coverage, and removes the unreachable `AnthropicTransport` (ADR-31). Work on the
+remaining backend modules and the frontend is in progress toward 100%. Three developer-only frontend
+pages are excluded from frontend coverage: `MapSpike.tsx` (Sprint 0 spike), `Prototypes.tsx` (US-22
+low-fidelity prototypes) and `KitPage.tsx` (component kit preview).
+
+**Mutation testing** (mutmut 2.5.1, five core backend modules), run 1 with the existing tests:
+
+| Module | Mutants | Score |
+|---|---|---|
+| `app/ingestion/segmentation/rules.py` | 36 | 86.1% |
+| `app/core/security.py` | 84 | 79.8% |
+| `app/lint/engine.py` | 56 | 60.7% |
+| `app/consequences/risk.py` | 37 | 51.4% |
+| `app/core/permissions.py` (catalogue tests only) | 215 | 2.8% |
+
+Surviving mutants in the lint engine and risk rules were boundary-value gaps (quality bands at 80 and 50,
+affected counts at 3 and 10); tests that kill them were added on `test/parth-coverage`. `permissions.py`
+is re-run against the permission matrix tests, which are the ones that check it. Remaining survivors are
+equivalent mutants (type aliases, `frozen=` on dataclasses, `@cache`).

@@ -5,10 +5,9 @@
 | | |
 |---|---|
 | **Local** | Docker Compose |
-| **Backend deploy** | Railway / Render |
-| **Frontend deploy** | Vercel |
+| **Deploy** | One Azure VM: `docker-compose.prod.yml` with Caddy serving the SPA and proxying the API (see *Single-host production*). Railway/Render and Vercel were the original plan |
 | **CI/CD** | GitHub Actions |
-| **Status** | Sprint 0 (Parth): docker-compose.yml, both Dockerfiles, .env.example, DB schema + migrations, auth skeleton, and backend-ci.yml are implemented and passing. Frontend build/deploy steps are still Sprint 5 (Dhavni didi). |
+| **Status** | Implemented: Docker Compose for development, the production stack (#119), Backend CI, Frontend CI, E2E and deploy-on-push to the Azure VM. All four workflows were green on `main` on 24 Nov 2026 |
 
 ---
 
