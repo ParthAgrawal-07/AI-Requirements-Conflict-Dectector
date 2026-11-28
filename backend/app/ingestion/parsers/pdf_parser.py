@@ -3,9 +3,10 @@ PDF parser using PyMuPDF.
 
 Extracts text page-by-page from born-digital PDFs. No OCR is performed.
 
-Each page becomes one RawSegment whose text keeps PyMuPDF's text blocks
-(roughly: paragraphs) separated by a blank line, so the segmenter can tell a
-paragraph break from a line that merely wrapped.
+Each page becomes one RawSegment whose paragraphs are separated by a blank line,
+so the segmenter can tell a paragraph break from a line that merely wrapped. The
+paragraphs are rebuilt from line positions (pdf_layout): borderless table rows come
+out as one "cell | cell" line each, and lines a PDF writer split apart are rejoined.
 
 Running headers, footers and page numbers are removed here because only the
 parser knows where on the page a block sits: a block in the top/bottom margin
@@ -22,6 +23,7 @@ import pymupdf  # PyMuPDF (fitz API is deprecated)
 from app.ingestion.errors import DocumentParseError
 from app.ingestion.models import RawSegment
 from app.ingestion.parsers.base import Parser
+from app.ingestion.parsers.pdf_layout import Line, body_font_size, page_lines, read_page
 from app.ingestion.segmentation.rules import (
     PAGE_NUMBER_PATTERN,
     REQUIREMENT_ID_PATTERN,
@@ -74,7 +76,14 @@ class PDFParser(Parser):
                 raise DocumentParseError(
                     f"'{doc_name}' is password-protected. Please upload an unencrypted PDF."
                 )
-            pages = [self._page_blocks(doc[i]) for i in range(len(doc))]
+            heights = [doc[i].rect.height for i in range(len(doc))]
+            lines = [page_lines(doc[i]) for i in range(len(doc))]
+
+        body_size = body_font_size(lines)
+        pages = [
+            self._page_blocks(page, height, body_size)
+            for page, height in zip(lines, heights, strict=True)
+        ]
 
         repeated = self._repeated_margin_texts(pages)
 
@@ -107,17 +116,12 @@ class PDFParser(Parser):
         return segments
 
     @staticmethod
-    def _page_blocks(page: pymupdf.Page) -> _PageBlocks:
-        height = page.rect.height
+    def _page_blocks(lines: list[Line], height: float, body_size: float) -> _PageBlocks:
         top, bottom = height * _MARGIN_FRACTION, height * (1 - _MARGIN_FRACTION)
-        blocks: _PageBlocks = []
-        # Block tuples: (x0, y0, x1, y1, text, block_no, block_type); type 0 = text.
-        for _x0, y0, _x1, y1, text, _no, block_type in page.get_text("blocks", sort=True):
-            text = text.strip()
-            if block_type != 0 or not text:
-                continue
-            blocks.append((text, y1 <= top or y0 >= bottom))
-        return blocks
+        return [
+            (block.text, block.y1 <= top or block.y0 >= bottom)
+            for block in read_page(lines, body_size)
+        ]
 
     @staticmethod
     def _repeated_margin_texts(pages: list[_PageBlocks]) -> set[str]:

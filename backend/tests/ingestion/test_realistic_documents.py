@@ -104,5 +104,5 @@ class TestRealisticDOCX:
         assert excluded == {
             "This SRS describes the Online Library System.": "non_requirement_section",
             "Member: a registered library user.": "non_requirement_section",
-            "ID | Requirement | Priority": "fragment",
+            "ID | Requirement | Priority": "table_header",
         }
