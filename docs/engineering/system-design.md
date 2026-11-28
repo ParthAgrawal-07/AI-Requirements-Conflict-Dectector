@@ -518,7 +518,7 @@ flowchart LR
 | Secrets exposure | Environment variables only; `SecretStr`; startup refuses weak production secrets; GitGuardian config in the repo | ✅ |
 | Information leakage | Standard error body with a request id; stack traces and file paths stay in server logs; worker error messages are sanitised | ✅ |
 | **Prompt injection** — requirement text is untrusted input to the LLM | Requirement text is delimited as data in the prompt; the model can take **no actions**; its output must validate against a schema (FR-15); it can only *propose* findings that a human reviews | ✅ |
-| Brute force / abuse | Rate limiting on login and upload | 🟡 sign-up, join codes, messages and authoring aids are rate-limited; login and upload are not |
+| Brute force / abuse | Rate limiting on login and upload | ✅ login (10/min per e-mail, 30/min per address, #125), sign-up, join codes, messages and authoring aids are rate-limited; 🟡 upload is not |
 | Data at rest / in transit (NFR-10) | TLS at the platform edge; managed-database encryption | ✅ TLS by Caddy (Let's Encrypt) on the Azure VM; ⬜ disk encryption is the VM's default only |
 
 ### 9.2 Reliability and failure handling

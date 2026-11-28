@@ -144,6 +144,8 @@ calendar weeks; each title carries the story IDs. Work for Sprints 3–6 was spl
 | 2026-11-24 | #113 | Us 55 change log | the-heet-shah |
 | 2026-11-24 | #114 | feat: integrate sprint 6 graph history and preview | DC-01051 |
 | 2026-11-24 | #122 | feat(discussion): US-53 comments, votes, watch and human links | Affan689 |
+| 2026-11-28 | #124 | fix(ingestion): rebuild borderless PDF tables from line positions (US-02, FR-03) | Bansil08 |
+| 2026-11-28 | #125 | fix(auth): rate-limit login attempts per e-mail and per address | ParthAgrawal-07 |
 
 ### Open at the time of writing (not on `main`)
 
@@ -158,7 +160,6 @@ calendar weeks; each title carries the story IDs. Work for Sprints 3–6 was spl
 | #116 | Compliance backend, protection, changes API | US-18, US-55 |
 | #118 | Compliance UI | US-18 |
 | #94, #104 | Docker runtime fixes | Infra |
-| #124 | Borderless PDF tables | US-02 |
 
 ## Open Items Status
 

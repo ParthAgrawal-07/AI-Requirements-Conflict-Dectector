@@ -61,7 +61,7 @@ Sprint 6 `MERGE_ORDER.md`):
 | US-55 Written change log (part) | — | Changes API, Changes panel, AI change-summary paragraph | PRs #116, #111 open; #123 closed |
 
 Sprint 6 test PRs also open: #105 (final accuracy report, SRS fidelity tests), #109 (injection and rate-limit
-tests). Infrastructure PRs open: #94 / #104 (Docker runtime fixes), #124 (borderless PDF tables).
+tests). Infrastructure PRs open: #94 / #104 (Docker runtime fixes).
 
 **Deferred by plan** (not built, 60 points): US-16, US-17, US-20, US-21, US-32, US-39, US-43, US-44, US-46, US-47,
 US-48, US-54, and outcome story US-23. Reasons in [`feature-catalog.md` §3](feature-catalog.md#3-deferred--post-mvp-backlog).
