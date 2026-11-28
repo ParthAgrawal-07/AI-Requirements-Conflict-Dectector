@@ -99,13 +99,27 @@ SessionStoreDep = Annotated[sessions.SessionStore, Depends(sessions.get_session_
     response_model=TokenResponse,
     summary="Authenticate and receive a JWT",
     dependencies=[PublicRoute],
-    responses={401: {"model": ErrorResponse, "description": "Incorrect email or password"}},
+    responses={
+        401: {"model": ErrorResponse, "description": "Incorrect email or password"},
+        429: {"model": ErrorResponse, "description": "Too many attempts"},
+    },
 )
 def login(
     form: Annotated[OAuth2PasswordRequestForm, Depends()],
+    request: Request,
     response: Response,
     db: Annotated[Session, Depends(get_db)],
+    limiter: Annotated[RateLimiter, Depends(get_rate_limiter)],
 ) -> TokenResponse:
+    settings = get_settings()
+    # Counted before the password is checked, so a correct guess past the limit gets 429 too and
+    # the limit cannot be probed. Each attempt also costs an Argon2 verification.
+    enforce(limiter, f"login:ip:{client_ip(request)}", limit=settings.login_ip_attempts_per_minute)
+    enforce(
+        limiter,
+        f"login:email:{hash_key_part(form.username)}",
+        limit=settings.login_attempts_per_minute,
+    )
     user = authenticate_user(db, form.username, form.password)
     if user is None:
         raise InvalidCredentialsError()
