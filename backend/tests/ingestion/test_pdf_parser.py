@@ -138,3 +138,97 @@ class TestHeaderFooterRemoval:
         doc.save(str(path))
         doc.close()
         assert PDFParser().parse(str(path))[0].text == "First paragraph.\n\nSecond paragraph."
+
+
+def _write(path, items, size=11):
+    """Write one page from (x, y, text) items placed one by one, the way PDF writers lay
+    out borderless tables."""
+    doc = pymupdf.open()
+    page = doc.new_page(width=595, height=842)
+    for x, y, text in items:
+        page.insert_text((x, y), text, fontsize=size)
+    doc.save(str(path))
+    doc.close()
+    return str(path)
+
+
+class TestLayout:
+    """Reading order rebuilt from line positions: borderless tables, wrapped headings."""
+
+    def test_key_value_rows_become_table_rows(self, tmp_path):
+        path = _write(
+            tmp_path / "kv.pdf",
+            [
+                (60, 200, "Description"),
+                (160, 194, "Create an account and authenticate"),
+                (160, 206, "securely."),
+                (60, 230, "Input"),
+                (160, 230, "Credentials, profile, consent"),
+            ],
+        )
+        assert PDFParser().parse(path)[0].text == (
+            "Description | Create an account and authenticate securely.\n\n"
+            "Input | Credentials, profile, consent"
+        )
+
+    def test_wrapped_id_cell_is_rejoined(self, tmp_path):
+        path = _write(
+            tmp_path / "nfr.pdf",
+            [
+                (60, 200, "NU-"),
+                (60, 212, "NFR-"),
+                (60, 224, "01"),
+                (120, 212, "Usability"),
+                (220, 206, "Forms should be clear and"),
+                (220, 218, "easy to learn."),
+                (420, 212, "High"),
+            ],
+        )
+        assert PDFParser().parse(path)[0].text == (
+            "NU-NFR-01 | Usability | Forms should be clear and easy to learn. | High"
+        )
+
+    def test_cell_wrapped_below_a_loosely_spaced_row_stays_in_its_cell(self, tmp_path):
+        path = _write(
+            tmp_path / "loose.pdf",
+            [
+                (60, 200, "Backend"),
+                (140, 200, "Bansil"),
+                (220, 200, "Ingestion and authoring: extraction,"),
+                (220, 214, "owners and change requests"),
+                (60, 245, "Backend"),
+                (140, 245, "Heet"),
+                (220, 245, "Embeddings and retrieval"),
+            ],
+        )
+        assert PDFParser().parse(path)[0].text == (
+            "Backend | Bansil | Ingestion and authoring: extraction, owners and change requests"
+            "\n\nBackend | Heet | Embeddings and retrieval"
+        )
+
+    def test_prose_is_not_split_into_cells(self, tmp_path):
+        path = _write(
+            tmp_path / "prose.pdf",
+            [
+                (60, 200, "The system shall let members reserve items for up to two days."),
+                (60, 214, "Reservations expire automatically."),
+            ],
+        )
+        assert "|" not in PDFParser().parse(path)[0].text
+
+    def test_wrapped_large_heading_is_one_line(self, tmp_path):
+        path = tmp_path / "heading.pdf"
+        doc = pymupdf.open()
+        page = doc.new_page(width=595, height=842)
+        page.insert_text((60, 150), "1. Citizen (Normal User) functional", fontsize=24)
+        page.insert_text((60, 178), "requirements", fontsize=24)
+        page.insert_text(
+            (60, 230), "Body text, which sets the usual font size of the page.", fontsize=11
+        )
+        doc.save(str(path))
+        doc.close()
+        assert (
+            PDFParser()
+            .parse(str(path))[0]
+            .text.startswith("1. Citizen (Normal User) functional requirements\n\n")
+        )

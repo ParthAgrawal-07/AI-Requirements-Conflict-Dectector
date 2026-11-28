@@ -417,7 +417,7 @@ class TestClassification:
         assert req.needs_review
 
     def test_short_fragments_excluded(self):
-        result = Segmenter().run(_pages("ID | Requirement | Priority"))
+        result = Segmenter().run(_pages("see below"))
         assert result.requirements == []
         assert result.excluded[0].reason == "fragment"
 
@@ -588,3 +588,70 @@ class TestSections:
             .sections
         )
         assert [(s.heading, s.body) for s in sections] == [("1.1 Scope", "Banking only.")]
+
+
+class TestTables:
+    """Table rows ("cell | cell"), as the PDF parser rebuilds them from borderless tables."""
+
+    SPEC = (
+        "NU-FR-01: Registration and Login\n\n"
+        "Field | Specification\n\n"
+        "Description | Create an account and authenticate securely.\n\n"
+        "Input | Credentials, profile, consent\n\n"
+        "Success | Valid account and session"
+    )
+    NEXT_PAGE = "Field | Specification\n\nv2 note | POST /auth"
+
+    def test_spec_rows_stay_with_their_titled_id(self):
+        [req] = Segmenter().segment(_pages(self.SPEC, self.NEXT_PAGE))
+
+        assert req.raw_text == (
+            "NU-FR-01: Registration and Login\n"
+            "Description | Create an account and authenticate securely.\n"
+            "Input | Credentials, profile, consent\n"
+            "Success | Valid account and session\n"
+            "v2 note | POST /auth"
+        )
+        assert not req.needs_review
+
+    def test_header_row_and_its_repeats_excluded(self):
+        result = Segmenter().run(_pages(self.SPEC, self.NEXT_PAGE))
+
+        assert [(e.text, e.reason) for e in result.excluded] == [
+            ("Field | Specification", "table_header"),
+            ("Field | Specification", "table_header"),
+        ]
+
+    def test_short_data_row_inside_a_table_is_not_a_header(self):
+        texts = _texts(_pages("FR-1: Login\n\nPriority | High\n\nOwner | Parth"))
+        assert texts == ["FR-1: Login\nPriority | High\nOwner | Parth"]
+
+    def test_rows_with_ids_are_one_requirement_each(self):
+        texts = _texts(
+            _pages(
+                "ID | Name | Explanation\n\n"
+                "NU-NFR-01 | Usability | Forms should be clear.\n\n"
+                "NU-NFR-02 | Privacy | Data is restricted to staff."
+            )
+        )
+        assert texts == [
+            "NU-NFR-01 | Usability | Forms should be clear.",
+            "NU-NFR-02 | Privacy | Data is restricted to staff.",
+        ]
+
+    def test_id_inside_a_paragraph_does_not_take_rows(self):
+        """A wrapped line that happens to start with an ID is not a requirement title."""
+        reqs = Segmenter().segment(
+            _pages("Stories: US-19 (Auth),\nUS-04 (Requirements list)\n\nParth | US-19 JWT auth")
+        )
+        assert reqs[-2].raw_text == "US-04 (Requirements list)"
+        assert reqs[-1].raw_text == "Parth | US-19 JWT auth"
+
+    def test_row_at_top_of_page_does_not_continue_previous_row(self):
+        texts = _texts(
+            _pages("Bansil | Composer backend (primary owner)", "Heet | Live retrieval for posts")
+        )
+        assert texts == [
+            "Bansil | Composer backend (primary owner)",
+            "Heet | Live retrieval for posts",
+        ]
