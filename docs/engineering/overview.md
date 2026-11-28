@@ -7,7 +7,7 @@
 | **Course** | IT314 — Software Engineering, Autumn 2026–27 |
 | **Team** | 10 members |
 | **Scope** | Revision 5 — [`IT314_RCD_Scope_Extension_v5.md`](../planning/v5/IT314_RCD_Scope_Extension_v5.md) |
-| **Status** | Sprint 1 in progress (see `project-status.md`) |
+| **Status** | Sprint 7 (release week); Sprints 0–5 merged, Sprint 6 partly merged (see `project-status.md`) |
 
 ---
 

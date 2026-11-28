@@ -7,7 +7,7 @@
 | **Course** | IT314 — Software Engineering, Autumn 2026–27 |
 | **Team** | 10 members |
 | **Plan** | Revision 5 — planning documents in [`docs/planning/v5/`](../planning/v5/) |
-| **Note** | These documents describe both implemented work (Sprint 0–1) and planned work. Implemented parts are marked ✅; everything else is marked as planned rather than described as done |
+| **Note** | Status re-checked against `main` (`eea5be7`, 24 Nov 2026) on 28 Nov 2026. Sprints 0–5 are merged; Sprint 6 is partly merged and its open PRs are listed in `project-status.md` §3. Parts built but not merged are marked ⏳, never ✅ |
 
 ---
 

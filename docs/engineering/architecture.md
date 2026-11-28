@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Status** | Modular monolith with API and worker processes; tenancy, permissions, upload, extraction and project context are implemented, the rest is planned |
+| **Status** | Modular monolith with API and worker processes, deployed on one Azure VM. Implemented on `main` through Sprint 5 and part of Sprint 6; the updated-SRS, export and compliance modules are in open Sprint 6 PRs |
 | **Detail** | `system-design.md` and `object-design.md`; changes for the extended scope in [`IT314_RCD_Design_Update_v5.md`](../planning/v5/IT314_RCD_Design_Update_v5.md) |
 
 ---

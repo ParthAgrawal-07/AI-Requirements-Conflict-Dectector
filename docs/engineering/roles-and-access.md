@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Status** | Implemented in Sprint 0–1 (rev. 5 plan): permission catalogue, nine default roles, memberships, `require_permission` |
+| **Status** | Implemented: permission catalogue, nine default roles, memberships, `require_permission` (Sprint 0–1); custom roles, member removal and role changes (Sprint 2, US-49, US-26) |
 | **Traces to** | FR-37, FR-38, FR-43–FR-48, FR-79, SX-06, ADR-12, ADR-14, ADR-20, NFR-11, NFR-27 |
 | **Code** | `backend/app/core/permissions.py` (catalogue), `app/core/auth.py` (dependencies), `app/services/access.py` (resolution) |
 | **Contract** | [`../contracts/permissions.md`](../contracts/permissions.md) |

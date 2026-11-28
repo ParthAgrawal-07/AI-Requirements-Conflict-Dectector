@@ -7,7 +7,7 @@
 | **Scope** | The classes and modules inside the backend, from the domain model down to collaborations |
 | **Companion** | `system-design.md` (architecture, runtime, deployment, cross-cutting) |
 | **Supersedes** | The class diagram in `diagrams.md`, which predates the implementation (differences in §2.3) |
-| **Status legend** | ✅ implemented and tested · 🟡 stub file exists, the design here is a **proposal for its owner to confirm** · ⬜ planned |
+| **Status legend** | ✅ implemented and tested · 🟡 part on `main` · ⏳ built, Sprint 6 PR open · ⬜ not built. Re-checked against `main` (`eea5be7`) on 28 Nov 2026 |
 | **Revision 5** | Written before the Step 7 scope extension. [`IT314_RCD_Design_Update_v5.md`](../planning/v5/IT314_RCD_Design_Update_v5.md) extends §2–§5 and replaces §10 (done below); anything it does not mention is unchanged |
 
 **Notation.** The backend is Python, and much of it is modules of functions rather than classes. A module that plays a class-like role in a diagram is drawn as `<<module>>`. `<<DTO>>` marks Pydantic data-transfer objects, `<<entity>>` marks SQLAlchemy ORM classes, `<<interface>>` marks a Protocol/ABC.
@@ -496,7 +496,7 @@ classDiagram
 
 ---
 
-## 4. Object Design of the Analysis Pipeline 🟡 (proposal)
+## 4. Object Design of the Analysis Pipeline ✅
 
 The stub files exist (`embeddings/embed.py`, `vector_store.py`, `candidate_filter.py`; `classification/classifier.py`, `schemas.py`; `clarification/question_gen.py`, `impact_analysis.py`) but are empty. This is a **proposed contract** that fits the data model and runtime design. Owners — Heet (embeddings), Keval (classification), Madhav (clarification) — should adopt or amend it before Sprint 2.
 
@@ -611,7 +611,7 @@ stateDiagram-v2
 
 `done` and `failed` are terminal for the worker: a repeat delivery returns `SKIPPED`. A retry endpoint (`reprocess`) is a planned, small addition (system design G5). Planned change: when later stages are chained, `done` is reached only after the final stage (G2).
 
-### 5.2 Finding lifecycle ⬜
+### 5.2 Finding lifecycle ✅
 
 ```mermaid
 stateDiagram-v2
@@ -704,7 +704,7 @@ sequenceDiagram
   Note over P,Db: any StageFailure triggers rollback, then status failed with a stage-prefixed message, commit, FAILED
 ```
 
-### 6.3 Classifying one candidate pair 🟡
+### 6.3 Classifying one candidate pair ✅
 
 ```mermaid
 sequenceDiagram
@@ -732,7 +732,7 @@ sequenceDiagram
   end
 ```
 
-### 6.4 Edit with impact preview 🟡
+### 6.4 Edit with impact preview ✅
 
 ```mermaid
 sequenceDiagram
@@ -763,13 +763,13 @@ sequenceDiagram
 | **Dependency factory / Decorator** | `require_roles(*roles)` | Adds an authorisation policy to a route declaratively | ✅ |
 | **Chain of Responsibility** | Middleware stack: request-context → CORS → body-size guard → router | Each layer handles one concern and passes the request on | ✅ |
 | **Template-style pipeline** | Upload: stage → validate → insert → move → commit → enqueue; worker: claim → extract → persist | A fixed order with a defined failure path at each step | ✅ |
-| **State** | `DocumentStatus`, `FindingStatus`, enforced by `CHECK` constraints and service transitions | Legal transitions are explicit | ✅ / ⬜ |
+| **State** | `DocumentStatus`, `FindingStatus`, enforced by `CHECK` constraints and service transitions | Legal transitions are explicit | ✅ |
 | **Data Transfer Object + Mapper** | `schemas.*` with `from_model()` | The API contract is independent of storage | ✅ |
 | **Value object** | `StagedFile`, `BodyLimit`, `TokenPayload` (frozen dataclasses) | Immutable, comparable, safe to share | ✅ |
 | **Singleton (via caching)** | `get_settings()`, `get_engine()`, `get_sessionmaker()` use `lru_cache` | One configuration and one connection pool per process | ✅ |
 | **Unit of Work** | A SQLAlchemy `Session`; `session_scope()` for non-request code | One transaction boundary per operation | ✅ |
-| **Adapter** | `LLMClient` → Gemini / Groq transports behind a fallback; a future S3 storage behind the same methods as `LocalFileStorage` | Isolates third-party SDKs and error types | 🟡 / ⬜ |
-| **Template Method / retry policy** | Classifier retry with backoff | One reliability policy for every LLM call | ⬜ |
+| **Adapter** | `LLMClient` → Gemini / Groq transports behind a fallback; a future S3 storage behind the same methods as `LocalFileStorage` | Isolates third-party SDKs and error types | ✅ LLM transports · ⬜ S3 storage (local storage only) |
+| **Template Method / retry policy** | Classifier retry with backoff | One reliability policy for every LLM call | ✅ Celery `autoretry_for` with backoff |
 | **Idempotent receiver** | `process_document` claim and skip rules | Duplicate delivery is harmless | ✅ |
 
 ## 8. Design Principles Applied
@@ -804,9 +804,9 @@ sequenceDiagram
 | **MaxBodySizeMiddleware** | Refuses over-limit bodies before they are read, including bodies with no declared length | BodyLimit, the error response builder |
 | **AuthDependencies** | Turns a bearer token into an active user and enforces role policy per route | Security, UserService, Session |
 | **Settings** | Holds validated configuration and refuses unsafe production values | the process environment |
-| **Classifier** 🟡 | Classifies a pair or single requirement into one of five categories with confidence and rationale; retries and validates | PromptBuilder, LLMClient, ClassificationResult |
-| **CandidateFilter** 🟡 | Produces candidate pairs above the workspace threshold using vector neighbours, in canonical order | VectorStore, CandidatePair |
-| **ImpactAnalyzer** 🟡 | Reports what an edit would affect, without saving anything | VectorStore, Classifier, Finding |
+| **Classifier** ✅ | Classifies a pair or single requirement into one of five categories with confidence and rationale; retries and validates | PromptBuilder, LLMClient, ClassificationResult |
+| **CandidateFilter** ✅ | Produces candidate pairs above the workspace threshold using vector neighbours, in canonical order | VectorStore, CandidatePair |
+| **ImpactAnalyzer** ✅ | Reports what an edit would affect, without saving anything | VectorStore, Classifier, Finding |
 
 ## 10. Module-to-Code Map
 
@@ -815,28 +815,28 @@ sequenceDiagram
 | Design element | Path | Owner | Status |
 |---|---|---|---|
 | Entities, enums, migrations | `backend/app/models/`, `backend/alembic/` | Parth | ✅ (`0001`–`0004a`, `0011`) |
-| Auth, membership, permissions and roles | `backend/app/core/auth.py`, `app/core/permissions.py`, `app/services/{access,membership}.py`; `roles.py` (custom roles) | Parth | ✅ · custom roles ⬜ |
-| Join codes and join requests | `app/services/join_codes.py` | Madhav | ⬜ (sign-up redeems a code in `app/services/signup.py` ✅) |
-| Channels, messages | `app/services/channels.py`, `app/api/channels.py` | Madhav | ⬜ |
-| Requirement posts, drafts, ownership, votes, watches, links | `app/intake/` | Bansil | 🟡 EARS templates and composer schemas |
-| Real-time gateway, event bus, queues, beat | `app/realtime/`, `app/core/celery_app.py` | Dhavni didi | 🟡 Celery ✅ · real-time ⬜ |
-| Graph service, deltas and change narrator | `app/graph/` | Dhavni didi | ⬜ |
-| Issues and auto conflict issues | `app/services/issues.py` | Dhavni didi | ⬜ |
-| Ingestion, chat detection, SRS export | `app/ingestion/`, `app/intake/`, `app/export/` | Bansil | ✅ ingestion · ⬜ export |
+| Auth, membership, permissions and roles | `backend/app/core/auth.py`, `app/core/permissions.py`, `app/services/{access,membership}.py`; `roles.py` (custom roles) | Parth | ✅ |
+| Join codes and join requests | `app/services/join_codes.py` | Madhav | ✅ |
+| Channels, messages | `app/services/channels.py`, `app/api/channels.py` | Madhav | ✅ |
+| Requirement posts, drafts, ownership, votes, watches, links | `app/intake/` | Bansil | ✅ |
+| Real-time gateway, event bus, queues, beat | `app/realtime/`, `app/core/celery_app.py` | Dhavni didi | ✅ |
+| Graph service, deltas and change narrator | `app/graph/` | Dhavni didi | ✅ |
+| Issues and auto conflict issues | `app/services/issues.py` | Dhavni didi | ✅ |
+| Ingestion, chat detection, SRS export | `app/ingestion/`, `app/intake/`, `app/export/` | Bansil | ✅ ingestion · ⏳ export (PR #108) · chat detection deferred (US-32) |
 | Project context, brief drafting, context gate | `app/context/` | Bansil | ✅ |
-| Context pack | `app/classification/context_pack.py` | Keval | ⬜ |
-| Updated SRS: readiness, generator, fidelity, exporter | `app/export/srs/` | Bansil (Keval: prompts) | ⬜ |
-| Embeddings, candidates, incremental retrieval, similar hints, search | `app/embeddings/`, `app/search/` | Heet | 🟡 |
-| Classification, LLM clients, budget guard, lint catalogue, pre-flight, AI wording | `app/classification/`, `app/lint/` | Keval | 🟡 |
-| Clarification, impact, consequence checks, risk scoring, notifications, AI suggestions and feedback | `app/clarification/`, `app/consequences/`, `app/suggestions/`, `app/notifications/` | Madhav (Keval: prompts) | 🟡 clarification, impact · ⬜ rest |
-| Change requests, review policy, merge, review state, baselines, audit | `app/services/{change_requests,reviews,baselines}.py` | Parth | ⬜ |
+| Context pack | `app/classification/context_pack.py` | Keval | ✅ |
+| Updated SRS: readiness, generator, fidelity, exporter | `app/export/srs/` | Bansil (Keval: prompts) | ⏳ PRs #108, #107 |
+| Embeddings, candidates, incremental retrieval, similar hints, search | `app/embeddings/`, `app/search/` | Heet | ✅ (workspace search deferred, US-46) |
+| Classification, LLM clients, budget guard, lint catalogue, pre-flight, AI wording | `app/classification/`, `app/lint/` | Keval | ✅ |
+| Clarification, impact, consequence checks, risk scoring, notifications, AI suggestions and feedback | `app/clarification/`, `app/consequences/`, `app/suggestions/`, `app/notifications/` | Madhav (Keval: prompts) | ✅ |
+| Change requests, review policy, merge, review state, baselines, audit | `app/services/{change_requests,reviews,baselines}.py` | Parth | ✅ |
 | DTOs and `Page[T]` | `backend/app/schemas/` | Parth | ✅ |
 | Error model, middleware, security, config | `backend/app/core/` | Parth | ✅ |
-| Frontend shell, channels, composer, requirements, issues, dashboard, baselines, analytics, map preview | `frontend/src/features/{channels,composer,requirements,issues,dashboard,baselines,analytics}` | Pranshu | ⬜ |
-| Frontend members and roles, findings, review, map, change requests, inbox, compliance, project setup wizard | `frontend/src/features/{members,findings,review,map,changes,notifications,compliance,setup}` | Abhijeet | ⬜ |
-| Frontend updated SRS screen | `frontend/src/features/srs` | Pranshu | ⬜ |
-| Accuracy benchmark and API tests | `backend/tests/`, `eval/` | Abhyudit | 🟡 backend tests ✅ · `eval/` ⬜ |
-| E2E, load and security tests | `e2e/`, `load/` | Affan | ⬜ |
+| Frontend shell, channels, composer, requirements, issues, dashboard, baselines, analytics, map preview | `frontend/src/features/{channels,composer,requirements,issues,dashboard,baselines,analytics}` | Pranshu | ✅ except the map time slider (PR #111) and analytics (deferred, US-44) |
+| Frontend members and roles, findings, review, map, change requests, inbox, compliance, project setup wizard | `frontend/src/features/{members,findings,review,map,changes,notifications,compliance,setup}` | Abhijeet | ✅ except compliance UI (PR #118), analytics (deferred, US-44) |
+| Frontend updated SRS screen | `frontend/src/features/srs` | Pranshu | ⏳ no open PR (Sprint 6 zip Keval-2) |
+| Accuracy benchmark and API tests | `backend/tests/`, `eval/` | Abhyudit | ✅ |
+| E2E, load and security tests | `e2e/`, `load/` | Affan | ✅ (S6 security PR #109 open) |
 
 ## 11. Hand-offs and Open Design Items
 

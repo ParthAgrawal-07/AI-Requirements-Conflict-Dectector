@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Engine** | PostgreSQL + pgvector extension |
-| **Status** | Implemented through migrations `0004`/`0004a` (Sprint 0) and `0011` (Sprint 1, project context). Later migrations add the rest — see [`IT314_RCD_Design_Update_v5.md` §4.3](../planning/v5/IT314_RCD_Design_Update_v5.md#43-migration-plan) |
+| **Status** | 27 Alembic migrations on `main` (`eea5be7`), from `0001` (initial schema) to `0009` (written change log, the head). The ER diagram and tables below were written at Sprint 1; the models in `backend/app/models/` and the migrations in `backend/alembic/versions/` are authoritative for tables added since. Plan: [`IT314_RCD_Design_Update_v5.md` §4.3](../planning/v5/IT314_RCD_Design_Update_v5.md#43-migration-plan) |
 
 ---
 

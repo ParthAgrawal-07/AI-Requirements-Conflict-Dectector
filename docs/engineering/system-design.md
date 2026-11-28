@@ -4,10 +4,10 @@
 
 | | |
 |---|---|
-| **Scope** | The whole AI Requirements Conflict Detector — implemented parts (Sprint 0–1) and planned parts (Sprint 2+) |
+| **Scope** | The whole AI Requirements Conflict Detector. Status markers re-checked against `main` (`eea5be7`) on 28 Nov 2026; the updated-SRS export and compliance parts are in open Sprint 6 PRs |
 | **Companion** | `object-design.md` (classes, patterns, state machines, object-level interactions) |
 | **Builds on** | `architecture.md` (module ownership), `diagrams.md` (initial UML), `data-model.md`, `decision-log.md` |
-| **Status legend** | ✅ implemented and tested · 🟡 stub file exists, design is a proposal for its owner to confirm · ⬜ planned, nothing in the repo yet |
+| **Status legend** | ✅ implemented and tested · 🟡 part done · ⬜ not built |
 | **Revision 5** | This document was written before the Step 7 scope extension. [`IT314_RCD_Design_Update_v5.md`](../planning/v5/IT314_RCD_Design_Update_v5.md) extends or replaces the sections marked below; anything it does not mention is unchanged. Since this was written, tenancy and permissions (migration `0004`) and project context (`0011`) have been implemented — see `data-model.md`, `roles-and-access.md` and `api-reference.md` for those |
 
 ---
@@ -104,9 +104,9 @@ flowchart TB
 
 | Container | Technology | Responsibility | Status |
 |---|---|---|---|
-| SPA | React, Vite, TypeScript, Tailwind, TanStack Query, React Flow | UI; holds no business rules | 🟡 scaffold only |
-| API | FastAPI, Pydantic, SQLAlchemy | AuthN/Z, validation, short synchronous reads/writes, enqueueing jobs | ✅ auth, documents; ⬜ findings, reports |
-| Worker | Celery | Long-running pipeline stages | ✅ extraction task; ⬜ later stages |
+| SPA | React, Vite, TypeScript, Tailwind, TanStack Query, React Flow | UI; holds no business rules | ✅ |
+| API | FastAPI, Pydantic, SQLAlchemy | AuthN/Z, validation, short synchronous reads/writes, enqueueing jobs | ✅ |
+| Worker | Celery | Long-running pipeline stages | ✅ extraction, embedding, candidates, classification, suggestions |
 | PostgreSQL + pgvector | `pgvector/pgvector:pg16` | System of record and similarity search | ✅ schema + migrations |
 | Redis | `redis:7` | Broker and result backend | ✅ |
 | Uploads volume | named Docker volume | Raw uploaded files, shared by API and worker | ✅ |
@@ -231,7 +231,7 @@ Two ordering rules carry most of the reliability:
 
 The worker task is **idempotent** (§9.2): a duplicate delivery does nothing, and a re-run after a crash replaces partial output instead of duplicating it.
 
-### 6.2 Analysis pipeline ⬜ (Sprint 2–3)
+### 6.2 Analysis pipeline ✅ (Sprints 2–3)
 
 The existing 14-step flow from `architecture.md`, expressed as Celery stages. Each stage is its own task so it can be retried alone, and progress maps onto `documents.progress_percent` (US-03).
 
@@ -294,7 +294,7 @@ sequenceDiagram
 
 The token holds only the user id. **Role, workspace and active flag are read from the database on every request**, so deactivating or demoting a user takes effect immediately instead of when their token expires.
 
-### 6.4 Review and change-impact ⬜ (Sprint 3)
+### 6.4 Review and change-impact ✅ (Sprints 3–4)
 
 > **Replaced in revision 5** by [Design Update v5 §3.2](../planning/v5/IT314_RCD_Design_Update_v5.md#32-change-request-consequence-report-and-approval-new-replaces-sd-64): edits to Approved requirements go through PR-style change requests with consequence checks (SX-03). New runtime flows — live analysis of a post, member removal, live map update, auto conflict issue, joining with a code, AI suggestions, written change log, trust layer, project setup and updated SRS — are in Design Update §3.1, §3.3–§3.8, §11 and §12.
 
@@ -517,9 +517,9 @@ flowchart LR
 | Tampering with history | Append-only audit trigger; immutable `original_ai_output` | ✅ |
 | Secrets exposure | Environment variables only; `SecretStr`; startup refuses weak production secrets; GitGuardian config in the repo | ✅ |
 | Information leakage | Standard error body with a request id; stack traces and file paths stay in server logs; worker error messages are sanitised | ✅ |
-| **Prompt injection** — requirement text is untrusted input to the LLM | Requirement text is delimited as data in the prompt; the model can take **no actions**; its output must validate against a schema (FR-15); it can only *propose* findings that a human reviews | ⬜ |
-| Brute force / abuse | Rate limiting on login and upload | ⬜ |
-| Data at rest / in transit (NFR-10) | TLS at the platform edge; managed-database encryption | ⬜ deploy-time |
+| **Prompt injection** — requirement text is untrusted input to the LLM | Requirement text is delimited as data in the prompt; the model can take **no actions**; its output must validate against a schema (FR-15); it can only *propose* findings that a human reviews | ✅ |
+| Brute force / abuse | Rate limiting on login and upload | 🟡 sign-up, join codes, messages and authoring aids are rate-limited; login and upload are not |
+| Data at rest / in transit (NFR-10) | TLS at the platform edge; managed-database encryption | ✅ TLS by Caddy (Let's Encrypt) on the Azure VM; ⬜ disk encryption is the VM's default only |
 
 ### 9.2 Reliability and failure handling
 
@@ -561,17 +561,17 @@ Real PostgreSQL + pgvector and Redis in tests and CI — not sqlite or mocks —
 
 | Driver | How the design meets it | Status |
 |---|---|---|
-| NFR-01/02 responsiveness | Async job queue; API answers 202 and never waits on analysis | ✅ mechanism, ⬜ measured |
+| NFR-01/02 responsiveness | Async job queue; API answers 202 and never waits on analysis | ✅ mechanism; measured in the CP2 load test (`load/reports/cp2.md`) |
 | NFR-04 concurrency | Stateless API, queued workers scaled independently | ✅ mechanism |
-| NFR-05 LLM-call reduction | HNSW candidate pre-filter | ⬜ |
-| NFR-07 reliability | Retries with backoff; idempotent tasks; visible failures | ✅ tasks, ⬜ LLM retries |
-| NFR-10 encryption | TLS at the edge, managed DB encryption | ⬜ deploy |
+| NFR-05 LLM-call reduction | HNSW candidate pre-filter | ✅ |
+| NFR-07 reliability | Retries with backoff; idempotent tasks; visible failures | ✅ |
+| NFR-10 encryption | TLS at the edge, managed DB encryption | ✅ TLS (Caddy) |
 | NFR-11 RBAC | JWT + `require_roles` + workspace scoping | ✅ |
 | NFR-12 credential protection | Env-only secrets, `SecretStr`, production start-up checks | ✅ |
-| NFR-13 audit | Append-only trigger-protected `audit_log`; viewing protected requirements logged | ✅ storage, ⬜ writers (Sprint 3/5) |
+| NFR-13 audit | Append-only trigger-protected `audit_log`; viewing protected requirements logged | ✅ |
 | NFR-14 residency / erasure | See open question Q3 | ⬜ |
-| NFR-17 explainability | Rationale, confidence and `original_ai_output` on every finding; AI content visibly separate | ⬜ |
-| NFR-18 configurability | Thresholds per workspace in the DB; modular parser registry | ✅ registry, ⬜ thresholds |
+| NFR-17 explainability | Rationale, confidence and `original_ai_output` on every finding; AI content visibly separate | ✅ |
+| NFR-18 configurability | Thresholds per workspace in the DB; modular parser registry | ✅ |
 | NFR-19 modularity | Four pipeline packages behind narrow interfaces | ✅ |
 | NFR-23 portability | Docker Compose parity; one image for API and worker | ✅ |
 
